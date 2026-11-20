@@ -119,6 +119,9 @@ export const translations = {
     simOpenLab: 'Abrir Simulador 3D Interactivo',
     simHideLab: 'Ocultar Simulador 3D',
     simLabSubtitle: 'Experimenta en tiempo real con fórmulas lógicas y matemáticas de Excel en una cinta transportadora 3D.',
+    zenMode: 'Modo Zen',
+    exitZenMode: 'Salir de Modo Zen',
+    zenActiveHint: 'Enfoque sin distracciones · Pulsa Esc para salir',
   },
   en: {
     brand: 'DB Academy',
@@ -231,6 +234,9 @@ export const translations = {
     simOpenLab: 'Open 3D Interactive Simulator',
     simHideLab: 'Hide 3D Simulator',
     simLabSubtitle: 'Practice Excel logical and math formulas in real time on an interactive 3D sorting conveyor.',
+    zenMode: 'Zen Mode',
+    exitZenMode: 'Exit Zen Mode',
+    zenActiveHint: 'Distraction-free focus · Press Esc to exit',
   },
   fr: {
     brand: 'DB Academy',
@@ -343,6 +349,9 @@ export const translations = {
     simOpenLab: 'Ouvrir le Simulateur 3D',
     simHideLab: 'Masquer le Simulateur 3D',
     simLabSubtitle: 'Pratiquez les formules logiques et mathématiques Excel en temps réel sur un convoyeur 3D.',
+    zenMode: 'Mode Zen',
+    exitZenMode: 'Quitter le Mode Zen',
+    zenActiveHint: 'Concentration maximale · Appuyez sur Échap pour quitter',
   },
   pt: {
     brand: 'DB Academy',
@@ -455,6 +464,9 @@ export const translations = {
     simOpenLab: 'Abrir Simulador 3D Interativo',
     simHideLab: 'Ocultar Simulador 3D',
     simLabSubtitle: 'Pratique fórmulas lógicas e matemáticas do Excel em tempo real em uma esteira 3D.',
+    zenMode: 'Modo Zen',
+    exitZenMode: 'Sair do Modo Zen',
+    zenActiveHint: 'Foco sem distrações · Pressione Esc para sair',
   },
 } as const;
 

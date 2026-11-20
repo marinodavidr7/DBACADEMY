@@ -9,6 +9,8 @@ import {
   Circle,
   Clock,
   Eye,
+  Maximize2,
+  Minimize2,
   PlayCircle,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -32,6 +34,9 @@ export const CoursePlayerView: React.FC = () => {
     selectedCourseId,
     setSelectedCourseId,
     setActiveView,
+    zenMode,
+    setZenMode,
+    toggleZenMode,
     completeLesson,
     t,
   } = usePlatform();
@@ -152,6 +157,22 @@ export const CoursePlayerView: React.FC = () => {
     markSubModuleComplete,
   ]);
 
+  // Esc key exits Zen Mode cleanly and leaving view resets Zen Mode
+  useEffect(() => {
+    if (!zenMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setZenMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zenMode, setZenMode]);
+
+  useEffect(() => {
+    return () => setZenMode(false);
+  }, [setZenMode]);
+
   if (!user) return <AuthGateNotice />;
 
   if (enrolledCourses.length === 0 || !activeCourse || !activeEnrollment || !currentLesson) {
@@ -247,57 +268,88 @@ export const CoursePlayerView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Enrolled Course Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {t('myCoursesTitle')}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {activeCourse.title} ·{' '}
-            <span className="tabular-nums">
-              {activeEnrollment.studyMinutes} {t('studyMinutes')}
-            </span>
-          </p>
+      {/* Zen Mode Minimal Focus Bar vs Standard Course Header */}
+      {zenMode ? (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {activeCourse.title} · {currentLesson.title}
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {t('zenActiveHint')} ·{' '}
+              <span className="font-mono tabular-nums">{activeEnrollment.progressPercent}%</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setZenMode(false)}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 dark:bg-slate-100 px-3.5 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap min-h-[38px]"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>{t('exitZenMode')}</span>
+          </button>
         </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {t('myCoursesTitle')}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {activeCourse.title} ·{' '}
+              <span className="tabular-nums">
+                {activeEnrollment.studyMinutes} {t('studyMinutes')}
+              </span>
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {isExcelCourse && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isExcelCourse && (
+              <button
+                type="button"
+                onClick={() => setShowSimulator((v) => !v)}
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[42px] ${
+                  showSimulator
+                    ? 'bg-[#107C41] text-white'
+                    : 'border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/60'
+                }`}
+              >
+                <Box className="w-4 h-4" />
+                <span>{showSimulator ? t('simHideLab') : t('simOpenLab')}</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setShowSimulator((v) => !v)}
-              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[42px] ${
-                showSimulator
-                  ? 'bg-[#107C41] text-white'
-                  : 'border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/60'
-              }`}
+              onClick={toggleZenMode}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[42px]"
             >
-              <Box className="w-4 h-4" />
-              <span>{showSimulator ? t('simHideLab') : t('simOpenLab')}</span>
+              <Maximize2 className="w-4 h-4" />
+              <span>{t('zenMode')}</span>
             </button>
-          )}
 
-          <select
-            value={activeCourse.id}
-            onChange={(e) => {
-              setSelectedCourseId(e.target.value);
-              setActiveLessonId(null);
-              setNewlyIssuedCert(null);
-            }}
-            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[42px]"
-          >
-            {enrolledCourses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
+            <select
+              value={activeCourse.id}
+              onChange={(e) => {
+                setSelectedCourseId(e.target.value);
+                setActiveLessonId(null);
+                setNewlyIssuedCert(null);
+              }}
+              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[42px]"
+            >
+              {enrolledCourses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Integrated 3D Formula Simulator Lab inside the Excel Course */}
+      {/* Integrated 3D Formula Simulator Lab inside the Excel Course (temporarily hidden in Zen Mode) */}
       <AnimatePresence initial={false}>
-        {isExcelCourse && showSimulator && (
+        {!zenMode && isExcelCourse && showSimulator && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -332,8 +384,9 @@ export const CoursePlayerView: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Live Progress Bar & Auto Certificate Banner */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
+      {/* Live Progress Bar & Auto Certificate Banner (hidden in Zen Mode for minimal clutter) */}
+      {!zenMode && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
             {activeEnrollment.completedLessonIds.length} / {allLessons.length} {t('subModulesLabel')} ·{' '}
@@ -377,11 +430,12 @@ export const CoursePlayerView: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
-      {/* Two-Zone Course Stage + Syllabus */}
+      {/* Two-Zone Course Stage + Syllabus (Syllabus hidden & stage maximized in Zen Mode) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-8 space-y-6">
+        <div className={zenMode ? 'lg:col-span-12 space-y-6' : 'lg:col-span-8 space-y-6'}>
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             <div className="aspect-video bg-slate-950 relative">
               <img
@@ -464,12 +518,18 @@ export const CoursePlayerView: React.FC = () => {
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.2 }}
                   onScroll={handleContentScroll}
-                  className="space-y-3 max-h-72 overflow-y-auto pr-1"
+                  className={`space-y-3 pr-1 overflow-y-auto ${
+                    zenMode ? 'max-h-[440px]' : 'max-h-72'
+                  }`}
                 >
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
                     {currentLesson.summary}
                   </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p
+                    className={`${
+                      zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'
+                    } text-slate-600 dark:text-slate-300`}
+                  >
                     {currentLesson.content}
                   </p>
                 </motion.div>
@@ -578,8 +638,9 @@ export const CoursePlayerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Syllabus Tree */}
-        <aside className="lg:col-span-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] divide-y divide-slate-200 dark:divide-slate-800">
+        {/* Right Syllabus Tree (temporarily hidden in Zen Mode) */}
+        {!zenMode && (
+          <aside className="lg:col-span-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] divide-y divide-slate-200 dark:divide-slate-800">
           {activeCourse.modules.map((mod) => {
             const modDone = activeEnrollment.completedModuleIds.includes(mod.id);
             const doneInModule = mod.lessons.filter((l) =>
@@ -643,7 +704,8 @@ export const CoursePlayerView: React.FC = () => {
               </div>
             );
           })}
-        </aside>
+          </aside>
+        )}
       </div>
     </div>
   );

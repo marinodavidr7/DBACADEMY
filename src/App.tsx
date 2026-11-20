@@ -12,6 +12,8 @@ import {
   Menu,
   MessageSquare,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Shield,
   Sun,
   X,
@@ -40,6 +42,7 @@ const AppShell: React.FC = () => {
     language,
     activeView,
     setActiveView,
+    zenMode,
     setWorkspaceRole,
     unreadCount,
     connectedDevicesCount,
@@ -53,6 +56,25 @@ const AppShell: React.FC = () => {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('catedra_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('catedra_sidebar_collapsed', String(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const navItems: Array<{ id: AppView; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'catalog', label: t('navCatalog'), icon: BookOpen },
@@ -72,26 +94,53 @@ const AppShell: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
+  const isZenActive = zenMode && activeView === 'learning';
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624]">
-        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800">
+      {/* Desktop Sidebar (Collapsible Rail, hidden in Zen Mode) */}
+      {!isZenActive && (
+        <aside
+          className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 ${
+            sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
+          }`}
+        >
+        <div
+          className={`h-14 border-b border-slate-200 dark:border-slate-800 flex items-center shrink-0 ${
+            sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+          }`}
+        >
+          {!sidebarCollapsed && (
+            <button
+              type="button"
+              onClick={() => handleSelectNav('catalog')}
+              className="text-left min-w-0"
+            >
+              <span className="block text-base font-bold tracking-tight text-slate-900 dark:text-slate-50 whitespace-nowrap truncate">
+                {t('brand')}
+              </span>
+              <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                {t('tagline')}
+              </span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => handleSelectNav('catalog')}
-            className="text-left block"
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
+            title={sidebarCollapsed ? 'Expandir menú' : 'Retraer menú'}
+            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0"
           >
-            <span className="block text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50 whitespace-nowrap">
-              {t('brand')}
-            </span>
-            <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('tagline')}
-            </span>
+            {sidebarCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -100,21 +149,29 @@ const AppShell: React.FC = () => {
                 key={item.id}
                 type="button"
                 onClick={() => handleSelectNav(item.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap min-h-[42px] ${
+                title={sidebarCollapsed ? item.label : undefined}
+                aria-label={item.label}
+                className={`w-full flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors whitespace-nowrap min-h-[42px] ${
+                  sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                } ${
                   active
                     ? 'bg-blue-600 text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-          {user && (
+        <div
+          className={`border-t border-slate-200 dark:border-slate-800 space-y-2.5 ${
+            sidebarCollapsed ? 'p-2.5 flex flex-col items-center' : 'p-4'
+          }`}
+        >
+          {!sidebarCollapsed && user && (
             <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
               <p className="font-medium text-slate-800 dark:text-slate-200 truncate">
                 {user.displayName || user.email}
@@ -125,56 +182,114 @@ const AppShell: React.FC = () => {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <select
-              value={language}
-              onChange={(e) => void setLanguage(e.target.value as Language)}
-              aria-label="Idioma"
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[40px]"
-            >
-              {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
-                <option key={code} value={code}>
-                  {LANGUAGE_LABELS[code]}
-                </option>
-              ))}
-            </select>
+          {sidebarCollapsed ? (
+            <div className="flex flex-col items-center gap-2 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  const codes: Language[] = ['es', 'en', 'fr', 'pt'];
+                  const next = codes[(codes.indexOf(language) + 1) % codes.length];
+                  void setLanguage(next);
+                }}
+                title={`Idioma: ${LANGUAGE_LABELS[language]}`}
+                aria-label="Cambiar idioma"
+                className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[11px] font-mono font-semibold uppercase text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+              >
+                {language}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => void toggleTheme()}
-              aria-label="Cambiar tema"
-              className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[40px]"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => void toggleTheme()}
+                title="Cambiar tema"
+                aria-label="Cambiar tema"
+                className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
 
-          {user ? (
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>{t('signOut')}</span>
-            </button>
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  title={t('signOut')}
+                  aria-label={t('signOut')}
+                  className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void signInWithGoogle()}
+                  title={t('signInGoogle')}
+                  aria-label={t('signInGoogle')}
+                  className="w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                >
+                  <LogIn className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => void signInWithGoogle()}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>{t('signInGoogle')}</span>
-            </button>
+            <>
+              <div className="flex items-center gap-2">
+                <select
+                  value={language}
+                  onChange={(e) => void setLanguage(e.target.value as Language)}
+                  aria-label="Idioma"
+                  className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[40px]"
+                >
+                  {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
+                    <option key={code} value={code}>
+                      {LANGUAGE_LABELS[code]}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => void toggleTheme()}
+                  aria-label="Cambiar tema"
+                  className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[40px]"
+                >
+                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {user ? (
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{t('signOut')}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void signInWithGoogle()}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{t('signInGoogle')}</span>
+                </button>
+              )}
+            </>
           )}
         </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
-        {/* Clean 3-Zone Top Bar (<= 56px height for mobile sticky cap compliance) */}
-        <header className="sticky top-0 z-30 h-14 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs px-4 sm:px-6 flex items-center justify-between gap-8">
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-out ${
+          isZenActive ? 'lg:pl-0' : sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64'
+        }`}
+      >
+        {/* Clean 3-Zone Top Bar (hidden in Zen Mode for maximum viewport) */}
+        {!isZenActive && (
+          <header className="sticky top-0 z-30 h-14 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs px-4 sm:px-6 flex items-center justify-between gap-8">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -184,10 +299,23 @@ const AppShell: React.FC = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
+              className="hidden lg:inline-flex p-2 -ml-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
+            </button>
             <span className="lg:hidden text-base font-bold text-slate-900 dark:text-slate-50 whitespace-nowrap shrink-0">
               {t('brand')}
             </span>
             <span className="hidden lg:inline text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
+              {sidebarCollapsed ? `${t('brand')} · ` : ''}
               {navItems.find((n) => n.id === activeView)?.label}
             </span>
           </div>
@@ -251,9 +379,14 @@ const AppShell: React.FC = () => {
               </button>
             )}
           </div>
-        </header>
+          </header>
+        )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1360px] w-full mx-auto">
+        <main
+          className={`flex-1 w-full mx-auto transition-all duration-200 ${
+            isZenActive ? 'p-4 sm:p-6 max-w-5xl' : 'p-4 sm:p-6 lg:p-8 max-w-[1360px]'
+          }`}
+        >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeView}

@@ -66,6 +66,9 @@ interface PlatformContextValue {
   t: (key: TranslationKeys) => string;
   activeView: AppView;
   setActiveView: (v: AppView) => void;
+  zenMode: boolean;
+  setZenMode: (v: boolean) => void;
+  toggleZenMode: () => void;
   selectedCourseId: string | null;
   setSelectedCourseId: (id: string | null) => void;
   workspaceRole: 'student' | 'instructor';
@@ -132,6 +135,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   });
 
   const [activeView, setActiveView] = useState<AppView>('catalog');
+  const [zenMode, setZenMode] = useState<boolean>(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');
 
@@ -152,6 +156,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const wsRef = useRef<WebSocket | null>(null);
   const notifiedDeadlineIdsRef = useRef<Set<string>>(new Set());
+
+  const toggleZenMode = useCallback(() => {
+    setZenMode((prev) => !prev);
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== 'learning' && zenMode) {
+      setZenMode(false);
+    }
+  }, [activeView, zenMode]);
 
   const isAdmin = useMemo(
     () => Boolean(user?.emailVerified && user?.email === ADMIN_EMAIL),
@@ -1128,6 +1142,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     t,
     activeView,
     setActiveView,
+    zenMode,
+    setZenMode,
+    toggleZenMode,
     selectedCourseId,
     setSelectedCourseId,
     workspaceRole,
