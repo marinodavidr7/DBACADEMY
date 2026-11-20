@@ -16,6 +16,7 @@ import {
   Sun,
   X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ApiIntegrationsView } from './components/ApiIntegrationsView';
 import { CalendarTasksView } from './components/CalendarTasksView';
 import { CatalogView } from './components/CatalogView';
@@ -253,21 +254,44 @@ const AppShell: React.FC = () => {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1360px] w-full mx-auto">
-          {activeView === 'catalog' && <CatalogView />}
-          {activeView === 'learning' && <CoursePlayerView />}
-          {activeView === 'instructor' && <InstructorDashboard />}
-          {activeView === 'forums' && <ForumView />}
-          {activeView === 'certificates' && <CertificatesView />}
-          {activeView === 'calendar' && <CalendarTasksView />}
-          {activeView === 'security' && <SecurityCloudView />}
-          {activeView === 'integrations' && <ApiIntegrationsView />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeView}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
+              {activeView === 'catalog' && <CatalogView />}
+              {activeView === 'learning' && <CoursePlayerView />}
+              {activeView === 'instructor' && <InstructorDashboard />}
+              {activeView === 'forums' && <ForumView />}
+              {activeView === 'certificates' && <CertificatesView />}
+              {activeView === 'calendar' && <CalendarTasksView />}
+              {activeView === 'security' && <SecurityCloudView />}
+              {activeView === 'integrations' && <ApiIntegrationsView />}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 
       {/* Mobile Navigation Drawer */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex bg-slate-950/60 backdrop-blur-xs">
-          <div className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800">
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 lg:hidden flex bg-slate-950/60 backdrop-blur-xs"
+          >
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800"
+            >
             <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
               <span className="text-base font-bold text-slate-900 dark:text-slate-50">
                 {t('brand')}
@@ -335,9 +359,10 @@ const AppShell: React.FC = () => {
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
       <OfflineIndicator message={t('offlineBanner')} />

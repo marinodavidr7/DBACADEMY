@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Award,
   BookOpen,
+  Box,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -10,10 +11,15 @@ import {
   Eye,
   PlayCircle,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Certificate } from '../types';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+
+const ExcelSimulator3D = lazy(() =>
+  import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
+);
 
 const VIEW_COMPLETION_MS = 5000;
 
@@ -56,6 +62,7 @@ export const CoursePlayerView: React.FC = () => {
   const [autoTrackEnabled, setAutoTrackEnabled] = useState(true);
   const [viewProgressPct, setViewProgressPct] = useState(0);
   const [autoCompletedLessonTitle, setAutoCompletedLessonTitle] = useState<string | null>(null);
+  const [showSimulator, setShowSimulator] = useState(true);
 
   const inFlightLessonsRef = useRef<Set<string>>(new Set());
 
@@ -168,6 +175,16 @@ export const CoursePlayerView: React.FC = () => {
 
   const earnedCert =
     newlyIssuedCert || certificates.find((c) => c.courseId === activeCourse.id) || null;
+  const isExcelCourse =
+    activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title);
+  const recommendedSimMode: 'SI' | 'CONTAR.SI' | 'SUMAR.SI' = /CONTAR\.SI/i.test(
+    currentLesson.title
+  )
+    ? 'CONTAR.SI'
+    : /SUMAR\.SI/i.test(currentLesson.title)
+      ? 'SUMAR.SI'
+      : 'SI';
+
   const prevLesson = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1] : null;
   const nextLesson =
     currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1
@@ -244,22 +261,76 @@ export const CoursePlayerView: React.FC = () => {
           </p>
         </div>
 
-        <select
-          value={activeCourse.id}
-          onChange={(e) => {
-            setSelectedCourseId(e.target.value);
-            setActiveLessonId(null);
-            setNewlyIssuedCert(null);
-          }}
-          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[42px]"
-        >
-          {enrolledCourses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isExcelCourse && (
+            <button
+              type="button"
+              onClick={() => setShowSimulator((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[42px] ${
+                showSimulator
+                  ? 'bg-[#107C41] text-white'
+                  : 'border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/60'
+              }`}
+            >
+              <Box className="w-4 h-4" />
+              <span>{showSimulator ? t('simHideLab') : t('simOpenLab')}</span>
+            </button>
+          )}
+
+          <select
+            value={activeCourse.id}
+            onChange={(e) => {
+              setSelectedCourseId(e.target.value);
+              setActiveLessonId(null);
+              setNewlyIssuedCert(null);
+            }}
+            className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[42px]"
+          >
+            {enrolledCourses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {/* Integrated 3D Formula Simulator Lab inside the Excel Course */}
+      <AnimatePresence initial={false}>
+        {isExcelCourse && showSimulator && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <Suspense
+              fallback={
+                <div className="h-[420px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                  Cargando Simulador 3D...
+                </div>
+              }
+            >
+              <ExcelSimulator3D
+                compact
+                externalMode={recommendedSimMode}
+                onInteract={() => {
+                  if (!isLessonDone) {
+                    setViewProgressPct(100);
+                    void markSubModuleComplete(
+                      currentLesson.id,
+                      currentLesson.title,
+                      currentLesson.durationMinutes,
+                      true
+                    );
+                  }
+                }}
+              />
+            </Suspense>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Live Progress Bar & Auto Certificate Banner */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
@@ -273,11 +344,13 @@ export const CoursePlayerView: React.FC = () => {
           </span>
         </div>
         <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-          <div
-            className={`h-full transition-all duration-300 ${
+          <motion.div
+            initial={false}
+            animate={{ width: `${activeEnrollment.progressPercent}%` }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
+            className={`h-full ${
               activeEnrollment.progressPercent === 100 ? 'bg-emerald-600' : 'bg-blue-600'
             }`}
-            style={{ width: `${activeEnrollment.progressPercent}%` }}
           />
         </div>
 
@@ -366,26 +439,41 @@ export const CoursePlayerView: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              {autoCompletedLessonTitle && (
-                <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 flex items-center gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>
-                    {t('autoCompletedNotice')}: {autoCompletedLessonTitle}
-                  </span>
-                </div>
-              )}
+              <AnimatePresence>
+                {autoCompletedLessonTitle && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22 }}
+                    className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 flex items-center gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-300"
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>
+                      {t('autoCompletedNotice')}: {autoCompletedLessonTitle}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-              <div
-                onScroll={handleContentScroll}
-                className="space-y-3 max-h-72 overflow-y-auto pr-1"
-              >
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {currentLesson.summary}
-                </p>
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {currentLesson.content}
-                </p>
-              </div>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentLesson.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                  onScroll={handleContentScroll}
+                  className="space-y-3 max-h-72 overflow-y-auto pr-1"
+                >
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {currentLesson.summary}
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {currentLesson.content}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">

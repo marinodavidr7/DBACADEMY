@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, Check, Play, Search } from 'lucide-react';
+import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
 import { CheckoutModal } from './CheckoutModal';
@@ -148,13 +149,17 @@ export const CatalogView: React.FC = () => {
 
         {/* Course Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filtered.map((course) => {
+          {filtered.map((course, idx) => {
             const enrollment = enrollments.find((e) => e.courseId === course.id);
             const isEnrolled = Boolean(enrollment);
 
             return (
-              <article
+              <motion.article
                 key={course.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, delay: Math.min(idx * 0.06, 0.3), ease: 'easeOut' }}
+                whileHover={{ y: -3 }}
                 className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
               >
                 <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
@@ -186,6 +191,14 @@ export const CatalogView: React.FC = () => {
                     <span className="tabular-nums">
                       {course.totalLessons} {t('lessonsLabel')}
                     </span>
+                    {(course.id === 'excel-basico-05' || /excel/i.test(course.title)) && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                          {t('navSimulator')}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <h2 className="mt-2.5 text-lg font-semibold text-slate-900 dark:text-slate-100 leading-snug">
@@ -206,11 +219,13 @@ export const CatalogView: React.FC = () => {
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div
-                          className={`h-full transition-all ${
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${enrollment.progressPercent}%` }}
+                          transition={{ duration: 0.55, ease: 'easeOut' }}
+                          className={`h-full ${
                             enrollment.progressPercent === 100 ? 'bg-emerald-600' : 'bg-blue-600'
                           }`}
-                          style={{ width: `${enrollment.progressPercent}%` }}
                         />
                       </div>
                     </div>
@@ -252,7 +267,7 @@ export const CatalogView: React.FC = () => {
                     )}
                   </div>
                 </div>
-              </article>
+              </motion.article>
             );
           })}
         </div>

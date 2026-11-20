@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, CreditCard, Globe2, ShieldCheck, X } from 'lucide-react';
+import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course, PaymentGateway, PaymentRecord } from '../types';
 
@@ -42,8 +43,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ course, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+        className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-2xl overflow-hidden"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -189,7 +201,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ course, onClose, o
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
