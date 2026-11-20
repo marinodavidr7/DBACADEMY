@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public workspace profile and synchronized cross-device preferences (non-PII).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["student", "instructor"] },
+        "preferredLanguage": { "type": "string", "enum": ["es", "en", "fr", "pt"] },
+        "preferredTheme": { "type": "string", "enum": ["light", "dark"] },
+        "e2eeKeyFingerprint": { "type": "string", "maxLength": 128 },
+        "activeDevicesCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "preferredLanguage", "preferredTheme", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII, notification rules, and cloud storage integration settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "pushEnabled": { "type": "boolean" },
+        "notifyDeadlines": { "type": "boolean" },
+        "notifyForumReplies": { "type": "boolean" },
+        "notifyPayments": { "type": "boolean" },
+        "notifyCertificates": { "type": "boolean" },
+        "deadlineLeadMinutes": { "type": "number" },
+        "quietHoursStart": { "type": "string", "maxLength": 10 },
+        "quietHoursEnd": { "type": "string", "maxLength": 10 },
+        "cloudProvider": { "type": "string", "enum": ["none", "google_drive", "dropbox", "aws_s3", "gcs"] },
+        "cloudFolder": { "type": "string", "maxLength": 200 },
+        "cloudAutoBackup": { "type": "boolean" },
+        "cloudLastSyncedAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "pushEnabled", "updatedAt"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Virtual course catalog item with structured modules.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "subtitle": { "type": "string", "minLength": 3, "maxLength": 240 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "level": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "priceCents": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD", "EUR", "MXN"] },
+        "coverImage": { "type": "string", "maxLength": 500 },
+        "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "published": { "type": "boolean" },
+        "modulesCount": { "type": "number" },
+        "totalLessons": { "type": "number" },
+        "modules": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "subtitle", "description", "category", "level", "priceCents", "currency", "instructorId", "instructorName", "published", "modules", "createdAt", "updatedAt"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "Real-time student progress and module completion record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "completedModuleIds": { "type": "array" },
+        "completedLessonIds": { "type": "array" },
+        "progressPercent": { "type": "number" },
+        "studyMinutes": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "enrolledAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "courseId", "courseTitle", "studentId", "studentName", "instructorId", "completedModuleIds", "completedLessonIds", "progressPercent", "studyMinutes", "status", "enrolledAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Integrated payment gateway transaction record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "amountCents": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD", "EUR", "MXN"] },
+        "gateway": { "type": "string", "enum": ["stripe", "mercadopago", "paypal"] },
+        "status": { "type": "string", "enum": ["succeeded", "refunded"] },
+        "transactionRef": { "type": "string", "minLength": 4, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "courseId", "courseTitle", "studentId", "instructorId", "amountCents", "currency", "gateway", "status", "transactionRef", "createdAt"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Automatically generated verifiable certificate upon 100% module completion.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "verificationCode": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "instructorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "completionPercent": { "type": "number" },
+        "hashSignature": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "issuedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "verificationCode", "courseId", "courseTitle", "studentId", "studentName", "instructorId", "instructorName", "completionPercent", "hashSignature", "issuedAt"]
+    },
+    "ForumThread": {
+      "title": "ForumThread",
+      "description": "Course discussion forum thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "body": { "type": "string", "minLength": 3, "maxLength": 3000 },
+        "pinned": { "type": "boolean" },
+        "resolved": { "type": "boolean" },
+        "upvotesCount": { "type": "number" },
+        "repliesCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "courseId", "authorId", "authorName", "title", "body", "pinned", "resolved", "upvotesCount", "repliesCount", "createdAt", "updatedAt"]
+    },
+    "ForumReply": {
+      "title": "ForumReply",
+      "description": "Reply inside a course forum thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "threadId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "isInstructorAnswer": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "threadId", "courseId", "authorId", "authorName", "body", "isInstructorAnswer", "createdAt"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "Calendar deadline or pending task synchronized with push notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseTitle": { "type": "string", "maxLength": 140 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "type": { "type": "string", "enum": ["deadline", "live_session", "task", "exam"] },
+        "dueAtIso": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "completed": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "reminderMinutes": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "type", "dueAtIso", "completed", "priority", "reminderMinutes", "createdAt", "updatedAt"]
+    },
+    "EncryptedNote": {
+      "title": "EncryptedNote",
+      "description": "End-to-end AES-GCM-256 encrypted user note or cloud backup payload.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "titleHint": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "ciphertext": { "type": "string", "minLength": 8, "maxLength": 16000 },
+        "iv": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "algorithm": { "type": "string", "enum": ["AES-GCM-256"] },
+        "keyFingerprint": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "titleHint", "ciphertext", "iv", "algorithm", "keyFingerprint", "createdAt", "updatedAt"]
+    },
+    "ApiIntegrationKey": {
+      "title": "ApiIntegrationKey",
+      "description": "Third-party integration API key metadata and webhook endpoint.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "keyPrefix": { "type": "string", "minLength": 4, "maxLength": 24 },
+        "keyHash": { "type": "string", "minLength": 16, "maxLength": 128 },
+        "webhookUrl": { "type": "string", "maxLength": 300 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "label", "keyPrefix", "keyHash", "active", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public workspace profile and cross-device preferences."
+    },
+    "/users/{userId}/private/info": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII, push notification preferences, and cloud storage config."
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "#/entities/Course" },
+      "description": "Published and instructor-owned courses."
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": { "$ref": "#/entities/Enrollment" },
+      "description": "Real-time student enrollments and progress tracking."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Payment gateway transaction receipts."
+    },
+    "/certificates/{certificateId}": {
+      "schema": { "$ref": "#/entities/Certificate" },
+      "description": "Automatically issued course completion certificates."
+    },
+    "/forumThreads/{threadId}": {
+      "schema": { "$ref": "#/entities/ForumThread" },
+      "description": "Course discussion threads."
+    },
+    "/forumThreads/{threadId}/replies/{replyId}": {
+      "schema": { "$ref": "#/entities/ForumReply" },
+      "description": "Discussion replies under a parent thread."
+    },
+    "/calendarEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/CalendarEvent" },
+      "description": "User deadlines, tasks, and live session reminders."
+    },
+    "/encryptedNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/EncryptedNote" },
+      "description": "Client-side E2EE encrypted notes and secure vault items."
+    },
+    "/apiKeys/{keyId}": {
+      "schema": { "$ref": "#/entities/ApiIntegrationKey" },
+      "description": "Third-party REST API keys and webhook URLs."
+    }
+  }
+}
