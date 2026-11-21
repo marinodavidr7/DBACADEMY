@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
+import { Container } from './ui/Container';
 
 interface LandingPageProps {
   onExplore: () => void;
@@ -59,55 +60,57 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   return (
     <div id="top" className="min-h-screen bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)]">
-      {/* Strict 3-Zone Top Bar */}
+      {/* Header — borde a borde, contenedor limitado */}
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
-          {/* Zone 1: Single-line Brand Wordmark */}
-          <a
-            href="#top"
-            className="font-display text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0"
-          >
-            DB Academy
-          </a>
+        <Container>
+          <div className="flex h-16 items-center justify-between gap-8">
+            {/* Zone 1: Single-line Brand Wordmark */}
+            <a
+              href="#top"
+              className="font-display text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+            >
+              DB Academy
+            </a>
 
-          {/* Zone 2: Concise single-line nav links */}
-          <nav
-            aria-label="Navegación principal"
-            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300"
-          >
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            {/* Zone 2: Concise single-line nav links */}
+            <nav
+              aria-label="Navegación principal"
+              className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300"
+            >
+              {navLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+
+            {/* Zone 3: 1 Primary Action + Mobile Menu Trigger */}
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={user ? onOpenLearning : onExplore}
+                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
               >
-                {link.label}
-              </a>
-            ))}
-          </nav>
+                <span>{user ? 'Mi Aprendizaje' : 'Explorar catálogo'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
 
-          {/* Zone 3: 1 Primary Action + Mobile Menu Trigger */}
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={user ? onOpenLearning : onExplore}
-              className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-            >
-              <span>{user ? 'Mi Aprendizaje' : 'Explorar catálogo'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen((o) => !o)}
-              aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú'}
-              aria-expanded={mobileNavOpen}
-              className="md:hidden p-2 rounded-lg text-slate-200 hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
-            >
-              {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen((o) => !o)}
+                aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú'}
+                aria-expanded={mobileNavOpen}
+                className="md:hidden p-2 rounded-lg text-slate-200 hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              >
+                {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
-        </div>
+        </Container>
 
         {/* Mobile Drawer */}
         {mobileNavOpen && (
@@ -140,44 +143,46 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {authError && (
         <div className="bg-red-950 border-b border-red-800 text-red-100 px-4 py-3 text-xs">
-          <div className="mx-auto max-w-7xl flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <p>{authError}</p>
-              {authError.includes('Authorized domains') && (
-                <a
-                  href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block font-semibold underline text-white"
-                >
-                  Abrir Firebase Console → Authentication → Settings
-                </a>
-              )}
+          <Container>
+            <div className="mx-auto flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p>{authError}</p>
+                {authError.includes('Authorized domains') && (
+                  <a
+                    href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block font-semibold underline text-white"
+                  >
+                    Abrir Firebase Console → Authentication → Settings
+                  </a>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={clearAuthError}
+                className="text-xs font-semibold underline shrink-0"
+              >
+                Cerrar
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={clearAuthError}
-              className="text-xs font-semibold underline shrink-0"
-            >
-              Cerrar
-            </button>
-          </div>
+          </Container>
         </div>
       )}
 
       <main>
-        {/* Dark Technological Hero */}
-        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90">
-          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
-              <div className="lg:col-span-6 flex flex-col justify-center">
+        {/* Hero — fondo de borde a borde, ancho limitado solo en contenido y párrafos */}
+        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 min-h-[calc(100vh-4rem)]">
+          <Container prose={false}>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
+              <div className="flex flex-col justify-center">
                 <p className="text-xs font-semibold tracking-wide text-cyan-300">
                   Academia técnica interactiva · DB Academy
                 </p>
-                <h1 className="mt-3 font-display text-[clamp(2.2rem,4vw,3.5rem)] font-bold tracking-tight text-white leading-[1.08] text-balance">
-                  Domina habilidades técnicas con práctica guiada en vivo.
+                <h1 className="mt-3 font-display text-4xl sm:text-5xl lg:text-6xl 2xl:text-7xl font-bold tracking-tight text-white leading-[1.08] text-balance">
+                  Domina habilidades técnicas con práctica interactiva paso a paso.
                 </h1>
-                <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300">
+                <p className="mt-5 max-w-prose text-base leading-relaxed text-slate-300">
                   Rutas estructuradas por nivel, laboratorio interactivo de Excel con Simulador 3D, seguimiento de progreso en tiempo real y certificados verificables.
                 </p>
 
@@ -185,105 +190,116 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <button
                     type="button"
                     onClick={onExplore}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px]"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
                   >
-                    <span>Explorar cursos</span>
+                    <span>Empezar gratis</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     onClick={() => (user ? onOpenLearning() : void onSignIn())}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px]"
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold transition-colors whitespace-nowrap min-h-[46px] focus-visible:outline-none focus-visible:ring-2 active:scale-95 ${
+                      user
+                        ? 'bg-[#0052CC] hover:bg-[#0747A6] text-white focus-visible:ring-[#0052CC]'
+                        : 'border border-slate-600 bg-slate-900/60 hover:bg-slate-800 text-white focus-visible:ring-slate-600'
+                    }`}
                   >
-                    <span>{user ? 'Ir a Mi Panel' : 'Iniciar sesión con Google'}</span>
+                    <span>{user ? 'Ir a Mi Panel' : 'Iniciar sesión'}</span>
                   </button>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
-                  <span>Acceso libre al catálogo</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Curso de Excel Básico gratuito</span>
-                  <span aria-hidden="true">·</span>
-                  <span>Sincronización multi-dispositivo</span>
+                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
+                    <Check className="w-3 h-3 text-cyan-300" />
+                    <span>Acceso libre al catálogo</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
+                    <BookOpen className="w-3 h-3 text-cyan-300" />
+                    <span>Curso de Excel Básico gratuito</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
+                    <ShieldCheck className="w-3 h-3 text-cyan-300" />
+                    <span>Sincronización multi-dispositivo</span>
+                  </span>
                 </div>
               </div>
 
-              <div className="lg:col-span-6">
-                <div className="relative h-full min-h-[280px] lg:min-h-[420px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
-                  <img
-                    src="/src/assets/images/hero_db_academy_tech_1795271913703.jpg"
-                    alt="Estudiantes trabajando en el laboratorio tecnológico de DB Academy"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/30 to-transparent" />
-                  <div className="absolute bottom-5 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-mono text-cyan-300">Ruta destacada</p>
-                      <p className="mt-1 font-display text-lg font-semibold text-white">
-                        Excel Básico: Fundamentos, SI y Simulador 3D
-                      </p>
-                    </div>
-                    {excelCourse && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectCourse(excelCourse.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 hover:bg-white px-3.5 py-2 text-xs font-semibold text-slate-900 transition-colors whitespace-nowrap shrink-0 min-h-[38px]"
-                      >
-                        <span>Ver programa</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+              <div className="relative h-full min-h-[280px] lg:min-h-[420px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
+                <ProductPreview />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/30 to-transparent" />
+                <div className="absolute bottom-5 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs sm:text-sm font-mono text-cyan-300 uppercase tracking-wider">
+                      Ruta destacada
+                    </p>
+                    <p className="mt-1 font-display text-base sm:text-lg font-bold text-white">
+                      Excel Básico: Fundamentos, SI y Simulador 3D
+                    </p>
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-[#107C41] px-2 py-0.5 text-[10px] font-bold text-white">
+                      GRATIS
+                    </span>
                   </div>
+                  {excelCourse && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectCourse(excelCourse.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
+                    >
+                      <span>Ver programa</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
+          </Container>
         </section>
 
-        {/* Full-Width 4-Column Verifiable Metrics Strip */}
+        {/* Stats Strip — fondo de borde a borde, ancho limitado solo en contenido */}
         <section className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A]">
-          <div className="mx-auto max-w-7xl grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
-            <div className="p-6 sm:p-8">
-              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
-                {publishedCourses.length}
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                Programas activos en catálogo
-              </p>
+          <Container>
+            <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
+              <div className="p-6 sm:p-8 flex flex-col h-full">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                  {publishedCourses.length}
+                </p>
+                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                  Programa activo en catálogo
+                </p>
+              </div>
+              <div className="p-6 sm:p-8 flex flex-col h-full">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[#0052CC] dark:text-cyan-400">
+                  218+
+                </p>
+                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                  Ejercicios interactivos de Excel
+                </p>
+              </div>
+              <div className="p-6 sm:p-8 flex flex-col h-full">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                  Certificados
+                </p>
+                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                  Verificables con firma hash SHA-256
+                </p>
+              </div>
+              <div className="p-6 sm:p-8 flex flex-col h-full">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                  20
+                </p>
+                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                  Lecciones en el curso de Excel
+                </p>
+              </div>
             </div>
-            <div className="p-6 sm:p-8">
-              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[#0052CC] dark:text-cyan-400">
-                218+
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                Ejercicios interactivos de Excel
-              </p>
-            </div>
-            <div className="p-6 sm:p-8">
-              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
-                SHA-256
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                Certificados verificables en PDF
-              </p>
-            </div>
-            <div className="p-6 sm:p-8">
-              <p className="font-display text-xl sm:text-2xl font-bold font-mono text-slate-700 dark:text-slate-200">
-                [COMPLETAR]
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                Estudiantes egresados de DB Academy
-              </p>
-            </div>
-          </div>
+          </Container>
         </section>
 
         {/* Rutas de Aprendizaje (Learning Paths) */}
         <section id="rutas" className="scroll-mt-20 py-16 sm:py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <Container>
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-              <div className="max-w-2xl">
+              <div className="max-w-prose">
                 <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
                   01. Rutas de aprendizaje
                 </p>
@@ -294,7 +310,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 onClick={onExplore}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:underline active:scale-95"
               >
                 <span>Ver todo el catálogo</span>
                 <ArrowRight className="w-4 h-4" />
@@ -340,7 +356,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectCourse(excelCourse.id)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[42px]"
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[42px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
                       >
                         <span>Explorar ruta y temario</span>
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -381,17 +397,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectCourse(track.id)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline min-h-[36px]"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline min-h-[36px] focus-visible:outline-none focus-visible:underline active:scale-95"
                       >
                         <span>Ver programa</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
                   </article>
                 ))}
               </div>
             </div>
-          </div>
+          </Container>
         </section>
 
         {/* Catálogo Completo Destacado */}
@@ -399,8 +415,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           id="cursos"
           className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
         >
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-2xl">
+          <Container>
+            <div className="max-w-prose">
               <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
                 02. Catálogo de cursos
               </p>
@@ -409,7 +425,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </h2>
             </div>
 
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="mt-10 grid gap-6 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {publishedCourses.map((course) => (
                 <article
                   key={course.id}
@@ -453,84 +469,86 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectCourse(course.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[40px]"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[40px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
                       >
                         <span>Ver programa</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
                 </article>
               ))}
             </div>
-          </div>
+          </Container>
         </section>
 
         {/* Metodología y Capacidades Reales */}
         <section id="metodologia" className="scroll-mt-20 py-16 sm:py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-            <div className="lg:col-span-5">
-              <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
-                03. Metodología DB Academy
-              </p>
-              <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
-                De la teoría al laboratorio en una sola plataforma
-              </h2>
-              <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                Cada programa combina lecciones guiadas, validación práctica inmediata, seguimiento de avance en tiempo real y emisión automática de certificados al completar el 100% del currículo.
-              </p>
+          <Container>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+              <div className="lg:col-span-5 max-w-prose">
+                <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                  03. Metodología DB Academy
+                </p>
+                <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                  De la teoría al laboratorio en una sola plataforma
+                </h2>
+                <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  Cada programa combina lecciones guiadas, validación práctica inmediata, seguimiento de avance en tiempo real y emisión automática de certificados al completar el 100% del currículo.
+                </p>
 
-              <div className="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-2">
-                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Testimonios y alianzas institucionales
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  [COMPLETAR: Agrega aquí un testimonio verificado de un estudiante o institución aliada de DB Academy con nombre completo y rol.]
-                </p>
+                <div className="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-2">
+                  <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Testimonios y alianzas institucionales
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    [COMPLETAR: Agrega aquí un testimonio verificado de un estudiante o institución aliada de DB Academy con nombre completo y rol.]
+                  </p>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  {
+                    icon: Box,
+                    title: 'Simulador 3D y Laboratorio Excel',
+                    body: 'Practica fórmulas lógicas y matemáticas (=SI, =SI.ANIDADO, =CONTAR.SI, =SUMAR.SI) con validación instantánea.',
+                  },
+                  {
+                    icon: Layers,
+                    title: 'Progreso sincronizado en vivo',
+                    body: 'Tu avance por módulo, calendario de entregas y notas se mantienen sincronizados entre tus dispositivos.',
+                  },
+                  {
+                    icon: Award,
+                    title: 'Certificados con firma SHA-256',
+                    body: 'Al completar un programa obtienes un certificado PDF con código público verificable.',
+                  },
+                  {
+                    icon: LockKeyhole,
+                    title: 'Bóveda personal cifrada E2EE',
+                    body: 'Tus apuntes privados se cifran en el navegador con AES-GCM-256 antes de guardarse en la nube.',
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <article
+                      key={item.title}
+                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6"
+                    >
+                      <Icon className="w-5 h-5 text-[#0052CC] dark:text-cyan-400" />
+                      <h3 className="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                        {item.title}
+                      </h3>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                        {item.body}
+                      </p>
+                    </article>
+                  );
+                })}
               </div>
             </div>
-
-            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                {
-                  icon: Box,
-                  title: 'Simulador 3D y Laboratorio Excel',
-                  body: 'Practica fórmulas lógicas y matemáticas (=SI, =SI.ANIDADO, =CONTAR.SI, =SUMAR.SI) con validación instantánea.',
-                },
-                {
-                  icon: Layers,
-                  title: 'Progreso sincronizado en vivo',
-                  body: 'Tu avance por módulo, calendario de entregas y notas se mantienen sincronizados entre tus dispositivos.',
-                },
-                {
-                  icon: Award,
-                  title: 'Certificados con firma SHA-256',
-                  body: 'Al completar un programa obtienes un certificado PDF con código público verificable.',
-                },
-                {
-                  icon: LockKeyhole,
-                  title: 'Bóveda personal cifrada E2EE',
-                  body: 'Tus apuntes privados se cifran en el navegador con AES-GCM-256 antes de guardarse en la nube.',
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <article
-                    key={item.title}
-                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6"
-                  >
-                    <Icon className="w-5 h-5 text-[#0052CC] dark:text-cyan-400" />
-                    <h3 className="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">
-                      {item.title}
-                    </h3>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                      {item.body}
-                    </p>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
+          </Container>
         </section>
 
         {/* Preguntas Frecuentes */}
@@ -538,7 +556,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           id="preguntas"
           className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
         >
-          <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <Container prose={true}>
             <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
               04. Preguntas frecuentes
             </p>
@@ -571,69 +589,144 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </details>
               ))}
             </div>
-          </div>
+          </Container>
         </section>
 
-        {/* Cierre Oscuro CTA */}
+        {/* Cierre Oscuro CTA — fondo de borde a borde */}
         <section className="bg-[#070E1D] text-slate-100 py-14 sm:py-16 border-t border-slate-800">
-          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white text-balance">
-                Comienza tu formación técnica hoy en DB Academy
-              </h2>
-              <p className="mt-2 text-sm text-slate-300">
-                Accede con tu cuenta de Google o explora el catálogo abierto desde cualquier dispositivo.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={user ? onOpenLearning : onExplore}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
-              >
-                <span>{user ? 'Ir a Mi Aprendizaje' : 'Ver catálogo'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              {!user && (
+          <Container>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="max-w-prose">
+                <h2 className="font-display text-2xl sm:text-3xl font-bold text-white text-balance">
+                  Comienza tu formación técnica hoy en DB Academy
+                </h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  Accede con tu cuenta de Google o explora el catálogo abierto desde cualquier dispositivo.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => void onSignIn()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 hover:bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
+                  onClick={user ? onOpenLearning : onExplore}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
                 >
-                  <span>Iniciar sesión</span>
+                  <span>{user ? 'Ir a Mi Aprendizaje' : 'Ver catálogo'}</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
-              )}
+                {!user && (
+                  <button
+                    type="button"
+                    onClick={() => void onSignIn()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-600 hover:bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
+                  >
+                    <span>Iniciar sesión</span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          </Container>
         </section>
       </main>
 
       <footer className="border-t border-slate-800 bg-[#050914] text-slate-400">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span className="font-display text-sm font-bold text-white">DB Academy</span>
-            <span className="text-xs text-slate-400">· Formación técnica en tiempo real</span>
-          </div>
+        <Container>
+          <div className="px-4 py-8 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="font-display text-sm font-bold text-white">DB Academy</span>
+              <span className="text-xs text-slate-400">· Formación técnica en tiempo real</span>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            {navLinks.map((link) => (
-              <a key={link.href} href={link.href} className="hover:text-white transition-colors">
-                {link.label}
-              </a>
-            ))}
-            <button
-              type="button"
-              onClick={() => void toggleTheme()}
-              aria-label="Cambiar tema claro u oscuro"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800"
-            >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-              <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              {navLinks.map((link) => (
+                <a key={link.href} href={link.href} className="hover:text-white transition-colors">
+                  {link.label}
+                </a>
+              ))}
+              <button
+                type="button"
+                onClick={() => void toggleTheme()}
+                aria-label="Cambiar tema claro u oscuro"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600"
+              >
+                {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+              </button>
+            </div>
+          </div>
+        </Container>
+      </footer>
+    </div>
+  );
+};
+
+/**
+ * Vista previa del producto dentro de un marco tipo ventana de navegador.
+ * Muestra una hoja de cálculo con la fórmula =SI(B2>=60;"Aprobado";"Reprobado").
+ * TODO: Reemplazar por una captura real del Simulador 3D o del laboratorio de Excel.
+ */
+function ProductPreview() {
+  return (
+    <div className="relative w-full h-full flex flex-col">
+      {/* Marco tipo ventana de navegador */}
+      <div className="absolute inset-0 flex flex-col bg-[#0F172A] border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+        {/* Barra de título de la ventana */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-[#1E293B]/50">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+          </div>
+          <span className="ml-3 text-[10px] font-mono text-slate-400">
+            Excel_Laboratorio — DB Academy
+          </span>
+        </div>
+
+        {/* Contenido de la hoja de cálculo */}
+        <div className="flex-1 p-4 bg-[#070E1D] overflow-hidden flex flex-col">
+          <div className="mb-2 text-[10px] font-mono text-slate-500">
+            Libro1.xlsx · Hoja1
+          </div>
+          <div className="flex-1 border border-slate-800 rounded-lg bg-[#020617] overflow-hidden">
+            <div className="overflow-x-auto overflow-y-auto">
+              <table className="w-full min-w-[400px] text-xs font-mono">
+                <thead>
+                  <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-400 sticky top-0">
+                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">A</th>
+                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">B</th>
+                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">C</th>
+                    <th className="px-3 py-1.5 text-center w-16">D</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-slate-800 text-slate-300">
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Nota</td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-cyan-300">85</td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">45</td>
+                    <td className="px-3 py-2 text-center font-mono">—</td>
+                  </tr>
+                  <tr className="border-b border-slate-800 text-slate-300 bg-[#0F172A]/50">
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Resultado</td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-emerald-400 font-bold">
+                      Aprobado
+                    </td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-slate-500">
+                      —
+                    </td>
+                    <td className="px-3 py-2 text-center font-mono">—</td>
+                  </tr>
+                  <tr className="border-b border-slate-800 text-slate-300">
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Fórmula</td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-blue-400" colSpan={3}>
+                      {'=SI(B2>=60;"Aprobado";"Reprobado")'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   );
 };
