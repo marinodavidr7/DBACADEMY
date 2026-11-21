@@ -8,7 +8,7 @@ import {
   ref,
   uploadBytesResumable,
 } from 'firebase/storage';
-import { storage } from '../firebase';
+import { assertPlatformAdminWrite, storage } from '../firebase';
 import type { CourseMaterial, CourseMaterialType } from '../types';
 
 /** Map MIME types to our internal material type */
@@ -70,6 +70,7 @@ export async function uploadCourseMaterial(
   file: File,
   onProgress?: UploadProgressCallback
 ): Promise<CourseMaterial> {
+  await assertPlatformAdminWrite('subir material de curso');
   const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const storagePath = `courses/${courseId}/lessons/${lessonId}/${Date.now()}_${sanitized}`;
   const fileRef = ref(storage, storagePath);
@@ -116,6 +117,7 @@ export async function uploadCourseMaterial(
  * Silently ignores "not found" errors.
  */
 export async function deleteCourseMaterial(url: string): Promise<void> {
+  await assertPlatformAdminWrite('eliminar material de curso');
   try {
     // Convert download URL to storage ref
     const fileRef = ref(storage, url);

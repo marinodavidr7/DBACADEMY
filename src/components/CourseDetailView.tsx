@@ -64,7 +64,7 @@ export const CourseDetailView: React.FC = () => {
 
   const enrollment = enrollments.find((e) => e.courseId === course.id);
   const isEnrolled = Boolean(enrollment);
-  const hasInstructorAccess = isAdmin || course.instructorId === user?.uid;
+  const hasInstructorAccess = isAdmin;
   const isExcelCourse = course.id === 'excel-basico-05' || /excel/i.test(course.title);
 
   const totalMinutes = course.modules.reduce((acc, m) => acc + (m.durationMinutes || 0), 0);

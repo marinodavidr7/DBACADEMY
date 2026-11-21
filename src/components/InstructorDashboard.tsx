@@ -12,16 +12,19 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  Lock,
   Paperclip,
   Pencil,
   Play,
   Plus,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { isAuthorizedAdminEmail } from '../firebase';
 import type { Course, CourseLesson, CourseModule } from '../types';
 import { exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
@@ -110,6 +113,7 @@ export const InstructorDashboard: React.FC = () => {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
@@ -129,6 +133,10 @@ export const InstructorDashboard: React.FC = () => {
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
   const [draftCourseId] = useState(() => `crs_${Date.now().toString(36)}`);
+
+  const canAdminMutate = Boolean(
+    user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email)
+  );
 
   const totalRevenueCents = useMemo(
     () =>
@@ -160,13 +168,51 @@ export const InstructorDashboard: React.FC = () => {
 
   if (!user) return <AuthGateNotice />;
 
+  if (!canAdminMutate) {
+    return (
+      <div className="mx-auto my-8 max-w-xl rounded-2xl border border-red-200 dark:border-red-900/60 bg-white dark:bg-[#111827] p-8 text-center space-y-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+          Acceso restringido al Administrador
+        </h2>
+        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+          Solo el correo administrador autorizado y verificado (<span className="font-mono font-semibold">Marinodavidr7@gmail.com</span>) tiene permisos de creación, edición o borrado en la plataforma.
+        </p>
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveView('catalog')}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors min-h-[40px]"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Volver al catálogo</span>
+          </button>
+          <span className="inline-flex items-center gap-1.5 px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Sesión actual: {user.email || 'Estudiante'}</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const requestGeneratedCover = async (targetTitle?: string): Promise<string> => {
+    if (!canAdminMutate) {
+      setCoverError('Permiso denegado: solo Marinodavidr7@gmail.com puede generar portadas.');
+      return coverImage || STUDIO_COVER_PRESETS[0].url;
+    }
     setGeneratingCover(true);
     setCoverError('');
     try {
+      const idToken = await user.getIdToken();
       const res = await fetch('/api/v1/courses/generate-cover', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           title: (targetTitle ?? title).trim() || 'Curso DB Academy',
           category,
@@ -191,6 +237,10 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleStartNew = () => {
+    if (!canAdminMutate) {
+      setSaveError('Solo el correo autorizado Marinodavidr7@gmail.com puede crear cursos.');
+      return;
+    }
     const initialMod = createEmptyModule(1);
     setEditingCourse(null);
     setTitle('');
@@ -212,6 +262,10 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleStartEdit = (course: Course) => {
+    if (!canAdminMutate) {
+      setSaveError('Solo el correo autorizado Marinodavidr7@gmail.com puede editar cursos.');
+      return;
+    }
     const clonedModules =
       course.modules && course.modules.length > 0
         ? cloneCourseModules(course.modules)
@@ -251,6 +305,7 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const updateModuleField = (moduleId: string, patch: Partial<CourseModule>) => {
+    if (!canAdminMutate) return;
     setModulesState((prev) =>
       prev.map((m) => (m.id === moduleId ? { ...m, ...patch } : m))
     );
@@ -261,6 +316,7 @@ export const InstructorDashboard: React.FC = () => {
     lessonId: string,
     patch: Partial<CourseLesson>
   ) => {
+    if (!canAdminMutate) return;
     setModulesState((prev) =>
       prev.map((m) => {
         if (m.id !== moduleId) return m;
@@ -273,7 +329,7 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleAddModule = () => {
-    if (modulesState.length >= 12) return;
+    if (!canAdminMutate || modulesState.length >= 12) return;
     const nextMod = createEmptyModule(modulesState.length + 1);
     setModulesState((prev) => [...prev, nextMod]);
     setExpandedModuleIds((prev) => ({ ...prev, [nextMod.id]: true }));
@@ -281,11 +337,12 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleRemoveModule = (moduleId: string) => {
-    if (modulesState.length <= 1) return;
+    if (!canAdminMutate || modulesState.length <= 1) return;
     setModulesState((prev) => prev.filter((m) => m.id !== moduleId));
   };
 
   const handleAddLesson = (moduleId: string) => {
+    if (!canAdminMutate) return;
     const mod = modulesState.find((m) => m.id === moduleId);
     const nextIdx = (mod?.lessons.length ?? 0) + 1;
     const nextLesson = createEmptyLesson(nextIdx);
@@ -299,6 +356,7 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleRemoveLesson = (moduleId: string, lessonId: string) => {
+    if (!canAdminMutate) return;
     setModulesState((prev) =>
       prev.map((m) => {
         if (m.id !== moduleId || m.lessons.length <= 1) return m;
@@ -311,6 +369,12 @@ export const InstructorDashboard: React.FC = () => {
     e.preventDefault();
     setSaveError('');
     setSaveSuccess('');
+    if (!canAdminMutate) {
+      setSaveError(
+        'Acceso denegado: solo el correo verificado Marinodavidr7@gmail.com tiene permisos de edición o escritura.'
+      );
+      return;
+    }
     setCreating(true);
     try {
       const resolvedCover = coverImage || (await requestGeneratedCover(title));
@@ -430,8 +494,11 @@ export const InstructorDashboard: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
             {t('instructorTitle')}
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {courses.length} programas en plataforma · {isAdmin ? 'Acceso completo de Administrador' : 'Panel de instructor'}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>
+              {courses.length} programas en plataforma · Administrador verificado ({user.email})
+            </span>
           </p>
         </div>
 
@@ -996,6 +1063,7 @@ export const InstructorDashboard: React.FC = () => {
                                       lessonId={lesson.id}
                                       lessonTitle={lesson.title || `Lección ${lessonIdx + 1}`}
                                       materials={lesson.materials ?? []}
+                                      canEdit={canAdminMutate}
                                       onChange={(updated) =>
                                         updateLessonField(mod.id, lesson.id, {
                                           materials: updated,
@@ -1142,7 +1210,10 @@ export const InstructorDashboard: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setCourseToDelete(course)}
+                    onClick={() => {
+                      setDeleteError('');
+                      setCourseToDelete(course);
+                    }}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
                     title="Eliminar curso"
                   >
@@ -1314,7 +1385,7 @@ export const InstructorDashboard: React.FC = () => {
                   ¿Eliminar este curso?
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Esta acción eliminará permanentemente el programa de la plataforma.
+                  Acción exclusiva del administrador verificado ({user.email}).
                 </p>
               </div>
             </div>
@@ -1328,28 +1399,51 @@ export const InstructorDashboard: React.FC = () => {
               </p>
             </div>
 
+            {deleteError && (
+              <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-2.5 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 disabled={deleting}
-                onClick={() => setCourseToDelete(null)}
+                onClick={() => {
+                  setDeleteError('');
+                  setCourseToDelete(null);
+                }}
                 className="px-4 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                disabled={deleting}
+                disabled={deleting || !canAdminMutate}
                 onClick={async () => {
+                  if (!canAdminMutate) {
+                    setDeleteError(
+                      'Acceso denegado: solo Marinodavidr7@gmail.com puede eliminar cursos.'
+                    );
+                    return;
+                  }
                   setDeleting(true);
+                  setDeleteError('');
                   try {
                     await deleteCourse(courseToDelete.id);
                     setCourseToDelete(null);
+                  } catch (err) {
+                    setDeleteError(
+                      err instanceof Error
+                        ? err.message
+                        : 'No se pudo eliminar el curso. Verifica tus permisos de administrador.'
+                    );
                   } finally {
                     setDeleting(false);
                   }
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors min-h-[38px]"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-xs font-semibold text-white transition-colors min-h-[38px]"
               >
                 {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Sí, eliminar curso</span>

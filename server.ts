@@ -14,6 +14,134 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 
+const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
+const FIREBASE_CERT_URL =
+  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+
+function loadFirebaseProjectId(): string {
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, 'firebase-applet-config.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { projectId?: string };
+    if (parsed.projectId) return parsed.projectId;
+  } catch {
+    // Fallback handled below
+  }
+  return process.env.FIREBASE_PROJECT_ID || 'river-pipe-m6tvw';
+}
+
+const FIREBASE_PROJECT_ID = loadFirebaseProjectId();
+let cachedGoogleCerts: { certs: Record<string, string>; expiresAt: number } = {
+  certs: {},
+  expiresAt: 0,
+};
+
+async function getGooglePublicCerts(forceRefresh = false): Promise<Record<string, string>> {
+  if (!forceRefresh && Date.now() < cachedGoogleCerts.expiresAt && Object.keys(cachedGoogleCerts.certs).length > 0) {
+    return cachedGoogleCerts.certs;
+  }
+  const resp = await fetch(FIREBASE_CERT_URL);
+  if (!resp.ok) {
+    throw new Error('Unable to fetch Firebase public verification certificates');
+  }
+  const cacheControl = resp.headers.get('cache-control') || '';
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const maxAgeSec = maxAgeMatch ? Number(maxAgeMatch[1]) : 3600;
+  const certs = (await resp.json()) as Record<string, string>;
+  cachedGoogleCerts = {
+    certs,
+    expiresAt: Date.now() + Math.max(60, maxAgeSec) * 1000,
+  };
+  return certs;
+}
+
+class AuthValidationError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function verifyFirebaseAdminBearerToken(
+  authHeader?: string
+): Promise<{ uid: string; email: string }> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new AuthValidationError(401, 'Token de autenticación requerido.');
+  }
+  const token = authHeader.slice('Bearer '.length).trim();
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    throw new AuthValidationError(401, 'Formato de token inválido.');
+  }
+  const [headerB64, payloadB64, sigB64] = parts;
+
+  let header: { alg?: string; kid?: string };
+  let payload: {
+    aud?: unknown;
+    iss?: unknown;
+    sub?: unknown;
+    exp?: unknown;
+    iat?: unknown;
+    email?: unknown;
+    email_verified?: unknown;
+  };
+  try {
+    header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8')) as {
+      alg?: string;
+      kid?: string;
+    };
+    payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as typeof payload;
+  } catch {
+    throw new AuthValidationError(401, 'Token JWT malformado.');
+  }
+
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid) {
+    throw new AuthValidationError(401, 'Algoritmo o identificador de clave no válido.');
+  }
+
+  let certs = await getGooglePublicCerts(false);
+  let cert = certs[header.kid];
+  if (!cert) {
+    certs = await getGooglePublicCerts(true);
+    cert = certs[header.kid];
+  }
+  if (!cert) {
+    throw new AuthValidationError(401, 'Certificado de firma no reconocido.');
+  }
+
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(`${headerB64}.${payloadB64}`);
+  verifier.end();
+  const isSignatureValid = verifier.verify(cert, Buffer.from(sigB64, 'base64url'));
+  if (!isSignatureValid) {
+    throw new AuthValidationError(401, 'Firma del token de Firebase inválida.');
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (
+    payload.aud !== FIREBASE_PROJECT_ID ||
+    payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}` ||
+    typeof payload.sub !== 'string' ||
+    payload.sub.length === 0 ||
+    typeof payload.exp !== 'number' ||
+    payload.exp <= nowSec ||
+    typeof payload.iat !== 'number' ||
+    payload.iat > nowSec + 60
+  ) {
+    throw new AuthValidationError(401, 'Token expirado o emitido para otro proyecto.');
+  }
+
+  const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+  if (payload.email_verified !== true || email !== AUTHORIZED_ADMIN_EMAIL) {
+    throw new AuthValidationError(
+      403,
+      'Permiso denegado: solo Marinodavidr7@gmail.com tiene permisos de escritura.'
+    );
+  }
+
+  return { uid: payload.sub, email };
+}
+
 interface SyncClient {
   ws: WebSocket;
   uid: string;
@@ -343,7 +471,18 @@ async function startServer() {
   fs.mkdirSync(generatedCoversDir, { recursive: true });
   app.use('/generated-covers', express.static(generatedCoversDir));
 
-  app.post('/api/v1/courses/generate-cover', (req, res) => {
+  app.post('/api/v1/courses/generate-cover', async (req, res) => {
+    try {
+      await verifyFirebaseAdminBearerToken(req.headers.authorization);
+    } catch (err) {
+      if (err instanceof AuthValidationError) {
+        res.status(err.status).json({ error: err.message });
+        return;
+      }
+      res.status(401).json({ error: 'No autorizado para generar portadas.' });
+      return;
+    }
+
     const { title, category, level } = req.body ?? {};
     const safeTitle = String(title || 'Nuevo Curso Técnico').trim().slice(0, 64);
     const safeCategory = String(category || 'DB Academy').trim().slice(0, 32);

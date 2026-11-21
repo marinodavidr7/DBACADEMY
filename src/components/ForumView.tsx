@@ -92,10 +92,8 @@ export const ForumView: React.FC = () => {
     setReplyText('');
   };
 
-  const canModerate = (th: ForumThread) => {
-    const course = courses.find((c) => c.id === th.courseId);
-    return Boolean(isAdmin || th.authorId === user.uid || course?.instructorId === user.uid);
-  };
+  const canModerate = (th: ForumThread) =>
+    Boolean(isAdmin || th.authorId === user.uid);
 
   return (
     <div className="space-y-6">
@@ -280,16 +278,17 @@ export const ForumView: React.FC = () => {
                     <ThumbsUp className="w-3.5 h-3.5" />
                     <span className="tabular-nums">{activeThread.upvotesCount}</span>
                   </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleForumThreadState(activeThread, 'pinned')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      <Pin className="w-3.5 h-3.5" />
+                      <span>{t('pinned')}</span>
+                    </button>
+                  )}
                   {canModerate(activeThread) && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void toggleForumThreadState(activeThread, 'pinned')}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                      >
-                        <Pin className="w-3.5 h-3.5" />
-                        <span>{t('pinned')}</span>
-                      </button>
                       <button
                         type="button"
                         onClick={() => void toggleForumThreadState(activeThread, 'resolved')}
@@ -298,7 +297,6 @@ export const ForumView: React.FC = () => {
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>{t('resolved')}</span>
                       </button>
-                    </>
                   )}
                 </div>
               </div>

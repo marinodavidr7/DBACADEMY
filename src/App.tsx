@@ -90,7 +90,7 @@ const AppShell: React.FC = () => {
     { id: 'landing', label: t('navHome'), icon: Home },
     { id: 'catalog', label: t('navCatalog'), icon: BookOpen },
     { id: 'learning', label: t('navLearning'), icon: GraduationCap },
-    { id: 'instructor', label: t('navInstructor'), icon: LayoutDashboard },
+    ...(isAdmin ? [{ id: 'instructor' as AppView, label: t('navInstructor'), icon: LayoutDashboard }] : []),
     { id: 'forums', label: t('navForums'), icon: MessageSquare },
     { id: 'certificates', label: t('navCertificates'), icon: Award },
     { id: 'calendar', label: t('navCalendar'), icon: Calendar },
@@ -372,13 +372,15 @@ const AppShell: React.FC = () => {
             >
               {t('navLearning')}
             </button>
-            <button
-              type="button"
-              onClick={() => handleSelectNav('instructor')}
-              className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
-            >
-              {t('navInstructor')}
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => handleSelectNav('instructor')}
+                className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
+              >
+                {t('navInstructor')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => handleSelectNav('calendar')}

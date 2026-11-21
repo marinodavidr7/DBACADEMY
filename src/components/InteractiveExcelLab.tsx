@@ -19,6 +19,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { isAuthorizedAdminEmail } from '../firebase';
 import {
   EXCEL_CURRICULUM,
   type ExcelExercise,
@@ -80,6 +81,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   onSolved,
 }) => {
   const { user, isAdmin, customExercises, deleteCustomExercise } = usePlatform();
+  const canAdminManage = Boolean(
+    user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email)
+  );
 
   const curriculum: ExcelLessonCurriculum = useMemo(
     () => EXCEL_CURRICULUM[lessonId] || EXCEL_CURRICULUM['les-excel-0-1'],
@@ -711,14 +715,16 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setCreatorOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-3 py-1.5 text-xs font-semibold text-white transition-colors shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Crear ejercicio</span>
-              </button>
+              {canAdminManage && (
+                <button
+                  type="button"
+                  onClick={() => setCreatorOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-3 py-1.5 text-xs font-semibold text-white transition-colors shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Crear ejercicio</span>
+                </button>
+              )}
               <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
                 Resueltos: {solvedCount}/{allExercises.length}
               </span>
@@ -804,15 +810,24 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {activeExercise.isCustom &&
-                    (isAdmin ||
-                      activeExercise.ownerId === user?.uid ||
-                      activeExercise.ownerId === 'local-creator') && (
+                  {activeExercise.isCustom && canAdminManage && (
                       <button
                         type="button"
                         onClick={() => {
-                          void deleteCustomExercise(activeExercise.id);
-                          setExerciseIdx(0);
+                          void deleteCustomExercise(activeExercise.id)
+                            .then(() => {
+                              setExerciseIdx(0);
+                              setCheckResult(null);
+                            })
+                            .catch((err: unknown) => {
+                              setCheckResult({
+                                ok: false,
+                                feedback:
+                                  err instanceof Error
+                                    ? err.message
+                                    : 'Solo Marinodavidr7@gmail.com puede eliminar ejercicios.',
+                              });
+                            });
                         }}
                         className="inline-flex items-center gap-1 rounded-md border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-[11px] font-medium text-red-700 dark:text-red-300 hover:bg-red-100"
                         title="Eliminar ejercicio personalizado"
@@ -1125,15 +1140,17 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         </div>
       </section>
 
-      <ExerciseCreatorModal
-        open={creatorOpen}
-        defaultLessonId={lessonId}
-        onClose={() => setCreatorOpen(false)}
-        onCreated={() => {
-          setLoadedExampleId(null);
-          setExerciseIdx(allExercises.length);
-        }}
-      />
+      {isAdmin && (
+        <ExerciseCreatorModal
+          open={creatorOpen}
+          defaultLessonId={lessonId}
+          onClose={() => setCreatorOpen(false)}
+          onCreated={() => {
+            setLoadedExampleId(null);
+            setExerciseIdx(allExercises.length);
+          }}
+        />
+      )}
       </>
       )}
     </div>

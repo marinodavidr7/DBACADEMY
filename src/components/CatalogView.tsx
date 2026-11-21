@@ -31,7 +31,7 @@ export const CatalogView: React.FC = () => {
 
   const filtered = useMemo(() => {
     return courses.filter((c) => {
-      if (!c.published && !isAdmin && c.instructorId !== user?.uid) {
+      if (!c.published && !isAdmin) {
         return false;
       }
       const q = search.trim().toLowerCase();
@@ -44,7 +44,7 @@ export const CatalogView: React.FC = () => {
       const matchesLevel = selectedLevel === 'all' || c.level === selectedLevel;
       return matchesSearch && matchesCategory && matchesLevel;
     });
-  }, [courses, isAdmin, user?.uid, search, selectedCategory, selectedLevel]);
+  }, [courses, isAdmin, search, selectedCategory, selectedLevel]);
 
   const levelLabel = (lvl: Course['level']) => {
     if (lvl === 'beginner') return t('beginner');
@@ -80,16 +80,18 @@ export const CatalogView: React.FC = () => {
                 <span>{t('exploreCatalog')}</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
-              <button
-                type="button"
-                onClick={() => {
-                  setWorkspaceRole('instructor');
-                  setActiveView('instructor');
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[44px]"
-              >
-                <span>{t('openInstructor')}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceRole('instructor');
+                    setActiveView('instructor');
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[44px]"
+                >
+                  <span>{t('openInstructor')}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -276,7 +278,7 @@ export const CatalogView: React.FC = () => {
                           <span>Ver programa</span>
                         </button>
 
-                        {isEnrolled || isAdmin || course.instructorId === user?.uid ? (
+                        {isEnrolled || isAdmin ? (
                           <button
                             type="button"
                             onClick={() => {

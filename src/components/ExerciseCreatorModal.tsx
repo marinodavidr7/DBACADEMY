@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { isAuthorizedAdminEmail } from '../firebase';
 import { EXCEL_BASICO_COURSE } from '../data/seedCourses';
 import type { CustomExcelExercise } from '../types';
 import {
@@ -159,7 +160,10 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   onClose,
   onCreated,
 }) => {
-  const { createCustomExercise } = usePlatform();
+  const { user, isAdmin, createCustomExercise } = usePlatform();
+  const canCreateExercise = Boolean(
+    user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email)
+  );
 
   const allLessons = useMemo(
     () =>
@@ -222,7 +226,7 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
     previewResult !== '' &&
     !isExcelError(previewResult);
 
-  if (!open) return null;
+  if (!open || !canCreateExercise) return null;
 
   const applyTemplate = (tpl: (typeof STARTER_TEMPLATES)[number]) => {
     const dims = getSheetDimensions(tpl.sheet, tpl.targetCell);
@@ -415,6 +419,13 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!canCreateExercise) {
+      setError(
+        'Acceso denegado: solo el correo verificado Marinodavidr7@gmail.com puede crear o editar ejercicios.'
+      );
+      return;
+    }
 
     if (title.trim().length < 2) {
       setError('El título debe tener al menos 2 caracteres.');

@@ -19,6 +19,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import { auth, isAuthorizedAdminEmail } from '../firebase';
 import type { CourseMaterial, CourseMaterialType } from '../types';
 import {
   buildExternalMaterial,
@@ -56,6 +57,7 @@ interface Props {
   lessonId: string;
   lessonTitle: string;
   materials: CourseMaterial[];
+  canEdit?: boolean;
   onChange: (updated: CourseMaterial[]) => void;
 }
 
@@ -76,10 +78,12 @@ export function MaterialUploader({
   lessonId,
   lessonTitle,
   materials,
+  canEdit = true,
   onChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<UploadTask[]>([]);
+  const [permissionError, setPermissionError] = useState('');
 
   // External URL form
   const [showExtForm, setShowExtForm] = useState(false);
@@ -87,12 +91,26 @@ export function MaterialUploader({
   const [extName, setExtName] = useState('');
   const [extType, setExtType] = useState<CourseMaterialType>('other');
 
+  const isAuthorizedAdminSession = () => {
+    const current = auth.currentUser;
+    return Boolean(
+      canEdit && current?.emailVerified && isAuthorizedAdminEmail(current.email)
+    );
+  };
+
   /* ---------------------------------------------------------------- */
   /*  File picker handler                                               */
   /* ---------------------------------------------------------------- */
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
+      if (!isAuthorizedAdminSession()) {
+        setPermissionError(
+          'Permiso denegado: solo el correo verificado Marinodavidr7@gmail.com puede subir materiales.'
+        );
+        return;
+      }
+      setPermissionError('');
 
       const tempId = courseId.startsWith('crs_') ? courseId : `tmp_${Date.now().toString(36)}`;
 
@@ -133,7 +151,7 @@ export function MaterialUploader({
       // Clear progress after a brief pause
       setTimeout(() => setUploading([]), 1800);
     },
-    [courseId, lessonId, materials, onChange]
+    [courseId, lessonId, materials, canEdit, onChange]
   );
 
   /* ---------------------------------------------------------------- */
@@ -154,6 +172,13 @@ export function MaterialUploader({
   /*  External link                                                     */
   /* ---------------------------------------------------------------- */
   const addExternal = () => {
+    if (!isAuthorizedAdminSession()) {
+      setPermissionError(
+        'Permiso denegado: solo el correo verificado Marinodavidr7@gmail.com puede agregar enlaces.'
+      );
+      return;
+    }
+    setPermissionError('');
     if (!extUrl.trim()) return;
     const name = extName.trim() || extUrl.trim().split('/').pop() || 'Enlace';
     onChange([...materials, buildExternalMaterial(name, extUrl.trim(), extType)]);
@@ -167,6 +192,13 @@ export function MaterialUploader({
   /*  Remove material                                                   */
   /* ---------------------------------------------------------------- */
   const removeMaterial = (id: string) => {
+    if (!isAuthorizedAdminSession()) {
+      setPermissionError(
+        'Permiso denegado: solo el correo verificado Marinodavidr7@gmail.com puede eliminar materiales.'
+      );
+      return;
+    }
+    setPermissionError('');
     onChange(materials.filter((m) => m.id !== id));
   };
 
@@ -182,26 +214,34 @@ export function MaterialUploader({
             Materiales — <span className="font-normal text-slate-500">{lessonTitle}</span>
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowExtForm((v) => !v)}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Agregar enlace externo"
-          >
-            <Plus className="w-3 h-3" />
-            Enlace
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-          >
-            <UploadCloud className="w-3 h-3" />
-            Subir archivo
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowExtForm((v) => !v)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Agregar enlace externo"
+            >
+              <Plus className="w-3 h-3" />
+              Enlace
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              <UploadCloud className="w-3 h-3" />
+              Subir archivo
+            </button>
+          </div>
+        )}
       </div>
+
+      {permissionError && (
+        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">
+          {permissionError}
+        </div>
+      )}
 
       {/* Hidden file input */}
       <input
@@ -214,7 +254,7 @@ export function MaterialUploader({
       />
 
       {/* Drop zone (shown when no materials yet) */}
-      {materials.length === 0 && uploading.length === 0 && (
+      {canEdit && materials.length === 0 && uploading.length === 0 && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -297,36 +337,40 @@ export function MaterialUploader({
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
-              <button
-                type="button"
-                onClick={() => removeMaterial(mat.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"
-                title="Eliminar material"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => removeMaterial(mat.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"
+                  title="Eliminar material"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ))}
           {/* Show drop target below the list too */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={`w-full text-xs text-center py-2 rounded-lg border-2 border-dashed transition-colors ${
-              dragging
-                ? 'border-blue-400 text-blue-600'
-                : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-blue-300 hover:text-blue-500'
-            }`}
-          >
-            + Agregar más archivos
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={`w-full text-xs text-center py-2 rounded-lg border-2 border-dashed transition-colors ${
+                dragging
+                  ? 'border-blue-400 text-blue-600'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-blue-300 hover:text-blue-500'
+              }`}
+            >
+              + Agregar más archivos
+            </button>
+          )}
         </div>
       )}
 
       {/* External URL form */}
-      {showExtForm && (
+      {canEdit && showExtForm && (
         <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 space-y-2">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
             Agregar enlace externo

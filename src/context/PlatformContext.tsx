@@ -25,10 +25,13 @@ import {
 } from 'firebase/firestore';
 import { EXCEL_BASICO_COURSE, REMOVED_SEED_COURSE_IDS, SEED_COURSES } from '../data/seedCourses';
 import {
+  assertPlatformAdminWrite,
   auth,
+  AUTHORIZED_ADMIN_EMAIL,
   db,
   googleProvider,
   handleFirestoreError,
+  isAuthorizedAdminEmail,
   isFirestoreOfflineError,
   OperationType,
 } from '../firebase';
@@ -54,7 +57,7 @@ import type {
 } from '../types';
 import { encryptTextE2EE, getOrCreateVaultKey, sha256Hex } from '../utils/crypto';
 
-const ADMIN_EMAIL = 'marinodavidr7@gmail.com';
+const isAdminEmail = isAuthorizedAdminEmail;
 const CUSTOM_EXERCISES_STORAGE_KEY = 'dbacademy_custom_exercises_v1';
 
 function loadLocalCustomExercises(): CustomExcelExercise[] {
@@ -283,7 +286,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [activeView, zenMode]);
 
   const isAdmin = useMemo(
-    () => Boolean(user?.emailVerified && user?.email === ADMIN_EMAIL),
+    () => Boolean(user?.emailVerified && isAdminEmail(user?.email)),
     [user]
   );
 
@@ -461,60 +464,55 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           );
         }
 
-        const isCurrentAdmin = Boolean(firebaseUser.emailVerified && firebaseUser.email === ADMIN_EMAIL);
-        // Remove deprecated non-Excel courses and seed missing Excel course into Firestore
-        const existingCourses = await withRetry(() =>
-          getDocs(
-            isCurrentAdmin
-              ? collection(db, 'courses')
-              : query(collection(db, 'courses'), where('published', '==', true))
-          )
+        const isCurrentAdmin = Boolean(
+          firebaseUser.emailVerified && isAdminEmail(firebaseUser.email)
         );
-        const existingIds = new Set(existingCourses.docs.map((d) => d.id));
-        const missingCourses = SEED_COURSES.filter((c) => !existingIds.has(c.id));
         const alreadyCleaned = localStorage.getItem('db_academy_non_excel_cleaned_v1') === '1';
-        const coursesToDelete = existingCourses.docs.filter((d) => {
-          if (d.id === EXCEL_BASICO_COURSE.id) return false;
-          const canDelete = isCurrentAdmin || d.data().instructorId === firebaseUser.uid;
-          if (!canDelete) return false;
-          return REMOVED_SEED_COURSE_IDS.includes(d.id) || !alreadyCleaned;
-        });
 
-        const existingExcelSnap = existingCourses.docs.find((d) => d.id === EXCEL_BASICO_COURSE.id);
-        const excelMergeResult = existingExcelSnap
-          ? mergeSeedLessonsIntoCourse(existingExcelSnap.data() as Course)
-          : null;
-        const canUpdateExistingExcel = Boolean(
-          existingExcelSnap &&
-            excelMergeResult?.changed &&
-            (isCurrentAdmin || existingExcelSnap.data().instructorId === firebaseUser.uid)
-        );
+        if (isCurrentAdmin) {
+          // Solo el administrador único puede sembrar, limpiar o actualizar cursos en Firestore
+          const existingCourses = await withRetry(() => getDocs(collection(db, 'courses')));
+          const existingIds = new Set(existingCourses.docs.map((d) => d.id));
+          const missingCourses = SEED_COURSES.filter((c) => !existingIds.has(c.id));
+          const coursesToDelete = existingCourses.docs.filter((d) => {
+            if (d.id === EXCEL_BASICO_COURSE.id) return false;
+            return REMOVED_SEED_COURSE_IDS.includes(d.id) || !alreadyCleaned;
+          });
 
-        if (missingCourses.length > 0 || coursesToDelete.length > 0 || canUpdateExistingExcel) {
-          const batch = writeBatch(db);
-          for (const docSnap of coursesToDelete) {
-            batch.delete(docSnap.ref);
+          const existingExcelSnap = existingCourses.docs.find(
+            (d) => d.id === EXCEL_BASICO_COURSE.id
+          );
+          const excelMergeResult = existingExcelSnap
+            ? mergeSeedLessonsIntoCourse(existingExcelSnap.data() as Course)
+            : null;
+          const canUpdateExistingExcel = Boolean(existingExcelSnap && excelMergeResult?.changed);
+
+          if (missingCourses.length > 0 || coursesToDelete.length > 0 || canUpdateExistingExcel) {
+            const batch = writeBatch(db);
+            for (const docSnap of coursesToDelete) {
+              batch.delete(docSnap.ref);
+            }
+            for (const course of missingCourses) {
+              batch.set(doc(db, 'courses', course.id), {
+                ...course,
+                instructorId: firebaseUser.uid,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+            if (canUpdateExistingExcel && excelMergeResult) {
+              batch.update(doc(db, 'courses', EXCEL_BASICO_COURSE.id), {
+                modulesCount: excelMergeResult.course.modulesCount,
+                totalLessons: excelMergeResult.course.totalLessons,
+                modules: excelMergeResult.course.modules,
+                updatedAt: serverTimestamp(),
+              });
+            }
+            await withRetry(() => batch.commit());
           }
-          for (const course of missingCourses) {
-            batch.set(doc(db, 'courses', course.id), {
-              ...course,
-              instructorId: firebaseUser.uid,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+          if (!alreadyCleaned) {
+            localStorage.setItem('db_academy_non_excel_cleaned_v1', '1');
           }
-          if (canUpdateExistingExcel && excelMergeResult) {
-            batch.update(doc(db, 'courses', EXCEL_BASICO_COURSE.id), {
-              modulesCount: excelMergeResult.course.modulesCount,
-              totalLessons: excelMergeResult.course.totalLessons,
-              modules: excelMergeResult.course.modules,
-              updatedAt: serverTimestamp(),
-            });
-          }
-          await withRetry(() => batch.commit());
-        }
-        if (!alreadyCleaned) {
-          localStorage.setItem('db_academy_non_excel_cleaned_v1', '1');
         }
         if (activeUid === firebaseUser.uid) {
           bootstrapCompletedForUid = firebaseUser.uid;
@@ -766,16 +764,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       )
     );
 
-    const instEnrollQuery = isAdmin
-      ? collection(db, 'enrollments')
-      : query(collection(db, 'enrollments'), where('instructorId', '==', user.uid));
-    unsubs.push(
-      onSnapshot(
-        instEnrollQuery,
-        (snap) => setInstructorEnrollments(snap.docs.map((d) => d.data() as Enrollment)),
-        (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments/instructor')
-      )
-    );
+    if (isAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'enrollments'),
+          (snap) => setInstructorEnrollments(snap.docs.map((d) => d.data() as Enrollment)),
+          (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments/instructor')
+        )
+      );
+    } else {
+      setInstructorEnrollments([]);
+    }
 
     unsubs.push(
       onSnapshot(
@@ -785,16 +784,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       )
     );
 
-    const instPayQuery = isAdmin
-      ? collection(db, 'payments')
-      : query(collection(db, 'payments'), where('instructorId', '==', user.uid));
-    unsubs.push(
-      onSnapshot(
-        instPayQuery,
-        (snap) => setInstructorPayments(snap.docs.map((d) => d.data() as PaymentRecord)),
-        (err) => handleFirestoreError(err, OperationType.LIST, 'payments/instructor')
-      )
-    );
+    if (isAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'payments'),
+          (snap) => setInstructorPayments(snap.docs.map((d) => d.data() as PaymentRecord)),
+          (err) => handleFirestoreError(err, OperationType.LIST, 'payments/instructor')
+        )
+      );
+    } else {
+      setInstructorPayments([]);
+    }
 
     unsubs.push(
       onSnapshot(
@@ -937,7 +937,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const signInAsAdmin = useCallback(async () => {
     setAuthError(null);
-    googleProvider.setCustomParameters({ prompt: 'select_account', login_hint: ADMIN_EMAIL });
+    googleProvider.setCustomParameters({ prompt: 'select_account', login_hint: AUTHORIZED_ADMIN_EMAIL });
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: unknown) {
@@ -1034,15 +1034,22 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       let resolvedInstructorId =
         course.instructorId === 'platform-faculty' ? user.uid : course.instructorId;
       if (!courseSnap.exists()) {
-        try {
-          await setDoc(courseRef, {
-            ...course,
-            instructorId: resolvedInstructorId,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, `courses/${course.id}`);
+        if (isAdmin && user.emailVerified) {
+          await assertPlatformAdminWrite('registrar curso en inscripción', user);
+          try {
+            await setDoc(courseRef, {
+              ...course,
+              instructorId: resolvedInstructorId,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.CREATE, `courses/${course.id}`);
+          }
+        } else {
+          throw new Error(
+            'El curso aún no está publicado en Firestore. Solicita al administrador (Marinodavidr7@gmail.com) que inicie sesión para sincronizar el catálogo.'
+          );
         }
       } else {
         resolvedInstructorId = String(courseSnap.data()?.instructorId || resolvedInstructorId);
@@ -1111,7 +1118,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
       return paymentPayload;
     },
-    [user, privateInfo, triggerPushAlert, t]
+    [user, isAdmin, privateInfo, triggerPushAlert, t]
   );
 
   const completeLesson = useCallback(
@@ -1213,14 +1220,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (
       courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>
     ) => {
-      if (!user) throw new Error('Authentication required');
+      if (!user || !isAdmin) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede crear cursos.'
+        );
+      }
+      const verifiedAdmin = await assertPlatformAdminWrite('crear cursos', user);
       const id = `crs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       try {
         await setDoc(doc(db, 'courses', id), {
           ...courseInput,
           id,
-          instructorId: user.uid,
-          instructorName: (user.displayName || user.email || 'Profesor').slice(0, 100),
+          instructorId: verifiedAdmin.uid,
+          instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -1228,12 +1240,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.CREATE, `courses/${id}`);
       }
     },
-    [user]
+    [user, isAdmin]
   );
 
   const updateCourse = useCallback(
     async (courseId: string, patch: Partial<Course>) => {
-      if (!user) throw new Error('Authentication required');
+      if (!user || !isAdmin) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede editar cursos.'
+        );
+      }
+      const verifiedAdmin = await assertPlatformAdminWrite('editar cursos', user);
       const courseRef = doc(db, 'courses', courseId);
       const allowedPatch: Record<string, unknown> = {};
 
@@ -1287,8 +1304,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ...existingLocal,
             ...allowedPatch,
             id: courseId,
-            instructorId: user.uid,
-            instructorName: (user.displayName || user.email || existingLocal.instructorName || 'Profesor').slice(0, 100),
+            instructorId: verifiedAdmin.uid,
+            instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || existingLocal.instructorName || 'Profesor').slice(0, 100),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -1297,12 +1314,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.UPDATE, `courses/${courseId}`);
       }
     },
-    [user, courses]
+    [user, isAdmin, courses]
   );
 
   const deleteCourse = useCallback(
     async (courseId: string) => {
-      if (!user) throw new Error('Authentication required');
+      if (!user || !isAdmin) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede eliminar cursos.'
+        );
+      }
+      await assertPlatformAdminWrite('eliminar cursos', user);
       try {
         await deleteDoc(doc(db, 'courses', courseId));
         setCourses((prev) => prev.filter((c) => c.id !== courseId));
@@ -1313,16 +1335,22 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.DELETE, `courses/${courseId}`);
       }
     },
-    [user, selectedCourseId]
+    [user, isAdmin, selectedCourseId]
   );
 
   const createCustomExercise = useCallback(
     async (
       input: Omit<CustomExcelExercise, 'id' | 'ownerId' | 'authorName' | 'createdAt' | 'updatedAt'>
     ): Promise<CustomExcelExercise> => {
+      if (!user || !isAdmin) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede crear ejercicios.'
+        );
+      }
+      const verifiedAdmin = await assertPlatformAdminWrite('crear ejercicios', user);
       const id = `ex_custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      const ownerId = user?.uid || 'local-creator';
-      const authorName = (user?.displayName || user?.email || 'Instructor').slice(0, 100);
+      const ownerId = verifiedAdmin.uid;
+      const authorName = (verifiedAdmin.displayName || verifiedAdmin.email || 'Administrador').slice(0, 100);
       const localRecord: CustomExcelExercise = {
         id,
         ownerId,
@@ -1341,57 +1369,60 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatedAt: new Date().toISOString(),
       };
 
+      try {
+        await setDoc(doc(db, 'customExercises', id), {
+          id,
+          ownerId: verifiedAdmin.uid,
+          authorName,
+          lessonId: localRecord.lessonId,
+          functionTag: localRecord.functionTag,
+          title: localRecord.title,
+          prompt: localRecord.prompt,
+          hint: localRecord.hint,
+          targetCell: localRecord.targetCell,
+          solutionFormula: localRecord.solutionFormula,
+          expectedResult: localRecord.expectedResult,
+          initialSheet: localRecord.initialSheet,
+          published: localRecord.published,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        if (!isFirestoreOfflineError(err)) {
+          handleFirestoreError(err, OperationType.CREATE, `customExercises/${id}`);
+        }
+      }
+
       const nextLocal = [...loadLocalCustomExercises(), localRecord];
       saveLocalCustomExercises(nextLocal);
       setCustomExercises((prev) => [...prev.filter((x) => x.id !== id), localRecord]);
 
-      if (user?.emailVerified) {
-        try {
-          await setDoc(doc(db, 'customExercises', id), {
-            id,
-            ownerId: user.uid,
-            authorName,
-            lessonId: localRecord.lessonId,
-            functionTag: localRecord.functionTag,
-            title: localRecord.title,
-            prompt: localRecord.prompt,
-            hint: localRecord.hint,
-            targetCell: localRecord.targetCell,
-            solutionFormula: localRecord.solutionFormula,
-            expectedResult: localRecord.expectedResult,
-            initialSheet: localRecord.initialSheet,
-            published: localRecord.published,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } catch (err) {
-          if (!isFirestoreOfflineError(err)) {
-            handleFirestoreError(err, OperationType.CREATE, `customExercises/${id}`);
-          }
-        }
-      }
       return localRecord;
     },
-    [user]
+    [user, isAdmin]
   );
 
   const deleteCustomExercise = useCallback(
     async (exerciseId: string) => {
+      if (!user || !isAdmin) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede eliminar ejercicios.'
+        );
+      }
+      await assertPlatformAdminWrite('eliminar ejercicios', user);
+      try {
+        await deleteDoc(doc(db, 'customExercises', exerciseId));
+      } catch (err) {
+        if (!isFirestoreOfflineError(err)) {
+          handleFirestoreError(err, OperationType.DELETE, `customExercises/${exerciseId}`);
+        }
+      }
+
       const nextLocal = loadLocalCustomExercises().filter((x) => x.id !== exerciseId);
       saveLocalCustomExercises(nextLocal);
       setCustomExercises((prev) => prev.filter((x) => x.id !== exerciseId));
-
-      if (user?.emailVerified) {
-        try {
-          await deleteDoc(doc(db, 'customExercises', exerciseId));
-        } catch (err) {
-          if (!isFirestoreOfflineError(err)) {
-            handleFirestoreError(err, OperationType.DELETE, `customExercises/${exerciseId}`);
-          }
-        }
-      }
     },
-    [user]
+    [user, isAdmin]
   );
 
   const createForumThread = useCallback(
@@ -1425,8 +1456,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (thread: ForumThread, body: string) => {
       if (!user) throw new Error('Authentication required');
       const replyId = `rep_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      const course = courses.find((c) => c.id === thread.courseId);
-      const isInstructorAnswer = Boolean(course && (course.instructorId === user.uid || isAdmin));
+      const isInstructorAnswer = isAdmin;
       const batch = writeBatch(db);
       batch.set(doc(db, 'forumThreads', thread.id, 'replies', replyId), {
         id: replyId,
@@ -1452,19 +1482,31 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user, courses, isAdmin, sendWs]
   );
 
-  const upvoteForumThread = useCallback(async (thread: ForumThread) => {
-    try {
-      await updateDoc(doc(db, 'forumThreads', thread.id), {
-        upvotesCount: (thread.upvotesCount || 0) + 1,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `forumThreads/${thread.id}`);
-    }
-  }, []);
+  const upvoteForumThread = useCallback(
+    async (thread: ForumThread) => {
+      if (!user) throw new Error('Authentication required');
+      try {
+        await updateDoc(doc(db, 'forumThreads', thread.id), {
+          upvotesCount: (thread.upvotesCount || 0) + 1,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `forumThreads/${thread.id}`);
+      }
+    },
+    [user]
+  );
 
   const toggleForumThreadState = useCallback(
     async (thread: ForumThread, field: 'pinned' | 'resolved') => {
+      if (!user) throw new Error('Authentication required');
+      if (field === 'pinned') {
+        await assertPlatformAdminWrite('fijar debates en el foro', user);
+      } else if (!isAdmin && thread.authorId !== user.uid) {
+        throw new Error(
+          'Solo el administrador autorizado (Marinodavidr7@gmail.com) o el autor puede cambiar el estado del debate.'
+        );
+      }
       try {
         await updateDoc(doc(db, 'forumThreads', thread.id), {
           [field]: !thread[field],
@@ -1474,7 +1516,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.UPDATE, `forumThreads/${thread.id}`);
       }
     },
-    []
+    [user, isAdmin]
   );
 
   const createCalendarEvent = useCallback(
@@ -1497,24 +1539,39 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
-  const toggleCalendarEventComplete = useCallback(async (ev: CalendarEvent) => {
-    try {
-      await updateDoc(doc(db, 'calendarEvents', ev.id), {
-        completed: !ev.completed,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `calendarEvents/${ev.id}`);
-    }
-  }, []);
+  const toggleCalendarEventComplete = useCallback(
+    async (ev: CalendarEvent) => {
+      if (!user) throw new Error('Authentication required');
+      if (!isAdmin && ev.ownerId !== user.uid) {
+        throw new Error('Permiso denegado: no puedes modificar tareas de otro usuario.');
+      }
+      try {
+        await updateDoc(doc(db, 'calendarEvents', ev.id), {
+          completed: !ev.completed,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `calendarEvents/${ev.id}`);
+      }
+    },
+    [user, isAdmin]
+  );
 
-  const deleteCalendarEvent = useCallback(async (eventId: string) => {
-    try {
-      await deleteDoc(doc(db, 'calendarEvents', eventId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `calendarEvents/${eventId}`);
-    }
-  }, []);
+  const deleteCalendarEvent = useCallback(
+    async (eventId: string) => {
+      if (!user) throw new Error('Authentication required');
+      const target = calendarEvents.find((ev) => ev.id === eventId);
+      if (target && !isAdmin && target.ownerId !== user.uid) {
+        throw new Error('Permiso denegado: no puedes eliminar eventos de otro usuario.');
+      }
+      try {
+        await deleteDoc(doc(db, 'calendarEvents', eventId));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `calendarEvents/${eventId}`);
+      }
+    },
+    [user, isAdmin, calendarEvents]
+  );
 
   const updateNotificationPrefs = useCallback(
     async (patch: Partial<UserPrivateInfo>) => {
@@ -1560,13 +1617,21 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
-  const deleteEncryptedNote = useCallback(async (noteId: string) => {
-    try {
-      await deleteDoc(doc(db, 'encryptedNotes', noteId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `encryptedNotes/${noteId}`);
-    }
-  }, []);
+  const deleteEncryptedNote = useCallback(
+    async (noteId: string) => {
+      if (!user) throw new Error('Authentication required');
+      const target = encryptedNotes.find((n) => n.id === noteId);
+      if (target && !isAdmin && target.ownerId !== user.uid) {
+        throw new Error('Permiso denegado: no puedes eliminar notas de otro usuario.');
+      }
+      try {
+        await deleteDoc(doc(db, 'encryptedNotes', noteId));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `encryptedNotes/${noteId}`);
+      }
+    },
+    [user, isAdmin, encryptedNotes]
+  );
 
   const syncCloudBackup = useCallback(
     async (provider: CloudProvider, folder: string, autoBackup: boolean) => {
@@ -1641,21 +1706,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
-  const toggleApiKey = useCallback(async (keyRecord: ApiIntegrationKey) => {
-    try {
-      await updateDoc(doc(db, 'apiKeys', keyRecord.id), { active: !keyRecord.active });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `apiKeys/${keyRecord.id}`);
-    }
-  }, []);
+  const toggleApiKey = useCallback(
+    async (keyRecord: ApiIntegrationKey) => {
+      if (!user) throw new Error('Authentication required');
+      if (!isAdmin && keyRecord.ownerId !== user.uid) {
+        throw new Error('Permiso denegado: no puedes modificar claves de otro usuario.');
+      }
+      try {
+        await updateDoc(doc(db, 'apiKeys', keyRecord.id), { active: !keyRecord.active });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `apiKeys/${keyRecord.id}`);
+      }
+    },
+    [user, isAdmin]
+  );
 
-  const deleteApiKey = useCallback(async (keyId: string) => {
-    try {
-      await deleteDoc(doc(db, 'apiKeys', keyId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `apiKeys/${keyId}`);
-    }
-  }, []);
+  const deleteApiKey = useCallback(
+    async (keyId: string) => {
+      if (!user) throw new Error('Authentication required');
+      const target = apiKeys.find((k) => k.id === keyId);
+      if (target && !isAdmin && target.ownerId !== user.uid) {
+        throw new Error('Permiso denegado: no puedes eliminar claves API de otro usuario.');
+      }
+      try {
+        await deleteDoc(doc(db, 'apiKeys', keyId));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `apiKeys/${keyId}`);
+      }
+    },
+    [user, isAdmin, apiKeys]
+  );
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,

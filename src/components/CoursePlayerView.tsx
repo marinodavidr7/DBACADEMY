@@ -150,10 +150,8 @@ export const CoursePlayerView: React.FC = () => {
   const enrolledCourses = useMemo(() => {
     // Modo estudiante: ignora el bypass de administrador y filtra como alumno normal
     if (isAdmin && !viewAsStudent) return courses;
-    return courses.filter(
-      (c) => enrollments.some((e) => e.courseId === c.id) || c.instructorId === user?.uid
-    );
-  }, [courses, enrollments, isAdmin, user?.uid, viewAsStudent]);
+    return courses.filter((c) => enrollments.some((e) => e.courseId === c.id));
+  }, [courses, enrollments, isAdmin, viewAsStudent]);
 
   const activeCourse = useMemo(() => {
     if (selectedCourseId) {
@@ -168,7 +166,7 @@ export const CoursePlayerView: React.FC = () => {
     const real = enrollments.find((e) => e.courseId === activeCourse.id);
     if (real) return real;
     // En modo estudiante no se crea un preview sintético: sin inscripción real no hay acceso
-    if ((isAdmin || activeCourse.instructorId === user?.uid) && !viewAsStudent) {
+    if (isAdmin && !viewAsStudent) {
       return {
         id: `preview_${activeCourse.id}`,
         courseId: activeCourse.id,
@@ -229,12 +227,29 @@ export const CoursePlayerView: React.FC = () => {
     [effectiveCompletedLessonIds]
   );
 
+  const allLessons = useMemo(
+    () =>
+      activeCourse
+        ? activeCourse.modules.flatMap((m, mIdx) =>
+            m.lessons.map((l, lIdx) => ({
+              ...l,
+              module: m,
+              moduleIndex: mIdx,
+              lessonInModuleIndex: lIdx,
+            }))
+          )
+        : [],
+    [activeCourse]
+  );
+
   const moduleProgression = useMemo(() => {
     if (!activeCourse) {
       return {
         firstIncompleteModuleIndex: 0,
+        firstIncompleteLessonIndex: 0,
         moduleIndexById: new Map<string, number>(),
         lessonModuleIndexById: new Map<string, number>(),
+        lessonGlobalIndexById: new Map<string, number>(),
         moduleMetaById: new Map<
           string,
           { doneCount: number; totalCount: number; isCompleted: boolean; remainingCount: number }
@@ -244,18 +259,22 @@ export const CoursePlayerView: React.FC = () => {
 
     const moduleIndexById = new Map<string, number>();
     const lessonModuleIndexById = new Map<string, number>();
+    const lessonGlobalIndexById = new Map<string, number>();
     const moduleMetaById = new Map<
       string,
       { doneCount: number; totalCount: number; isCompleted: boolean; remainingCount: number }
     >();
 
     let firstIncompleteModuleIndex = activeCourse.modules.length;
+    let globalCounter = 0;
 
     activeCourse.modules.forEach((mod, mIdx) => {
       moduleIndexById.set(mod.id, mIdx);
       let doneCount = 0;
       mod.lessons.forEach((lesson) => {
         lessonModuleIndexById.set(lesson.id, mIdx);
+        lessonGlobalIndexById.set(lesson.id, globalCounter);
+        globalCounter += 1;
         if (completedLessonSet.has(lesson.id)) {
           doneCount += 1;
         }
@@ -270,13 +289,19 @@ export const CoursePlayerView: React.FC = () => {
       }
     });
 
+    const firstIncompleteIdx = allLessons.findIndex((l) => !completedLessonSet.has(l.id));
+    const firstIncompleteLessonIndex =
+      firstIncompleteIdx >= 0 ? firstIncompleteIdx : allLessons.length;
+
     return {
       firstIncompleteModuleIndex,
+      firstIncompleteLessonIndex,
       moduleIndexById,
       lessonModuleIndexById,
+      lessonGlobalIndexById,
       moduleMetaById,
     };
-  }, [activeCourse, completedLessonSet]);
+  }, [activeCourse, allLessons, completedLessonSet]);
 
   const effectiveCompletedModuleIds = useMemo(() => {
     if (!activeCourse) return [] as string[];
@@ -302,18 +327,11 @@ export const CoursePlayerView: React.FC = () => {
 
   const isLessonUnlocked = useCallback(
     (lessonId: string) => {
-      const idx = moduleProgression.lessonModuleIndexById.get(lessonId) ?? 0;
-      return idx <= moduleProgression.firstIncompleteModuleIndex;
+      const globalIdx = moduleProgression.lessonGlobalIndexById.get(lessonId);
+      if (globalIdx === undefined) return false;
+      return globalIdx <= moduleProgression.firstIncompleteLessonIndex;
     },
     [moduleProgression]
-  );
-
-  const allLessons = useMemo(
-    () =>
-      activeCourse
-        ? activeCourse.modules.flatMap((m) => m.lessons.map((l) => ({ ...l, module: m })))
-        : [],
-    [activeCourse]
   );
 
   const defaultUnlockedLessonIndex = useMemo(() => {
@@ -341,30 +359,46 @@ export const CoursePlayerView: React.FC = () => {
   const isLessonDone = Boolean(
     currentLesson && completedLessonSet.has(currentLesson.id)
   );
+  const blockingLesson =
+    allLessons[moduleProgression.firstIncompleteLessonIndex] ?? null;
+
+  const isExcelCourse = Boolean(
+    activeCourse && (activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title))
+  );
+  const isSiLesson = currentLesson?.id === 'les-excel-1-13';
+  const lessonExerciseCount = useMemo(() => {
+    if (!isExcelCourse || !currentLesson) return 0;
+    const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
+    const custom = customExercises.filter((ce) => ce.lessonId === currentLesson.id).length;
+    return base + custom;
+  }, [isExcelCourse, currentLesson, customExercises]);
 
   const selectLesson = useCallback(
     (targetLessonId: string) => {
       if (!activeCourse) return;
       if (!isLessonUnlocked(targetLessonId)) {
+        const targetModIdx = moduleProgression.lessonModuleIndexById.get(targetLessonId) ?? 0;
         const blockingMod =
           activeCourse.modules[moduleProgression.firstIncompleteModuleIndex] ??
           activeCourse.modules[0];
-        const blockingMeta = blockingMod
-          ? moduleProgression.moduleMetaById.get(blockingMod.id)
-          : undefined;
-        const remaining = blockingMeta?.remainingCount ?? 1;
-        setLockWarning(
-          `Módulo bloqueado: termina todas las lecciones de "${blockingMod?.title ?? 'el módulo anterior'}" (${remaining} pendiente${remaining === 1 ? '' : 's'}) para poder avanzar.`
-        );
+        if (targetModIdx > moduleProgression.firstIncompleteModuleIndex) {
+          setLockWarning(
+            `Módulo y capítulo bloqueados: completa primero "${blockingLesson?.title ?? 'la lección actual'}" (${blockingMod?.title ?? 'módulo anterior'}) para desbloquear este contenido.`
+          );
+        } else {
+          setLockWarning(
+            `Capítulo bloqueado: completa primero "${blockingLesson?.title ?? 'el capítulo anterior'}" para desbloquear este capítulo.`
+          );
+        }
         return;
       }
       setLockWarning(null);
       setActiveLessonId(targetLessonId);
     },
-    [activeCourse, isLessonUnlocked, moduleProgression]
+    [activeCourse, isLessonUnlocked, moduleProgression, blockingLesson]
   );
 
-  // Guard: if activeLessonId ever points to a locked module (e.g., course change or role switch), snap to unlocked lesson
+  // Guard: if activeLessonId ever points to a locked chapter/module, snap to unlocked lesson
   useEffect(() => {
     if (!activeLessonId || !currentLesson) return;
     if (activeLessonId !== currentLesson.id) {
@@ -409,8 +443,8 @@ export const CoursePlayerView: React.FC = () => {
     setActiveTab('reader');
     setRequestedExampleId(null);
     setLockWarning(null);
-    const isSiLesson = currentLesson?.id === 'les-excel-1-13';
-    setShowSimulator(isSiLesson);
+    const isSi = currentLesson?.id === 'les-excel-1-13';
+    setShowSimulator(isSi);
     if (currentLesson?.module?.id) {
       setExpandedModules((prev) => ({
         ...prev,
@@ -458,15 +492,6 @@ export const CoursePlayerView: React.FC = () => {
 
   const earnedCert =
     newlyIssuedCert || certificates.find((c) => c.courseId === activeCourse.id) || null;
-  const isExcelCourse =
-    activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title);
-  const isSiLesson = currentLesson.id === 'les-excel-1-13';
-  const lessonExerciseCount = useMemo(() => {
-    if (!isExcelCourse) return 0;
-    const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
-    const custom = customExercises.filter((ce) => ce.lessonId === currentLesson.id).length;
-    return base + custom;
-  }, [isExcelCourse, currentLesson.id, customExercises]);
 
   const launchDecisionSimulation = (mode: FormulaMode, presetId: string) => {
     setActiveTab('reader');
@@ -483,9 +508,6 @@ export const CoursePlayerView: React.FC = () => {
       ? allLessons[currentLessonIndex + 1]
       : null;
   const isNextLessonLocked = Boolean(nextLesson && !isLessonUnlocked(nextLesson.id));
-  const currentModuleRemainingLessons = currentLesson.module.lessons.filter(
-    (l) => !completedLessonSet.has(l.id)
-  );
   const currentModuleMeta = moduleProgression.moduleMetaById.get(currentLesson.module.id);
 
   const handleCompleteLesson = async () => {
@@ -606,7 +628,7 @@ export const CoursePlayerView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {(isAdmin || activeCourse.instructorId === user.uid) && (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => {
@@ -1123,11 +1145,19 @@ export const CoursePlayerView: React.FC = () => {
                         <button
                           type="button"
                           disabled
-                          title={`Completa ${currentLesson.module.title} para desbloquear ${nextLesson.module.title}`}
+                          title={
+                            nextLesson.module.id !== currentLesson.module.id
+                              ? `Completa "${currentLesson.title}" y todo ${currentLesson.module.title} para desbloquear ${nextLesson.module.title}`
+                              : `Completa "${currentLesson.title}" para desbloquear "${nextLesson.title}"`
+                          }
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/70 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed min-h-[42px]"
                         >
                           <Lock className="w-3.5 h-3.5" />
-                          <span>Siguiente módulo bloqueado</span>
+                          <span>
+                            {nextLesson.module.id !== currentLesson.module.id
+                              ? 'Siguiente módulo bloqueado'
+                              : 'Siguiente capítulo bloqueado'}
+                          </span>
                         </button>
                       ) : (
                         <button
@@ -1151,21 +1181,22 @@ export const CoursePlayerView: React.FC = () => {
                       <span>
                         {lockWarning
                           ? lockWarning
-                          : currentModuleRemainingLessons.length === 1 && !isLessonDone
-                            ? `Para desbloquear "${nextLesson?.module.title}", primero marca esta última lección como completada.`
-                            : `No puedes avanzar a "${nextLesson?.module.title}" sin terminar todas las lecciones de "${currentLesson.module.title}" (${currentModuleRemainingLessons.length} pendiente${currentModuleRemainingLessons.length === 1 ? '' : 's'}).`}
+                          : !isLessonDone
+                            ? `Capítulo bloqueado: para desbloquear "${nextLesson?.title}", primero completa este capítulo ("${currentLesson.title}").`
+                            : blockingLesson
+                              ? `Para desbloquear "${nextLesson?.title}", primero completa el capítulo pendiente "${blockingLesson.title}".`
+                              : `No puedes avanzar a "${nextLesson?.module.title}" sin terminar "${currentLesson.module.title}".`}
                       </span>
                     </div>
-                    {currentModuleRemainingLessons.length > 0 &&
-                      currentModuleRemainingLessons[0].id !== currentLesson.id && (
-                        <button
-                          type="button"
-                          onClick={() => selectLesson(currentModuleRemainingLessons[0].id)}
-                          className="rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors shrink-0"
-                        >
-                          Ir a pendiente: {currentModuleRemainingLessons[0].title}
-                        </button>
-                      )}
+                    {blockingLesson && blockingLesson.id !== currentLesson.id && (
+                      <button
+                        type="button"
+                        onClick={() => selectLesson(blockingLesson.id)}
+                        className="rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors shrink-0"
+                      >
+                        Ir a pendiente: {blockingLesson.title}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1335,19 +1366,22 @@ export const CoursePlayerView: React.FC = () => {
                     {filteredLessons.map((lesson) => {
                       const done = completedLessonSet.has(lesson.id);
                       const active = currentLesson.id === lesson.id;
+                      const lessonLocked = !isLessonUnlocked(lesson.id);
                       return (
                         <button
                           key={lesson.id}
                           type="button"
-                          aria-disabled={isModuleLocked}
+                          aria-disabled={lessonLocked}
                           onClick={() => selectLesson(lesson.id)}
                           title={
-                            isModuleLocked
-                              ? `Completa ${blockingModule?.title ?? 'el módulo anterior'} para desbloquear esta lección`
+                            lessonLocked
+                              ? isModuleLocked
+                                ? `Completa ${blockingModule?.title ?? 'el módulo anterior'} para desbloquear este capítulo`
+                                : `Completa "${blockingLesson?.title ?? 'el capítulo anterior'}" para desbloquear este capítulo`
                               : undefined
                           }
                           className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors min-h-[38px] ${
-                            isModuleLocked
+                            lessonLocked
                               ? 'text-slate-400 dark:text-slate-500 opacity-65 cursor-not-allowed hover:bg-amber-50/40 dark:hover:bg-amber-950/20'
                               : active
                                 ? 'bg-blue-600 text-white font-medium shadow-xs'
@@ -1357,7 +1391,7 @@ export const CoursePlayerView: React.FC = () => {
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
-                            {isModuleLocked ? (
+                            {lessonLocked ? (
                               <Lock className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
                             ) : done ? (
                               <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -1370,7 +1404,7 @@ export const CoursePlayerView: React.FC = () => {
                             {lesson.id === 'les-excel-1-13' && (
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  isModuleLocked
+                                  lessonLocked
                                     ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                                     : active
                                       ? 'bg-white/20 text-white'
@@ -1380,7 +1414,7 @@ export const CoursePlayerView: React.FC = () => {
                                 3D
                               </span>
                             )}
-                            <span className={`font-mono tabular-nums text-[10px] ${active && !isModuleLocked ? 'text-blue-100' : 'text-slate-400'}`}>
+                            <span className={`font-mono tabular-nums text-[10px] ${active && !lessonLocked ? 'text-blue-100' : 'text-slate-400'}`}>
                               {lesson.durationMinutes}m
                             </span>
                           </span>

@@ -1,8 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, type User } from 'firebase/auth';
 import {
   doc,
-  enableNetwork,
   getDocFromServer,
   getFirestore,
   initializeFirestore,
@@ -15,9 +14,8 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 
 function initDb(): Firestore {
-  const settings: FirestoreSettings & { useFetchStreams?: boolean } = {
-    experimentalForceLongPolling: true,
-    useFetchStreams: false,
+  const settings: FirestoreSettings = {
+    experimentalAutoDetectLongPolling: true,
     ignoreUndefinedProperties: true,
   };
   try {
@@ -31,6 +29,50 @@ export const db = initDb();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const storage = getStorage(app);
+
+export const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
+
+export function isAuthorizedAdminEmail(email?: string | null): boolean {
+  return Boolean(email && email.trim().toLowerCase() === AUTHORIZED_ADMIN_EMAIL);
+}
+
+export async function assertPlatformAdminWrite(
+  actionLabel: string,
+  sessionUser?: User | null
+): Promise<User> {
+  const currentUser = auth.currentUser ?? sessionUser ?? null;
+  if (!currentUser) {
+    throw new Error(
+      `Acceso denegado (${actionLabel}): inicia sesión con la cuenta administradora Marinodavidr7@gmail.com.`
+    );
+  }
+  if (sessionUser && currentUser.uid !== sessionUser.uid) {
+    throw new Error(
+      `Acceso denegado (${actionLabel}): la sesión activa no coincide con el usuario autenticado.`
+    );
+  }
+  if (!currentUser.emailVerified || !isAuthorizedAdminEmail(currentUser.email)) {
+    throw new Error(
+      `Permiso denegado (${actionLabel}): solo el correo verificado Marinodavidr7@gmail.com tiene permisos de escritura, edición o eliminación.`
+    );
+  }
+
+  const tokenResult = await currentUser.getIdTokenResult();
+  const claimEmail =
+    typeof tokenResult.claims.email === 'string'
+      ? tokenResult.claims.email
+      : currentUser.email;
+  const claimVerified =
+    tokenResult.claims.email_verified === true || currentUser.emailVerified;
+
+  if (!claimVerified || !isAuthorizedAdminEmail(claimEmail)) {
+    throw new Error(
+      `Validación de token denegada (${actionLabel}): solo Marinodavidr7@gmail.com puede modificar o eliminar contenido.`
+    );
+  }
+
+  return currentUser;
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -99,26 +141,16 @@ export async function testConnection(): Promise<boolean> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return false;
   }
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      await getDocFromServer(doc(db, 'test', 'connection'));
-      return true;
-    } catch (error) {
-      if (isFirestoreOfflineError(error)) {
-        if (attempt === 0) {
-          await enableNetwork(db).catch(() => undefined);
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          continue;
-        }
-        console.error('Please check your Firebase configuration.');
-        return false;
-      }
-      // Permission denied means Firestore backend responded cleanly
-      return true;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+      return false;
     }
+    return true;
   }
-  return false;
 }
 
 void testConnection();

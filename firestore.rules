@@ -19,7 +19,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isVerified() && request.auth.token.email == 'marinodavidr7@gmail.com';
+      return isVerified()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'marinodavidr7@gmail.com';
     }
 
     function incoming() {
@@ -366,34 +368,25 @@ service cloud.firestore {
     }
 
     match /courses/{courseId} {
-      allow get: if isValidId(courseId) && (existing().published == true || (isSignedIn() && (existing().instructorId == request.auth.uid || isAdmin())));
-      allow list: if existing().published == true || (isSignedIn() && (existing().instructorId == request.auth.uid || isAdmin()));
-      allow create: if isValidId(courseId) && isVerified()
+      allow get: if isValidId(courseId) && (existing().published == true || isAdmin());
+      allow list: if existing().published == true || isAdmin();
+      allow create: if isValidId(courseId) && isAdmin()
         && isValidCourse(incoming())
         && incoming().id == courseId
-        && (incoming().instructorId == request.auth.uid || isAdmin())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isValidId(courseId) && isVerified()
+      allow update: if isValidId(courseId) && isAdmin()
         && isValidCourse(incoming())
         && incoming().id == existing().id
         && incoming().instructorId == existing().instructorId
         && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && (isAdmin() || (
-          existing().instructorId == request.auth.uid
-          && incoming().diff(existing()).affectedKeys().hasOnly([
-            'title', 'subtitle', 'description', 'category', 'level',
-            'priceCents', 'currency', 'coverImage', 'instructorName',
-            'published', 'modulesCount', 'totalLessons', 'modules', 'updatedAt'
-          ])
-        ));
-      allow delete: if isValidId(courseId) && isVerified() && (existing().instructorId == request.auth.uid || isAdmin());
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(courseId) && isAdmin();
     }
 
     match /enrollments/{enrollmentId} {
-      allow get: if isValidCompositeId(enrollmentId) && isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
+      allow get: if isValidCompositeId(enrollmentId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && isValidCompositeId(enrollmentId)
         && isValidEnrollment(incoming())
@@ -427,8 +420,8 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow get: if isValidId(paymentId) && isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
+      allow get: if isValidId(paymentId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && isValidId(paymentId)
         && isValidPayment(incoming())
@@ -449,7 +442,7 @@ service cloud.firestore {
 
     match /certificates/{certificateId} {
       allow get: if isValidId(certificateId);
-      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
       allow create: if isValidId(certificateId) && isVerified()
         && isValidCertificate(incoming())
         && incoming().id == certificateId
@@ -484,11 +477,7 @@ service cloud.firestore {
           isAdmin() ||
           (
             existing().authorId == request.auth.uid
-            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'resolved', 'updatedAt'])
-          ) ||
-          (
-            get(/databases/$(database)/documents/courses/$(existing().courseId)).data.instructorId == request.auth.uid
-            && incoming().diff(existing()).affectedKeys().hasOnly(['pinned', 'resolved', 'updatedAt'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['resolved', 'updatedAt'])
           ) ||
           (
             incoming().upvotesCount == existing().upvotesCount + 1
@@ -499,7 +488,7 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly(['repliesCount', 'updatedAt'])
           )
         );
-      allow delete: if isValidId(threadId) && isVerified() && (existing().authorId == request.auth.uid || isAdmin());
+      allow delete: if isValidId(threadId) && isAdmin();
 
       match /replies/{replyId} {
         allow get: if isValidId(threadId) && isValidId(replyId) && isSignedIn();
@@ -511,14 +500,13 @@ service cloud.firestore {
           && incoming().authorId == request.auth.uid
           && incoming().createdAt == request.time
           && exists(/databases/$(database)/documents/forumThreads/$(threadId));
-        allow update: if isValidId(threadId) && isValidId(replyId) && isVerified()
+        allow update: if isValidId(threadId) && isValidId(replyId) && isAdmin()
           && isValidForumReply(incoming())
           && incoming().id == existing().id
           && incoming().threadId == existing().threadId
           && incoming().authorId == existing().authorId
-          && incoming().createdAt == existing().createdAt
-          && (isAdmin() || (existing().authorId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['body'])));
-        allow delete: if isValidId(threadId) && isValidId(replyId) && isVerified() && (existing().authorId == request.auth.uid || isAdmin());
+          && incoming().createdAt == existing().createdAt;
+        allow delete: if isValidId(threadId) && isValidId(replyId) && isAdmin();
       }
     }
 
@@ -587,29 +575,21 @@ service cloud.firestore {
     }
 
     match /customExercises/{exerciseId} {
-      allow get: if isValidId(exerciseId) && (existing().published == true || (isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin())));
-      allow list: if existing().published == true || (isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin()));
-      allow create: if isValidId(exerciseId) && isVerified()
+      allow get: if isValidId(exerciseId) && (existing().published == true || isAdmin());
+      allow list: if existing().published == true || isAdmin();
+      allow create: if isValidId(exerciseId) && isAdmin()
         && isValidCustomExercise(incoming())
         && incoming().id == exerciseId
         && incoming().ownerId == request.auth.uid
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isValidId(exerciseId) && isVerified()
+      allow update: if isValidId(exerciseId) && isAdmin()
         && isValidCustomExercise(incoming())
         && incoming().id == existing().id
         && incoming().ownerId == existing().ownerId
         && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && (isAdmin() || (
-          existing().ownerId == request.auth.uid
-          && incoming().diff(existing()).affectedKeys().hasOnly([
-            'lessonId', 'functionTag', 'title', 'prompt', 'hint',
-            'targetCell', 'solutionFormula', 'expectedResult',
-            'initialSheet', 'published', 'updatedAt'
-          ])
-        ));
-      allow delete: if isValidId(exerciseId) && isVerified() && (existing().ownerId == request.auth.uid || isAdmin());
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(exerciseId) && isAdmin();
     }
   }
 }
