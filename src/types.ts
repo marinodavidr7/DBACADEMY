@@ -120,8 +120,12 @@ export interface PaymentRecord {
   studentId: string;
   instructorId: string;
   amountCents: number;
+  originalAmountCents?: number;
+  discountCents?: number;
+  couponCode?: string;
+  discountSource?: 'none' | 'coupon' | 'referral_welcome';
   currency: 'USD' | 'EUR' | 'MXN';
-  gateway: PaymentGateway;
+  gateway: PaymentGateway | 'free';
   status: 'succeeded' | 'refunded';
   transactionRef: string;
   createdAt?: unknown;
@@ -231,5 +235,77 @@ export interface CustomExcelExercise {
   published: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+export type CouponType = 'percent' | 'fixed';
+export type CouponAppliesTo = 'all' | 'courses';
+export type CouponRedemptionStatus = 'pending' | 'confirmed' | 'refunded';
+export type ReferralStatus = 'pending' | 'qualified' | 'rewarded' | 'rejected' | 'refunded';
+export type RewardType = 'welcome_discount' | 'referrer_credit';
+
+export interface Coupon {
+  id: string;
+  code: string;
+  description: string;
+  type: CouponType;
+  value: number;
+  currency: 'USD' | 'EUR' | 'MXN';
+  appliesTo: CouponAppliesTo;
+  courseIds: string[];
+  startsAt?: unknown;
+  expiresAt?: unknown;
+  maxRedemptions?: number;
+  maxPerUser: number;
+  minPurchaseCents?: number;
+  redemptionCount: number;
+  active: boolean;
+  createdBy: string;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export interface CouponRedemption {
+  id: string;
+  couponCode: string;
+  userId: string;
+  courseId: string;
+  orderId?: string;
+  discountCents: number;
+  status: CouponRedemptionStatus;
+  createdAt: unknown;
+}
+
+export interface Referral {
+  id: string;
+  referrerId: string;
+  referredId: string;
+  orderId?: string;
+  status: ReferralStatus;
+  rewardType: RewardType;
+  rewardValue: number;
+  createdAt: unknown;
+  qualifiedAt?: unknown;
+  rewardedAt?: unknown;
+}
+
+export interface ReferralSettings {
+  id: string;
+  welcomeDiscountPercent: number;
+  referrerRewardPercent: number;
+  referrerRewardMinCents?: number;
+  retentionDays: number;
+  maxRewardsPerReferrerPerMonth: number;
+  active: boolean;
+  updatedAt: unknown;
+}
+
+export interface CouponValidationResult {
+  valid: boolean;
+  originalPriceCents: number;
+  discountCents: number;
+  finalPriceCents: number;
+  currency: 'USD' | 'EUR' | 'MXN';
+  reason?: string;
+  coupon?: Coupon;
 }
 

@@ -28,6 +28,7 @@ import { isAuthorizedAdminEmail } from '../firebase';
 import type { Course, CourseLesson, CourseModule } from '../types';
 import { exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { MaterialUploader } from './MaterialUploader';
 
@@ -107,6 +108,7 @@ export const InstructorDashboard: React.FC = () => {
     t,
   } = usePlatform();
 
+  const [adminTab, setAdminTab] = useState<'courses' | 'coupons' | 'referrals'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
@@ -528,6 +530,31 @@ export const InstructorDashboard: React.FC = () => {
         </div>
       </div>
 
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+        {([
+          { id: 'courses', label: 'Cursos' },
+          { id: 'coupons', label: t('couponsTitle') },
+          { id: 'referrals', label: t('referralsTitle') },
+        ] as const).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setAdminTab(tab.id)}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${adminTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {adminTab === 'coupons' && <CouponsAdminPanel />}
+      {adminTab === 'referrals' && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 text-sm text-slate-500">
+          Configuración de referidos disponible vía API /api/referrals/settings. Panel detallado pendiente de UI extendida.
+        </div>
+      )}
+
+      {adminTab === 'courses' && (<>
       {saveSuccess && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 flex items-center justify-between gap-3 text-xs font-medium text-emerald-800 dark:text-emerald-300">
           <span className="flex items-center gap-2">
@@ -1462,6 +1489,7 @@ export const InstructorDashboard: React.FC = () => {
           )
         }
       />
+      </>)}
     </div>
   );
 };

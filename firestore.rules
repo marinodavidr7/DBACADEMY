@@ -149,7 +149,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'id', 'courseId', 'courseTitle', 'studentId', 'instructorId',
-          'amountCents', 'currency', 'gateway', 'status', 'transactionRef', 'createdAt'
+          'amountCents', 'originalAmountCents', 'discountCents', 'couponCode', 'discountSource',
+          'currency', 'gateway', 'status', 'transactionRef', 'createdAt'
         ])
         && isValidId(data.id)
         && isValidId(data.courseId)
@@ -157,8 +158,12 @@ service cloud.firestore {
         && isValidId(data.studentId)
         && isValidId(data.instructorId)
         && data.amountCents is number && data.amountCents >= 0 && data.amountCents <= 10000000
+        && (!('originalAmountCents' in data) || (data.originalAmountCents is number && data.originalAmountCents >= 0 && data.originalAmountCents <= 10000000))
+        && (!('discountCents' in data) || (data.discountCents is number && data.discountCents >= 0 && data.discountCents <= 10000000))
+        && (!('couponCode' in data) || data.couponCode == null || (data.couponCode is string && data.couponCode.size() >= 1 && data.couponCode.size() <= 64))
+        && (!('discountSource' in data) || data.discountSource == null || data.discountSource in ['none', 'coupon', 'referral_welcome'])
         && data.currency in ['USD', 'EUR', 'MXN']
-        && data.gateway in ['stripe', 'mercadopago', 'paypal']
+        && data.gateway in ['stripe', 'mercadopago', 'paypal', 'free']
         && data.status in ['succeeded', 'refunded']
         && data.transactionRef is string && data.transactionRef.size() >= 4 && data.transactionRef.size() <= 100
         && data.createdAt is timestamp;
@@ -590,6 +595,29 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time;
       allow delete: if isValidId(exerciseId) && isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Cupones, redenciones y referidos: solo admin/servidor (Admin SDK bypass)
+    // -------------------------------------------------------------------------
+    match /coupons/{couponId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /couponRedemptions/{redemptionId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
   }
 }

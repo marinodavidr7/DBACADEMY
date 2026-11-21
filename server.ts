@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
 import { WebSocket, WebSocketServer } from 'ws';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore, type Firestore, type Transaction } from 'firebase-admin/firestore';
+import type { Coupon, CouponRedemption, Referral, ReferralSettings } from './src/types';
 
 dotenv.config();
 
@@ -15,6 +18,77 @@ const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 
 const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
+
+// ---------------------------------------------------------------------------
+// Firebase Admin SDK (para cupones, referidos y reglas de servidor)
+// Requiere: FIREBASE_SERVICE_ACCOUNT (JSON string) o FIREBASE_SERVICE_ACCOUNT_PATH
+// ---------------------------------------------------------------------------
+let adminDb: Firestore | null = null;
+
+function initFirebaseAdmin(): Firestore | null {
+  if (adminDb) return adminDb;
+  try {
+    let serviceAccount: Record<string, unknown> | null = null;
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const pathEnv = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+    if (raw) {
+      serviceAccount = JSON.parse(raw) as Record<string, unknown>;
+    } else if (pathEnv && fs.existsSync(pathEnv)) {
+      serviceAccount = JSON.parse(fs.readFileSync(pathEnv, 'utf8')) as Record<string, unknown>;
+    }
+
+    if (serviceAccount) {
+      initializeApp({
+        credential: cert(serviceAccount as Parameters<typeof cert>[0]),
+      });
+      adminDb = getFirestore();
+    }
+  } catch {
+    // Admin SDK no disponible; los endpoints de cupones/referidos devolverán error 503
+  }
+  return adminDb;
+}
+
+function getAdminDb(): Firestore {
+  const db = initFirebaseAdmin();
+  if (!db) {
+    throw new Error('Firebase Admin SDK no configurado. Define FIREBASE_SERVICE_ACCOUNT o FIREBASE_SERVICE_ACCOUNT_PATH.');
+  }
+  return db;
+}
+
+// (auth helpers moved below token verification)
+
+// ---------------------------------------------------------------------------
+// Rate limiting simple para /api/coupons/validate (evita fuerza bruta de códigos)
+// ---------------------------------------------------------------------------
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+
+function checkRateLimit(identifier: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(identifier, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxRequests) return false;
+  entry.count++;
+  return true;
+}
+
+// Limpieza periódica del mapa de rate limit
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetAt) rateLimitMap.delete(key);
+  }
+}, 60_000);
 const FIREBASE_CERT_URL =
   'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
@@ -140,6 +214,80 @@ async function verifyFirebaseAdminBearerToken(
   }
 
   return { uid: payload.sub, email };
+}
+
+async function verifyFirebaseTokenAny(authHeader?: string): Promise<{ uid: string; email: string | null; emailVerified: boolean }> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new AuthValidationError(401, 'Token de autenticación requerido.');
+  }
+  const token = authHeader.slice('Bearer '.length).trim();
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new AuthValidationError(401, 'Formato de token inválido.');
+  const [headerB64, payloadB64, sigB64] = parts;
+
+  let header: { alg?: string; kid?: string };
+  let payload: { aud?: unknown; iss?: unknown; sub?: unknown; exp?: unknown; iat?: unknown; email?: unknown; email_verified?: unknown };
+  try {
+    header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8')) as typeof header;
+    payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as typeof payload;
+  } catch {
+    throw new AuthValidationError(401, 'Token JWT malformado.');
+  }
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid) {
+    throw new AuthValidationError(401, 'Algoritmo o identificador de clave no válido.');
+  }
+  let certs = await getGooglePublicCerts(false);
+  let certPem = certs[header.kid];
+  if (!certPem) {
+    certs = await getGooglePublicCerts(true);
+    certPem = certs[header.kid];
+  }
+  if (!certPem) throw new AuthValidationError(401, 'Certificado de firma no reconocido.');
+
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(`${headerB64}.${payloadB64}`);
+  verifier.end();
+  if (!verifier.verify(certPem, Buffer.from(sigB64, 'base64url'))) {
+    throw new AuthValidationError(401, 'Firma del token de Firebase inválida.');
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (
+    payload.aud !== FIREBASE_PROJECT_ID ||
+    payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}` ||
+    typeof payload.sub !== 'string' || payload.sub.length === 0 ||
+    typeof payload.exp !== 'number' || payload.exp <= nowSec ||
+    typeof payload.iat !== 'number' || payload.iat > nowSec + 60
+  ) {
+    throw new AuthValidationError(401, 'Token expirado o emitido para otro proyecto.');
+  }
+  const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
+  return { uid: payload.sub, email, emailVerified: payload.email_verified === true };
+}
+
+async function requireAdmin(req: express.Request, res: express.Response): Promise<boolean> {
+  try {
+    const auth = await verifyFirebaseTokenAny(req.headers.authorization);
+    if (auth.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+      res.status(403).json({ error: 'Admin access required' });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    const status = err instanceof AuthValidationError ? err.status : 401;
+    res.status(status).json({ error: err instanceof Error ? err.message : 'Invalid token' });
+    return false;
+  }
+}
+
+async function requireAuth(req: express.Request, res: express.Response): Promise<{ uid: string; email: string | null } | null> {
+  try {
+    const auth = await verifyFirebaseTokenAny(req.headers.authorization);
+    return { uid: auth.uid, email: auth.email };
+  } catch (err) {
+    const status = err instanceof AuthValidationError ? err.status : 401;
+    res.status(status).json({ error: err instanceof Error ? err.message : 'Invalid token' });
+    return null;
+  }
 }
 
 interface SyncClient {
@@ -310,8 +458,12 @@ async function startServer() {
   });
 
   app.post('/api/v1/payments/checkout', async (req, res) => {
-    const { courseId, courseTitle, studentId, instructorId, amountCents, currency, gateway } = req.body ?? {};
-    if (!courseId || !studentId || typeof amountCents !== 'number' || !gateway) {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    const { courseId, gateway, couponCode, referralWelcome, testMode } = req.body ?? {};
+    const isTestModeAdmin = testMode === true && auth.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
+    if (!courseId || !gateway) {
       res.status(400).json({ error: 'Missing required payment fields' });
       return;
     }
@@ -321,45 +473,686 @@ async function startServer() {
       return;
     }
 
-    const prefix = gateway === 'stripe' ? 'pi' : gateway === 'mercadopago' ? 'mp' : 'pp';
-    const transactionRef = `${prefix}_${crypto.randomBytes(8).toString('hex')}`;
-    const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
+    try {
+      const db = getAdminDb();
 
-    const receipt = {
-      paymentId,
-      courseId: String(courseId),
-      courseTitle: String(courseTitle || ''),
-      studentId: String(studentId),
-      instructorId: String(instructorId || ''),
-      amountCents,
-      currency: String(currency || 'USD'),
-      gateway: String(gateway),
-      status: 'succeeded',
-      transactionRef,
-      authorizedAt: new Date().toISOString(),
+      // Fuente de verdad: curso desde Firestore
+      const courseSnap = await db.collection('courses').doc(String(courseId)).get();
+      if (!courseSnap.exists) {
+        res.status(404).json({ error: 'Curso no encontrado' });
+        return;
+      }
+      const course = courseSnap.data() as { title?: string; instructorId?: string; priceCents?: number; currency?: string };
+      const originalAmountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
+      const currency = (course.currency === 'EUR' || course.currency === 'MXN' ? course.currency : 'USD') as 'USD' | 'EUR' | 'MXN';
+
+      // Calcular descuento en servidor
+      let discountCents = 0;
+      let appliedCouponCode: string | undefined;
+      let redemptionId: string | undefined;
+      let discountSource: 'none' | 'coupon' | 'referral_welcome' = 'none';
+
+      // Descuento bienvenida por referido (primera compra pagada, referido válido)
+      let welcomeDiscountCents = 0;
+      if (referralWelcome === true && originalAmountCents > 0) {
+        const settingsSnap = await db.collection('settings').doc('referrals').get();
+        const settings = settingsSnap.exists ? (settingsSnap.data() as ReferralSettings) : null;
+        if (settings?.active) {
+          const userSnap = await db.collection('users').doc(auth.uid).get();
+          const userData = userSnap.exists ? (userSnap.data() as { referredBy?: string }) : {};
+          if (userData.referredBy && userData.referredBy !== auth.uid) {
+            // Solo primera compra pagada
+            const prevPayments = await db.collection('payments')
+              .where('studentId', '==', auth.uid)
+              .where('status', '==', 'succeeded')
+              .limit(1)
+              .get();
+            if (prevPayments.empty) {
+              const pct = Math.min(100, Math.max(0, Number(settings.welcomeDiscountPercent ?? 10)));
+              welcomeDiscountCents = Math.min(originalAmountCents, Math.round((originalAmountCents * pct) / 100));
+            }
+          }
+        }
+      }
+
+      let couponDiscountCents = 0;
+      let couponToApply: Coupon | null = null;
+      const normalizedCoupon = typeof couponCode === 'string' && couponCode.trim() ? normalizeCode(couponCode) : '';
+
+      if (normalizedCoupon && originalAmountCents > 0) {
+        const couponRef = db.collection('coupons').doc(normalizedCoupon);
+        const couponSnap = await couponRef.get();
+        if (!couponSnap.exists) {
+          res.status(400).json({ error: 'Código de cupón no encontrado.' });
+          return;
+        }
+        couponToApply = couponSnap.data() as Coupon;
+        if (!isCouponActive(couponToApply)) {
+          res.status(400).json({ error: 'El cupón no está activo, expiró o agotó sus usos.' });
+          return;
+        }
+        if (couponToApply.appliesTo === 'courses' && !couponToApply.courseIds?.includes(String(courseId))) {
+          res.status(400).json({ error: 'Este cupón no aplica a este curso.' });
+          return;
+        }
+        if (couponToApply.minPurchaseCents && originalAmountCents < couponToApply.minPurchaseCents) {
+          res.status(400).json({ error: `Compra mínima requerida: ${couponToApply.minPurchaseCents / 100} ${couponToApply.currency}.` });
+          return;
+        }
+        couponDiscountCents = calculateDiscount(couponToApply, originalAmountCents).discountCents;
+      }
+
+      // No acumulación: usar el mayor descuento
+      if (couponDiscountCents >= welcomeDiscountCents && couponDiscountCents > 0) {
+        discountCents = couponDiscountCents;
+        discountSource = 'coupon';
+        appliedCouponCode = normalizedCoupon;
+      } else if (welcomeDiscountCents > 0) {
+        discountCents = welcomeDiscountCents;
+        discountSource = 'referral_welcome';
+      }
+
+      const finalAmountCents = Math.max(0, originalAmountCents - discountCents);
+
+      // Canje atómico de cupón (reserva pending + confirmación inmediata en pago mock exitoso)
+      if (discountSource === 'coupon' && couponToApply && appliedCouponCode && !isTestModeAdmin) {
+        const couponRef = db.collection('coupons').doc(appliedCouponCode);
+        redemptionId = `cr_${crypto.randomBytes(8).toString('hex')}`;
+        const redemptionRef = db.collection('couponRedemptions').doc(redemptionId);
+
+        await db.runTransaction(async (tx: Transaction) => {
+          const freshCouponSnap = await tx.get(couponRef);
+          if (!freshCouponSnap.exists) throw new Error('Cupón no encontrado.');
+          const freshCoupon = freshCouponSnap.data() as Coupon;
+
+          if (!isCouponActive(freshCoupon)) throw new Error('El cupón ya no está disponible.');
+          if (freshCoupon.appliesTo === 'courses' && !freshCoupon.courseIds?.includes(String(courseId))) {
+            throw new Error('Este cupón no aplica a este curso.');
+          }
+          if (freshCoupon.maxRedemptions !== undefined && freshCoupon.redemptionCount >= freshCoupon.maxRedemptions) {
+            throw new Error('El cupón ha agotado sus usos.');
+          }
+
+          // Límite por usuario (redenciones confirmed/pending)
+          const userRedemptionsSnap = await tx.get(
+            db.collection('couponRedemptions')
+              .where('couponCode', '==', appliedCouponCode)
+              .where('userId', '==', auth.uid)
+          );
+          const usedByUser = userRedemptionsSnap.docs.filter((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+            const st = (d.data() as CouponRedemption).status;
+            return st === 'pending' || st === 'confirmed';
+          }).length;
+          if (usedByUser >= (freshCoupon.maxPerUser ?? 1)) {
+            throw new Error('Ya has usado este cupón el máximo de veces permitido.');
+          }
+
+          const now = new Date().toISOString();
+          const redemption: CouponRedemption = {
+            id: redemptionId!,
+            couponCode: appliedCouponCode!,
+            userId: auth.uid,
+            courseId: String(courseId),
+            discountCents,
+            status: 'confirmed', // mock payment succeeded immediately
+            createdAt: now,
+          };
+
+          tx.set(redemptionRef, redemption);
+          tx.update(couponRef, {
+            redemptionCount: (freshCoupon.redemptionCount ?? 0) + 1,
+            updatedAt: now,
+          });
+        });
+      }
+
+      // Si el precio final es 0, no pasamos por pasarela
+      const isFree = finalAmountCents === 0;
+      const prefix = isFree ? 'free' : gateway === 'stripe' ? 'pi' : gateway === 'mercadopago' ? 'mp' : 'pp';
+      const transactionRef = `${prefix}_${crypto.randomBytes(8).toString('hex')}`;
+      const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
+
+      const receipt = {
+        paymentId,
+        courseId: String(courseId),
+        courseTitle: String(course.title || ''),
+        studentId: auth.uid,
+        instructorId: String(course.instructorId || ''),
+        amountCents: finalAmountCents,
+        originalAmountCents,
+        discountCents,
+        discountSource,
+        couponCode: appliedCouponCode,
+        redemptionId,
+        currency,
+        gateway: isFree ? 'free' : String(gateway),
+        status: 'succeeded',
+        transactionRef,
+        authorizedAt: new Date().toISOString(),
+      };
+
+      broadcastEvent({ type: 'PAYMENT_COMPLETED', scope: 'user', ...receipt }, auth.uid);
+      if (course.instructorId) {
+        broadcastEvent({ type: 'INSTRUCTOR_SALE', scope: 'user', ...receipt }, String(course.instructorId));
+        void dispatchWebhooks(String(course.instructorId), 'payment.succeeded', receipt);
+      }
+
+      res.json(receipt);
+    } catch (err) {
+      console.error('Checkout error:', err);
+      const message = err instanceof Error ? err.message : 'Error procesando el pago.';
+      res.status(400).json({ error: message });
+    }
+  });
+
+  // =========================================================================
+  // CUPONES — Endpoints (validación en servidor; escritura solo desde admin)
+  // =========================================================================
+
+  function normalizeCode(code: string): string {
+    return String(code).trim().toUpperCase().replace(/\s+/g, '');
+  }
+
+  function isCouponActive(coupon: Coupon): boolean {
+    const now = Date.now();
+    if (!coupon.active) return false;
+    if (coupon.startsAt && new Date(String(coupon.startsAt)).getTime() > now) return false;
+    if (coupon.expiresAt && new Date(String(coupon.expiresAt)).getTime() < now) return false;
+    if (coupon.maxRedemptions !== undefined && coupon.redemptionCount >= coupon.maxRedemptions) return false;
+    return true;
+  }
+
+  function calculateDiscount(coupon: Coupon, priceCents: number): { discountCents: number; finalPriceCents: number } {
+    if (coupon.type === 'percent') {
+      const discount = Math.round((priceCents * coupon.value) / 100);
+      return {
+        discountCents: Math.min(discount, priceCents), // nunca más que el precio
+        finalPriceCents: Math.max(0, priceCents - Math.min(discount, priceCents)),
+      };
+    }
+    // fixed
+    const discount = Math.min(coupon.value, priceCents);
+    return {
+      discountCents: discount,
+      finalPriceCents: Math.max(0, priceCents - discount),
     };
+  }
 
-    broadcastEvent(
-      {
-        type: 'PAYMENT_COMPLETED',
-        scope: 'user',
-        ...receipt,
-      },
-      String(studentId)
-    );
-    if (instructorId) {
-      broadcastEvent(
-        {
-          type: 'INSTRUCTOR_SALE',
-          scope: 'user',
-          ...receipt,
-        },
-        String(instructorId)
-      );
-      void dispatchWebhooks(String(instructorId), 'payment.succeeded', receipt);
+  // POST /api/coupons/validate — Validar cupón para un curso y precio
+  app.post('/api/coupons/validate', async (req, res) => {
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp, 30, 60_000)) {
+      res.status(429).json({ error: 'Demasiadas solicitudes. Intenta de nuevo más tarde.' });
+      return;
     }
 
-    res.json(receipt);
+    const { code, courseId, priceCents } = req.body ?? {};
+    if (!code || typeof courseId !== 'string' || typeof priceCents !== 'number' || priceCents < 0) {
+      res.status(400).json({ error: 'Parámetros inválidos: code, courseId y priceCents son requeridos.' });
+      return;
+    }
+
+    try {
+      const db = getAdminDb();
+      const normalizedCode = normalizeCode(code);
+      const couponRef = db.collection('coupons').doc(normalizedCode);
+      const couponSnap = await couponRef.get();
+
+      if (!couponSnap.exists) {
+        res.status(404).json({
+          valid: false,
+          originalPriceCents: priceCents,
+          discountCents: 0,
+          finalPriceCents: priceCents,
+          currency: 'USD',
+          reason: 'Código de cupón no encontrado.',
+        });
+        return;
+      }
+
+      const coupon = couponSnap.data() as Coupon;
+
+      // Verificar vigencia
+      if (!isCouponActive(coupon)) {
+        let reason = 'El cupón no está activo.';
+        if (!coupon.active) reason = 'El cupón ha sido desactivado.';
+        else if (coupon.expiresAt && new Date(String(coupon.expiresAt)).getTime() < Date.now()) {
+          reason = 'El cupón ha expirado.';
+        } else if (coupon.maxRedemptions !== undefined && coupon.redemptionCount >= coupon.maxRedemptions) {
+          reason = 'El cupón ha agotado sus usos disponibles.';
+        }
+        res.status(400).json({
+          valid: false,
+          originalPriceCents: priceCents,
+          discountCents: 0,
+          finalPriceCents: priceCents,
+          currency: coupon.currency,
+          reason,
+        });
+        return;
+      }
+
+      // Verificar aplicaTo
+      if (coupon.appliesTo === 'courses' && (!coupon.courseIds || !coupon.courseIds.includes(courseId))) {
+        res.status(400).json({
+          valid: false,
+          originalPriceCents: priceCents,
+          discountCents: 0,
+          finalPriceCents: priceCents,
+          currency: coupon.currency,
+          reason: 'Este cupón no aplica a este curso.',
+        });
+        return;
+      }
+
+      // Verificar monto mínimo
+      if (coupon.minPurchaseCents && priceCents < coupon.minPurchaseCents) {
+        res.status(400).json({
+          valid: false,
+          originalPriceCents: priceCents,
+          discountCents: 0,
+          finalPriceCents: priceCents,
+          currency: coupon.currency,
+          reason: `Compra mínima requerida: ${coupon.minPurchaseCents / 100} ${coupon.currency}.`,
+        });
+        return;
+      }
+
+      const { discountCents, finalPriceCents } = calculateDiscount(coupon, priceCents);
+
+      res.json({
+        valid: true,
+        originalPriceCents: priceCents,
+        discountCents,
+        finalPriceCents,
+        currency: coupon.currency,
+        coupon: {
+          code: coupon.code,
+          description: coupon.description,
+          type: coupon.type,
+          value: coupon.value,
+        },
+      });
+    } catch (err) {
+      console.error('Coupon validation error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error validando cupón.' });
+    }
+  });
+
+  // GET /api/coupons — Listar todos los cupones (solo admin)
+  app.get('/api/coupons', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const snap = await db.collection('coupons').orderBy('createdAt', 'desc').get();
+      const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Coupon);
+      res.json({ coupons });
+    } catch (err) {
+      console.error('List coupons error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error listando cupones.' });
+    }
+  });
+
+  // POST /api/coupons — Crear cupón (solo admin)
+  app.post('/api/coupons', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const {
+        code, description, type, value, currency, appliesTo, courseIds,
+        startsAt, expiresAt, maxRedemptions, maxPerUser, minPurchaseCents,
+      } = req.body ?? {};
+
+      if (!code || !description || !type || typeof value !== 'number') {
+        res.status(400).json({ error: 'Faltan campos requeridos: code, description, type, value.' });
+        return;
+      }
+
+      const normalizedCode = normalizeCode(code);
+      const couponId = normalizedCode;
+
+      if (type === 'percent' && (value < 1 || value > 100)) {
+        res.status(400).json({ error: 'El porcentaje debe estar entre 1 y 100.' });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const coupon: Coupon = {
+        id: couponId,
+        code: normalizedCode,
+        description: String(description).trim(),
+        type: type as Coupon['type'],
+        value,
+        currency: currency || 'USD',
+        appliesTo: appliesTo || 'all',
+        courseIds: Array.isArray(courseIds) ? courseIds : [],
+        startsAt: startsAt || undefined,
+        expiresAt: expiresAt || undefined,
+        maxRedemptions: typeof maxRedemptions === 'number' ? maxRedemptions : undefined,
+        maxPerUser: typeof maxPerUser === 'number' && maxPerUser > 0 ? maxPerUser : 1,
+        minPurchaseCents: typeof minPurchaseCents === 'number' ? minPurchaseCents : undefined,
+        redemptionCount: 0,
+        active: true,
+        createdBy: 'admin',
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await db.collection('coupons').doc(couponId).set(coupon);
+      res.status(201).json({ coupon });
+    } catch (err) {
+      console.error('Create coupon error:', err);
+      if (err instanceof Error && err.message.includes('already-exists')) {
+        res.status(409).json({ error: 'Ya existe un cupón con ese código.' });
+        return;
+      }
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error creando cupón.' });
+    }
+  });
+
+  // PUT /api/coupons/:code — Actualizar cupón (solo admin)
+  app.put('/api/coupons/:code', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { code } = req.params;
+      const normalizedCode = normalizeCode(code);
+      const couponRef = db.collection('coupons').doc(normalizedCode);
+      const snap = await couponRef.get();
+
+      if (!snap.exists) {
+        res.status(404).json({ error: 'Cupón no encontrado.' });
+        return;
+      }
+
+      const updates: Partial<Coupon> = { ...req.body, updatedAt: new Date().toISOString() };
+      // No permitir cambiar el id/code
+      delete updates.id;
+      delete updates.code;
+
+      await couponRef.update(updates as any);
+      const updatedSnap = await couponRef.get();
+      res.json({ coupon: { id: updatedSnap.id, ...updatedSnap.data() } as Coupon });
+    } catch (err) {
+      console.error('Update coupon error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error actualizando cupón.' });
+    }
+  });
+
+  // DELETE /api/coupons/:code — Eliminar cupón (solo admin; solo si no tiene redenciones)
+  app.delete('/api/coupons/:code', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { code } = req.params;
+      const normalizedCode = normalizeCode(code);
+      const couponRef = db.collection('coupons').doc(normalizedCode);
+      const snap = await couponRef.get();
+
+      if (!snap.exists) {
+        res.status(404).json({ error: 'Cupón no encontrado.' });
+        return;
+      }
+
+      const coupon = snap.data() as Coupon;
+      if (coupon.redemptionCount > 0) {
+        res.status(400).json({ error: 'No se puede eliminar un cupón con redenciones. Desactívalo en su lugar.' });
+        return;
+      }
+
+      await couponRef.delete();
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Delete coupon error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error eliminando cupón.' });
+    }
+  });
+
+  // POST /api/coupons/:code/toggle — Activar/desactivar cupón (solo admin)
+  app.post('/api/coupons/:code/toggle', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { code } = req.params;
+      const normalizedCode = normalizeCode(code);
+      const { active } = req.body ?? {};
+
+      if (typeof active !== 'boolean') {
+        res.status(400).json({ error: 'El campo active es requerido (boolean).' });
+        return;
+      }
+
+      const couponRef = db.collection('coupons').doc(normalizedCode);
+      await couponRef.update({ active, updatedAt: new Date().toISOString() });
+      res.json({ success: true, active });
+    } catch (err) {
+      console.error('Toggle coupon error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error cambiando estado del cupón.' });
+    }
+  });
+
+  // GET /api/coupons/:code/redemptions — Listar redenciones de un cupón (solo admin)
+  app.get('/api/coupons/:code/redemptions', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { code } = req.params;
+      const normalizedCode = normalizeCode(code);
+      const snap = await db.collection('couponRedemptions')
+        .where('couponCode', '==', normalizedCode)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const redemptions = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as CouponRedemption);
+      const totalDiscount = redemptions
+        .filter((r: CouponRedemption) => r.status === 'confirmed')
+        .reduce((acc: number, r: CouponRedemption) => acc + r.discountCents, 0);
+
+      res.json({ redemptions, totalDiscountCents: totalDiscount });
+    } catch (err) {
+      console.error('List redemptions error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error listando redenciones.' });
+    }
+  });
+
+  // =========================================================================
+  // REFERIDOS — Endpoints
+  // =========================================================================
+
+  // GET /api/referrals/settings — Obtener configuración de referidos (admin)
+  app.get('/api/referrals/settings', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const snap = await db.collection('settings').doc('referrals').get();
+      if (!snap.exists) {
+        // Valores por defecto
+        const defaults: ReferralSettings = {
+          id: 'default',
+          welcomeDiscountPercent: 10,
+          referrerRewardPercent: 10,
+          retentionDays: 7,
+          maxRewardsPerReferrerPerMonth: 10,
+          active: true,
+          updatedAt: new Date().toISOString(),
+        };
+        await db.collection('settings').doc('referrals').set(defaults);
+        res.json({ settings: defaults });
+        return;
+      }
+      res.json({ settings: snap.data() as ReferralSettings });
+    } catch (err) {
+      console.error('Get referral settings error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error obteniendo configuración de referidos.' });
+    }
+  });
+
+  // PUT /api/referrals/settings — Actualizar configuración de referidos (admin)
+  app.put('/api/referrals/settings', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { welcomeDiscountPercent, referrerRewardPercent, retentionDays, maxRewardsPerReferrerPerMonth, active } = req.body ?? {};
+
+      const settingsRef = db.collection('settings').doc('referrals');
+      const updates: Partial<ReferralSettings> = {
+        updatedAt: new Date().toISOString(),
+      };
+      if (typeof welcomeDiscountPercent === 'number') updates.welcomeDiscountPercent = welcomeDiscountPercent;
+      if (typeof referrerRewardPercent === 'number') updates.referrerRewardPercent = referrerRewardPercent;
+      if (typeof retentionDays === 'number') updates.retentionDays = retentionDays;
+      if (typeof maxRewardsPerReferrerPerMonth === 'number') updates.maxRewardsPerReferrerPerMonth = maxRewardsPerReferrerPerMonth;
+      if (typeof active === 'boolean') updates.active = active;
+
+      await settingsRef.update(updates as any);
+      const updatedSnap = await settingsRef.get();
+      res.json({ settings: updatedSnap.data() as ReferralSettings });
+    } catch (err) {
+      console.error('Update referral settings error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error actualizando configuración de referidos.' });
+    }
+  });
+
+  // GET /api/referrals — Listar todos los referidos (admin)
+  app.get('/api/referrals', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const snap = await db.collection('referrals').orderBy('createdAt', 'desc').get();
+      const referrals = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as Referral);
+      res.json({ referrals });
+    } catch (err) {
+      console.error('List referrals error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error listando referidos.' });
+    }
+  });
+
+  // GET /api/referrals/my — Obtener mis datos de referido (estudiante autenticado)
+  app.get('/api/referrals/my', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    try {
+      const db = getAdminDb();
+      const userId = auth.uid;
+
+      const userSnap = await db.collection('users').doc(userId).get();
+      const userData = userSnap.exists ? (userSnap.data() as { referralCode?: string; referredBy?: string }) : {};
+      const referralCode = userData.referralCode;
+
+      // Mis referidos como referidor
+      const referralsSnap = await db.collection('referrals')
+        .where('referrerId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+      const myReferrals = referralsSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as Referral);
+
+      const totalRewards = myReferrals
+        .filter((r: Referral) => r.status === 'rewarded')
+        .reduce((acc: number, r: Referral) => acc + r.rewardValue, 0);
+      const pendingRewards = myReferrals
+        .filter((r: Referral) => r.status === 'qualified')
+        .reduce((acc: number, r: Referral) => acc + r.rewardValue, 0);
+
+      res.json({
+        referralCode,
+        referredBy: userData.referredBy,
+        myReferrals,
+        totalRewardsCents: totalRewards,
+        pendingRewardsCents: pendingRewards,
+      });
+    } catch (err) {
+      console.error('Get my referrals error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error obteniendo referidos.' });
+    }
+  });
+
+  // POST /api/referrals/record — Registrar un referido tras pago confirmado (servidor interno)
+  app.post('/api/referrals/record', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const { referrerId, referredId, orderId, rewardValue } = req.body ?? {};
+
+      if (!referrerId || !referredId || !orderId || typeof rewardValue !== 'number') {
+        res.status(400).json({ error: 'Faltan campos requeridos.' });
+        return;
+      }
+
+      if (referrerId === referredId) {
+        res.status(400).json({ error: 'No se permite autorreferido.' });
+        return;
+      }
+
+      // Verificar que el referido no tenga ya un referido previo
+      const existing = await db.collection('referrals')
+        .where('referredId', '==', referredId)
+        .limit(1)
+        .get();
+      if (!existing.empty) {
+        res.status(400).json({ error: 'El usuario ya tiene un referidor asignado.' });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const referral: Referral = {
+        id: `ref_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        referrerId,
+        referredId,
+        orderId,
+        status: 'pending',
+        rewardType: 'referrer_credit',
+        rewardValue,
+        createdAt: now,
+      };
+
+      await db.collection('referrals').doc(referral.id).set(referral);
+      res.status(201).json({ referral });
+    } catch (err) {
+      console.error('Record referral error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error registrando referido.' });
+    }
+  });
+
+  // POST /api/referrals/reconcile — Pasar referidos pendientes a qualified tras retención (admin/cron)
+  app.post('/api/referrals/reconcile', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const db = getAdminDb();
+      const settingsSnap = await db.collection('settings').doc('referrals').get();
+      const settings = settingsSnap.exists ? (settingsSnap.data() as ReferralSettings) : {
+        retentionDays: 7,
+        active: true,
+      };
+
+      if (!settings.active) {
+        res.json({ processed: 0 });
+        return;
+      }
+
+      const retentionMs = (settings.retentionDays || 7) * 24 * 60 * 60 * 1000;
+      const cutoff = new Date(Date.now() - retentionMs).toISOString();
+
+      const pendingSnap = await db.collection('referrals')
+        .where('status', '==', 'pending')
+        .get();
+
+      const batch = db.batch();
+      let processed = 0;
+
+      for (const docSnap of pendingSnap.docs) {
+        const referral = docSnap.data() as Referral;
+        if (referral.createdAt && String(referral.createdAt) <= cutoff) {
+          batch.update(docSnap.ref, { status: 'qualified', qualifiedAt: new Date().toISOString() });
+          processed++;
+        }
+      }
+
+      if (processed > 0) await batch.commit();
+      res.json({ processed });
+    } catch (err) {
+      console.error('Reconcile referrals error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error reconociendo referidos.' });
+    }
   });
 
   app.post('/api/v1/webhooks/register', (req, res) => {

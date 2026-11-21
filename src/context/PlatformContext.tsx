@@ -201,7 +201,11 @@ interface PlatformContextValue {
   signInWithEmail: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   signInAsAdmin: () => Promise<void>;
   logout: () => Promise<void>;
-  enrollWithPayment: (course: Course, gateway: PaymentGateway) => Promise<PaymentRecord>;
+  enrollWithPayment: (
+    course: Course,
+    gateway: PaymentGateway,
+    options?: { couponCode?: string; referralWelcome?: boolean; testMode?: boolean }
+  ) => Promise<PaymentRecord>;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
   createCourse: (courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateCourse: (courseId: string, patch: Partial<Course>) => Promise<void>;
@@ -995,37 +999,59 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 
   const enrollWithPayment = useCallback(
-    async (course: Course, gateway: PaymentGateway): Promise<PaymentRecord> => {
+    async (
+      course: Course,
+      gateway: PaymentGateway,
+      options?: { couponCode?: string; referralWelcome?: boolean; testMode?: boolean }
+    ): Promise<PaymentRecord> => {
       if (!user) throw new Error('Authentication required');
 
-      // Si el curso es gratis (priceCents === 0), saltar el pago y crear la inscripción directamente
-      let receipt: { paymentId: string; transactionRef: string; status: 'succeeded' };
-      if (course.priceCents === 0) {
+      const couponCode = options?.couponCode?.trim().toUpperCase() || '';
+      const referralWelcome = options?.referralWelcome === true;
+      const testMode = options?.testMode === true;
+
+      // Cursos gratis sin cupón/referido: inscripción directa
+      let receipt: {
+        paymentId: string;
+        transactionRef: string;
+        status: 'succeeded';
+        amountCents?: number;
+        originalAmountCents?: number;
+        discountCents?: number;
+        couponCode?: string;
+        discountSource?: 'none' | 'coupon' | 'referral_welcome';
+      };
+
+      if (course.priceCents === 0 && !couponCode && !referralWelcome) {
         receipt = {
           paymentId: `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
           transactionRef: `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
           status: 'succeeded',
+          amountCents: 0,
+          originalAmountCents: 0,
+          discountCents: 0,
         };
       } else {
+        const idToken = await user.getIdToken();
         const res = await fetch('/api/v1/payments/checkout', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
           body: JSON.stringify({
             courseId: course.id,
-            courseTitle: course.title,
-            studentId: user.uid,
-            instructorId: course.instructorId,
-            amountCents: course.priceCents,
-            currency: course.currency,
             gateway,
+            couponCode: couponCode || undefined,
+            referralWelcome,
+            testMode,
           }),
         });
-        if (!res.ok) throw new Error('Payment authorization failed');
-        receipt = (await res.json()) as {
-          paymentId: string;
-          transactionRef: string;
-          status: 'succeeded';
-        };
+        if (!res.ok) {
+          const errData = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(errData.error || 'Payment authorization failed');
+        }
+        receipt = (await res.json()) as typeof receipt;
       }
 
       // Ensure the course document exists in Firestore before enrollment/payment rules check exists()
@@ -1057,15 +1083,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const enrollmentId = `${course.id}_${user.uid}`;
       const batch = writeBatch(db);
+      const finalAmount = typeof receipt.amountCents === 'number' ? receipt.amountCents : course.priceCents;
       const paymentPayload: PaymentRecord = {
         id: receipt.paymentId,
         courseId: course.id,
         courseTitle: course.title.slice(0, 140),
         studentId: user.uid,
         instructorId: resolvedInstructorId,
-        amountCents: course.priceCents,
+        amountCents: finalAmount,
+        originalAmountCents: typeof receipt.originalAmountCents === 'number' ? receipt.originalAmountCents : course.priceCents,
+        discountCents: typeof receipt.discountCents === 'number' ? receipt.discountCents : 0,
+        couponCode: receipt.couponCode,
+        discountSource: receipt.discountSource,
         currency: course.currency,
-        gateway,
+        gateway: finalAmount === 0 ? 'free' : gateway,
         status: 'succeeded',
         transactionRef: receipt.transactionRef,
         createdAt: serverTimestamp(),
