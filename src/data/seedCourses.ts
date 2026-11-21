@@ -8,7 +8,7 @@ export const EXCEL_BASICO_COURSE: Course = {
     'Curso práctico paso a paso diseñado para dominar la anatomía de fórmulas en Excel, referencias relativas/absolutas/mixtas, resolución de errores frecuentes y las 12 familias de funciones matemáticas y estadísticas básicas.',
   category: 'Productividad',
   level: 'beginner',
-  priceCents: 4900,
+  priceCents: 0,
   currency: 'USD',
   coverImage: '/src/assets/images/course_excel_basico_1795186770853.jpg',
   instructorId: 'platform-faculty',

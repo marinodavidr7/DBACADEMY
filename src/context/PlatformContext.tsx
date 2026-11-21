@@ -1003,25 +1003,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const enrollWithPayment = useCallback(
     async (course: Course, gateway: PaymentGateway): Promise<PaymentRecord> => {
       if (!user) throw new Error('Authentication required');
-      const res = await fetch('/api/v1/payments/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId: course.id,
-          courseTitle: course.title,
-          studentId: user.uid,
-          instructorId: course.instructorId,
-          amountCents: course.priceCents,
-          currency: course.currency,
-          gateway,
-        }),
-      });
-      if (!res.ok) throw new Error('Payment authorization failed');
-      const receipt = (await res.json()) as {
-        paymentId: string;
-        transactionRef: string;
-        status: 'succeeded';
-      };
+
+      // Si el curso es gratis (priceCents === 0), saltar el pago y crear la inscripción directamente
+      let receipt: { paymentId: string; transactionRef: string; status: 'succeeded' };
+      if (course.priceCents === 0) {
+        receipt = {
+          paymentId: `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+          transactionRef: `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
+          status: 'succeeded',
+        };
+      } else {
+        const res = await fetch('/api/v1/payments/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId: course.id,
+            courseTitle: course.title,
+            studentId: user.uid,
+            instructorId: course.instructorId,
+            amountCents: course.priceCents,
+            currency: course.currency,
+            gateway,
+          }),
+        });
+        if (!res.ok) throw new Error('Payment authorization failed');
+        receipt = (await res.json()) as {
+          paymentId: string;
+          transactionRef: string;
+          status: 'succeeded';
+        };
+      }
 
       // Ensure the course document exists in Firestore before enrollment/payment rules check exists()
       const courseRef = doc(db, 'courses', course.id);
@@ -1100,7 +1111,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       triggerPushAlert(
         'payment',
         t('paymentSuccess'),
-        `${course.title} (${gateway.toUpperCase()} · ${receipt.transactionRef})`
+        course.priceCents === 0
+          ? `${course.title} (Inscripción gratuita)`
+          : `${course.title} (${gateway.toUpperCase()} · ${receipt.transactionRef})`
       );
       return paymentPayload;
     },

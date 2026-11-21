@@ -11,6 +11,7 @@ export const CatalogView: React.FC = () => {
     isAdmin,
     courses,
     enrollments,
+    enrollWithPayment,
     setActiveView,
     setSelectedCourseId,
     setWorkspaceRole,
@@ -246,7 +247,7 @@ export const CatalogView: React.FC = () => {
                     <div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">{course.instructorName}</p>
                       <p className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
-                        {formatPrice(course.priceCents, course.currency)}
+                        {course.priceCents === 0 ? 'Gratis' : formatPrice(course.priceCents, course.currency)}
                       </p>
                     </div>
 
@@ -271,10 +272,20 @@ export const CatalogView: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setCheckoutCourse(course)}
+                        onClick={async () => {
+                          if (course.priceCents === 0) {
+                            await enrollWithPayment(course, 'stripe');
+                            setSelectedCourseId(course.id);
+                            setActiveView('learning');
+                          } else {
+                            setCheckoutCourse(course);
+                          }
+                        }}
                         className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
                       >
-                        <span>{t('enrollNow')}</span>
+                        <span>
+                          {course.priceCents === 0 ? 'Inscribirse gratis' : t('enrollNow')}
+                        </span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}
