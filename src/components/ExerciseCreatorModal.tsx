@@ -1,20 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Minus,
   Plus,
   Sparkles,
   Table2,
+  Upload,
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import { EXCEL_BASICO_COURSE } from '../data/seedCourses';
 import type { CustomExcelExercise } from '../types';
 import {
-  COLS,
-  ROWS,
+  ALL_COLS,
+  MAX_ROWS,
   evaluateExcelFormula,
+  getSheetDimensions,
   isExcelError,
   type CellPrimitive,
   type SheetCells,
@@ -107,7 +110,48 @@ const STARTER_TEMPLATES: Array<{
   },
 ];
 
-const ALL_CELL_ADDRESSES = ROWS.flatMap((r) => COLS.map((c) => `${c}${r}`));
+function parseCsvMatrix(rawText: string): string[][] {
+  const clean = rawText.replace(/^\uFEFF/, '');
+  const firstNonEmpty = clean.split(/\r?\n/).find((l) => l.trim() !== '') || '';
+  const delimiter = !firstNonEmpty.includes(',') && firstNonEmpty.includes(';') ? ';' : ',';
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === '"') {
+      if (inQuotes && clean[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && ch === delimiter) {
+      row.push(cell.trim());
+      cell = '';
+      continue;
+    }
+    if (!inQuotes && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && clean[i + 1] === '\n') i++;
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell.trim());
+    rows.push(row);
+  }
+  return rows;
+}
 
 export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   open,
@@ -135,6 +179,8 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   const [title, setTitle] = useState<string>(STARTER_TEMPLATES[0].title);
   const [prompt, setPrompt] = useState<string>(STARTER_TEMPLATES[0].prompt);
   const [hint, setHint] = useState<string>(STARTER_TEMPLATES[0].hint);
+  const [colCount, setColCount] = useState<number>(4);
+  const [rowCount, setRowCount] = useState<number>(6);
   const [targetCell, setTargetCell] = useState<string>(STARTER_TEMPLATES[0].targetCell);
   const [solutionFormula, setSolutionFormula] = useState<string>(
     STARTER_TEMPLATES[0].solutionFormula
@@ -143,6 +189,17 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   const [published, setPublished] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
+
+  const visibleCols = useMemo(() => ALL_COLS.slice(0, colCount), [colCount]);
+  const visibleRows = useMemo(
+    () => Array.from({ length: rowCount }, (_, i) => i + 1),
+    [rowCount]
+  );
+  const allCellAddresses = useMemo(
+    () => visibleRows.flatMap((r) => visibleCols.map((c) => `${c}${r}`)),
+    [visibleRows, visibleCols]
+  );
 
   // Sync defaultLessonId when modal opens
   React.useEffect(() => {
@@ -168,6 +225,9 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
   if (!open) return null;
 
   const applyTemplate = (tpl: (typeof STARTER_TEMPLATES)[number]) => {
+    const dims = getSheetDimensions(tpl.sheet, tpl.targetCell);
+    setColCount(dims.cols.length);
+    setRowCount(dims.rows.length);
     setFunctionTag(tpl.functionTag);
     setTitle(tpl.title);
     setPrompt(tpl.prompt);
@@ -176,6 +236,163 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
     setSolutionFormula(tpl.solutionFormula);
     setSheet({ ...tpl.sheet });
     setError('');
+  };
+
+  const handleAddRow = () => {
+    setRowCount((prev) => Math.min(MAX_ROWS, prev + 1));
+  };
+
+  const handleRemoveRow = () => {
+    if (rowCount <= 2) return;
+    const nextRows = rowCount - 1;
+    setRowCount(nextRows);
+    setSheet((prev) => {
+      const next: SheetCells = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const match = k.match(/^([A-L])(\d+)$/i);
+        if (match && Number(match[2]) <= nextRows) {
+          next[k] = v;
+        }
+      }
+      return next;
+    });
+    const tMatch = targetCell.match(/^([A-L])(\d+)$/i);
+    if (tMatch && Number(tMatch[2]) > nextRows) {
+      setTargetCell(`${tMatch[1].toUpperCase()}${nextRows}`);
+    }
+  };
+
+  const handleAddCol = () => {
+    setColCount((prev) => Math.min(ALL_COLS.length, prev + 1));
+  };
+
+  const handleRemoveCol = () => {
+    if (colCount <= 2) return;
+    const nextColsCount = colCount - 1;
+    const allowedCols = new Set<string>(ALL_COLS.slice(0, nextColsCount));
+    setColCount(nextColsCount);
+    setSheet((prev) => {
+      const next: SheetCells = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const match = k.match(/^([A-L])(\d+)$/i);
+        if (match && allowedCols.has(match[1].toUpperCase())) {
+          next[k] = v;
+        }
+      }
+      return next;
+    });
+    const tMatch = targetCell.match(/^([A-L])(\d+)$/i);
+    if (tMatch && !allowedCols.has(tMatch[1].toUpperCase())) {
+      setTargetCell(`${ALL_COLS[nextColsCount - 1]}${tMatch[2]}`);
+    }
+  };
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const matrix = parseCsvMatrix(text);
+
+      // Find the header row (first row with >= 2 non-empty cells)
+      let headerIdx = matrix.findIndex((r) => r.filter((c) => c !== '').length >= 2);
+      if (headerIdx < 0) {
+        setError('No se detectó una tabla con encabezados válidos en el CSV.');
+        return;
+      }
+
+      // Extract optional preamble instructions before the table
+      const preambleLines = matrix
+        .slice(0, headerIdx)
+        .map((r) => r.filter((c) => c !== '').join(' ').trim())
+        .filter(Boolean);
+
+      let detectedTitle = file.name.replace(/\.csv$/i, '').replace(/[_-]+/g, ' ').trim();
+      let detectedFormula = '';
+      const promptParts: string[] = [];
+
+      for (const line of preambleLines) {
+        const cleaned = line.replace(/^[\u{1F300}-\u{1FAFF}\u2600-\u27BF\s]+/u, '').trim();
+        if (!cleaned) continue;
+        if (cleaned.startsWith('=')) {
+          detectedFormula = cleaned;
+        } else if (/^(EJ\s*\d+|📋)/i.test(line)) {
+          detectedTitle = cleaned.slice(0, 140);
+        } else if (!/^INSTRUCCIONES:?$/i.test(cleaned)) {
+          promptParts.push(cleaned);
+        }
+      }
+
+      const tableRows = matrix
+        .slice(headerIdx)
+        .filter((r) => r.some((c) => c !== ''))
+        .slice(0, MAX_ROWS);
+
+      if (tableRows.length < 2) {
+        setError('El CSV debe incluir al menos una fila de encabezados y una fila de datos.');
+        return;
+      }
+
+      const maxColsFound = Math.min(
+        ALL_COLS.length,
+        Math.max(2, ...tableRows.map((r) => r.length))
+      );
+
+      const importedSheet: SheetCells = {};
+      tableRows.forEach((r, rowOffset) => {
+        const rowNum = rowOffset + 1;
+        for (let cIdx = 0; cIdx < maxColsFound; cIdx++) {
+          const val = (r[cIdx] ?? '').trim();
+          if (val === '') continue;
+          const addr = `${ALL_COLS[cIdx]}${rowNum}`;
+          importedSheet[addr] =
+            !val.startsWith('=') && /^-?\d+(\.\d+)?$/.test(val) ? Number(val) : val;
+        }
+      });
+
+      // Detect first empty cell in row 2 as targetCell (or fallback to last col, row 2)
+      let nextTarget = `${ALL_COLS[maxColsFound - 1]}2`;
+      for (let cIdx = 0; cIdx < maxColsFound; cIdx++) {
+        const addr = `${ALL_COLS[cIdx]}2`;
+        if (importedSheet[addr] === undefined || importedSheet[addr] === '') {
+          nextTarget = addr;
+          break;
+        }
+      }
+
+      // Shift row numbers in detectedFormula if preamble came from an offset Excel sheet
+      if (detectedFormula && headerIdx > 0) {
+        const origDataRow = headerIdx + 2; // 1-indexed first data row in original CSV
+        const delta = 2 - origDataRow;
+        if (delta !== 0) {
+          detectedFormula = detectedFormula.replace(
+            /(\$?[A-L])(\d+)/gi,
+            (full, colPart: string, rowNumStr: string) => {
+              const shifted = Number(rowNumStr) + delta;
+              return shifted >= 1 && shifted <= MAX_ROWS ? `${colPart.toUpperCase()}${shifted}` : full;
+            }
+          );
+        }
+      }
+
+      setColCount(maxColsFound);
+      setRowCount(Math.max(2, Math.min(MAX_ROWS, tableRows.length)));
+      setSheet(importedSheet);
+      setTargetCell(nextTarget);
+      if (detectedTitle.length >= 2) setTitle(detectedTitle.slice(0, 140));
+      if (promptParts.length > 0) {
+        setPrompt(promptParts.join(' · ').slice(0, 600));
+      }
+      if (detectedFormula) {
+        setSolutionFormula(detectedFormula.slice(0, 240));
+        setHint(`Aplica la fórmula en ${nextTarget}: ${detectedFormula}`.slice(0, 400));
+      }
+      setError('');
+    } catch {
+      setError('No se pudo leer el archivo CSV. Verifica que tenga codificación UTF-8.');
+    }
   };
 
   const handleCellChange = (addr: string, raw: string) => {
@@ -290,6 +507,21 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
                 {tpl.label}
               </button>
             ))}
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => void handleImportCsv(e)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => csvInputRef.current?.click()}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+            >
+              <Upload className="w-3 h-3" />
+              <span>Importar .CSV</span>
+            </button>
           </div>
 
           {error && (
@@ -365,30 +597,84 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
             />
           </div>
 
-          {/* Editable 4x6 Sheet Grid */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[11px]">
+          {/* Editable Dynamic Sheet Grid */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <Table2 className="w-3.5 h-3.5 text-[#107C41]" />
-                Datos iniciales de la hoja (A1:D6)
+                Datos iniciales de la hoja (A1:{visibleCols[visibleCols.length - 1]}{rowCount})
               </span>
-              <button
-                type="button"
-                onClick={() => setSheet({})}
-                className="text-slate-500 hover:text-red-600 underline"
-              >
-                Limpiar hoja
-              </button>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={handleRemoveRow}
+                    disabled={rowCount <= 2}
+                    title="Quitar última fila"
+                    className="px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="px-2 py-1 font-mono font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                    {rowCount} filas
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddRow}
+                    disabled={rowCount >= MAX_ROWS}
+                    title="Insertar nueva fila"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-emerald-700 dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-40 border-l border-slate-200 dark:border-slate-700"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Fila</span>
+                  </button>
+                </div>
+
+                <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={handleRemoveCol}
+                    disabled={colCount <= 2}
+                    title="Quitar última columna"
+                    className="px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="px-2 py-1 font-mono font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                    {colCount} cols
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddCol}
+                    disabled={colCount >= ALL_COLS.length}
+                    title="Insertar nueva columna"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-emerald-700 dark:text-emerald-400 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-40 border-l border-slate-200 dark:border-slate-700"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Columna</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSheet({})}
+                  className="text-slate-500 hover:text-red-600 underline ml-1"
+                >
+                  Limpiar hoja
+                </button>
+              </div>
             </div>
+
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
               <table className="w-full border-collapse text-xs font-mono">
                 <thead>
                   <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400">
                     <th className="w-8 border border-slate-200 dark:border-slate-800 py-1 text-center" />
-                    {COLS.map((c) => (
+                    {visibleCols.map((c) => (
                       <th
                         key={c}
-                        className="border border-slate-200 dark:border-slate-800 py-1 px-2 text-center font-semibold"
+                        className="border border-slate-200 dark:border-slate-800 py-1 px-2 text-center font-semibold min-w-[96px]"
                       >
                         {c}
                       </th>
@@ -396,12 +682,12 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {ROWS.map((r) => (
+                  {visibleRows.map((r) => (
                     <tr key={r}>
                       <td className="border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-center text-[11px] text-slate-500 font-semibold">
                         {r}
                       </td>
-                      {COLS.map((c) => {
+                      {visibleCols.map((c) => {
                         const addr = `${c}${r}`;
                         const isTarget = addr === targetCell;
                         return (
@@ -440,7 +726,7 @@ export const ExerciseCreatorModal: React.FC<ExerciseCreatorModalProps> = ({
                 onChange={(e) => setTargetCell(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
               >
-                {ALL_CELL_ADDRESSES.map((addr) => (
+                {allCellAddresses.map((addr) => (
                   <option key={addr} value={addr}>
                     {addr}
                   </option>

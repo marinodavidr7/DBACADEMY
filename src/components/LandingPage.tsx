@@ -1,374 +1,462 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRight,
   Award,
   BookOpen,
-  CalendarDays,
+  Box,
   Check,
   ChevronDown,
-  CircleCheck,
-  GraduationCap,
+  Layers,
   LockKeyhole,
-  MessageSquare,
+  Menu,
   Moon,
-  Radio,
   ShieldCheck,
-  Sparkles,
   Sun,
-  Wallet,
+  X,
 } from 'lucide-react';
-import { LANDING_COPY } from '../data/landingCopy';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
 
 interface LandingPageProps {
   onExplore: () => void;
+  onSelectCourse: (courseId: string) => void;
+  onOpenLearning: () => void;
   onSignIn: () => void | Promise<void>;
 }
 
-const FEATURE_ICONS = [Wallet, Radio, MessageSquare, Award, CalendarDays, LockKeyhole];
+const formatPrice = (cents: number, currency: Course['currency']) => {
+  if (cents === 0) return 'Gratis';
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
+};
 
-const formatPrice = (cents: number, currency: Course['currency']) =>
-  new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onExplore,
+  onSelectCourse,
+  onOpenLearning,
+  onSignIn,
+}) => {
+  const { user, courses, theme, toggleTheme, authError, clearAuthError, t } = usePlatform();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onExplore, onSignIn }) => {
-  const { courses, theme, toggleTheme } = usePlatform();
-  const copy = LANDING_COPY;
-  const featuredCourses = courses.filter((course) => course.published).slice(0, 3);
+  const publishedCourses = courses.filter((c) => c.published);
+  const excelCourse =
+    publishedCourses.find((c) => c.id === 'excel-basico-05' || /excel/i.test(c.title)) ||
+    publishedCourses[0];
+  const secondaryTracks = publishedCourses.filter((c) => c.id !== excelCourse?.id).slice(0, 3);
+
+  const levelLabel = (level: Course['level']) => {
+    if (level === 'beginner') return t('beginner');
+    if (level === 'intermediate') return t('intermediate');
+    return t('advanced');
+  };
 
   const navLinks = [
-    { href: '#beneficios', label: copy.nav.benefits },
-    { href: '#como-funciona', label: copy.nav.how },
-    { href: '#cursos', label: copy.nav.courses },
-    { href: '#seguridad', label: copy.nav.security },
-    { href: '#preguntas', label: copy.nav.faq },
+    { href: '#rutas', label: 'Rutas' },
+    { href: '#cursos', label: 'Catálogo' },
+    { href: '#metodologia', label: 'Metodología' },
+    { href: '#preguntas', label: 'Preguntas' },
   ];
 
-  const levelLabel = (level: Course['level']) => copy.courses.level[level];
-
   return (
-    <div id="top" className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#090D16] dark:text-slate-100">
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-[#0F1624]/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <a href="#top" className="flex items-center gap-2.5 shrink-0">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 text-white">
-              <GraduationCap className="h-5 w-5" />
-            </span>
-            <span className="font-display text-lg font-bold tracking-tight">DB Academy</span>
+    <div id="top" className="min-h-screen bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)]">
+      {/* Strict 3-Zone Top Bar */}
+      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
+          {/* Zone 1: Single-line Brand Wordmark */}
+          <a
+            href="#top"
+            className="font-display text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+          >
+            DB Academy
           </a>
 
-          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 lg:flex">
+          {/* Zone 2: Concise single-line nav links */}
+          <nav
+            aria-label="Navegación principal"
+            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300"
+          >
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="whitespace-nowrap transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+                className="hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
               >
                 {link.label}
               </a>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Zone 3: 1 Primary Action + Mobile Menu Trigger */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
-              onClick={() => void toggleTheme()}
-              aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={user ? onOpenLearning : onExplore}
+              className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
             >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span>{user ? 'Mi Aprendizaje' : 'Explorar catálogo'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
+
             <button
               type="button"
-              onClick={() => void onSignIn()}
-              className="inline-flex min-h-[40px] items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+              onClick={() => setMobileNavOpen((o) => !o)}
+              aria-label={mobileNavOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={mobileNavOpen}
+              className="md:hidden p-2 rounded-lg text-slate-200 hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
-              {copy.nav.signIn}
+              {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Drawer */}
+        {mobileNavOpen && (
+          <div className="md:hidden border-t border-slate-800 bg-[#070E1D] px-4 py-4 space-y-2">
+            {navLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileNavOpen(false)}
+                className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+              >
+                {link.label}
+              </a>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileNavOpen(false);
+                if (user) onOpenLearning();
+                else onExplore();
+              }}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] px-4 py-2.5 text-sm font-semibold text-white min-h-[44px]"
+            >
+              <span>{user ? 'Ir a Mi Aprendizaje' : 'Explorar catálogo'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </header>
 
+      {authError && (
+        <div className="bg-red-950 border-b border-red-800 text-red-100 px-4 py-3 text-xs">
+          <div className="mx-auto max-w-7xl flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p>{authError}</p>
+              {authError.includes('Authorized domains') && (
+                <a
+                  href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block font-semibold underline text-white"
+                >
+                  Abrir Firebase Console → Authentication → Settings
+                </a>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={clearAuthError}
+              className="text-xs font-semibold underline shrink-0"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
       <main>
-        {/* Hero */}
-        <section className="relative overflow-hidden border-b border-slate-200 dark:border-slate-800">
-          <div className="absolute inset-x-0 top-0 -z-10 h-96 bg-gradient-to-b from-blue-50 to-transparent dark:from-blue-950/30" />
-          <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-2 lg:items-center lg:px-8 lg:py-24">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-900 bg-white/70 dark:bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
-                <Sparkles className="h-3.5 w-3.5" />
-                {copy.hero.badge}
-              </span>
-              <h1 className="mt-6 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-                {copy.hero.title}
-                <br />
-                <span className="text-blue-600 dark:text-blue-400">{copy.hero.titleAccent}</span>
-              </h1>
-              <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg">
-                {copy.hero.subtitle}
-              </p>
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => void onSignIn()}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                  {copy.hero.primary}
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onExplore}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 text-sm font-semibold text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  {copy.hero.secondary}
-                </button>
-              </div>
-              <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{copy.hero.note}</p>
-            </div>
-
-            {/* Representación de la interfaz real de la plataforma */}
-            <div aria-hidden="true" className="relative mx-auto w-full max-w-lg">
-              <div className="absolute -inset-6 -z-10 rounded-[2rem] bg-blue-500/10 blur-3xl" />
-              <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-xl shadow-slate-900/10">
-                <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <span className="ml-3 font-mono text-[11px] text-slate-400">db-academy · panel</span>
-                </div>
-                <div className="grid grid-cols-[52px_1fr]">
-                  <div className="flex flex-col items-center gap-3 border-r border-slate-200 dark:border-slate-800 py-4">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-white">
-                      <BookOpen className="h-4 w-4" />
-                    </span>
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400">
-                      <MessageSquare className="h-4 w-4" />
-                    </span>
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400">
-                      <Award className="h-4 w-4" />
-                    </span>
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400">
-                      <CalendarDays className="h-4 w-4" />
-                    </span>
-                  </div>
-                  <div className="p-4 sm:p-6">
-                    <p className="font-display text-lg font-semibold">{copy.hero.mockTitle}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {copy.hero.mockSubtitle}
-                    </p>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      {[
-                        String(courses.length),
-                        'ES / EN / FR / PT',
-                        'PDF',
-                      ].map((value, index) => (
-                        <div
-                          key={value}
-                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-2.5"
-                        >
-                          <p className="font-mono text-sm font-semibold tabular-nums text-blue-600 dark:text-blue-400">
-                            {value}
-                          </p>
-                          <p className="mt-0.5 text-[10px] leading-tight text-slate-500 dark:text-slate-400">
-                            {copy.hero.mockStats[index]}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-medium leading-snug">{copy.hero.mockCourse}</p>
-                        <span className="shrink-0 rounded-full bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
-                          En curso
-                        </span>
-                      </div>
-                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                        <div className="h-full w-2/3 rounded-full bg-blue-600" />
-                      </div>
-                      <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
-                        {copy.hero.mockProgress}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="absolute -bottom-4 -left-2 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] px-3 py-2 text-xs font-medium shadow-lg sm:-left-8">
-                <Radio className="h-3.5 w-3.5 text-emerald-500" />
-                Sincronizado
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Datos verificables del producto */}
-        <section className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624]">
-          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-4 lg:px-8">
-            {copy.stats.map((stat) => (
-              <div key={stat.label}>
-                <p className="font-display text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl">
-                  {stat.value}
+        {/* Dark Technological Hero */}
+        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
+              <div className="lg:col-span-6 flex flex-col justify-center">
+                <p className="text-xs font-semibold tracking-wide text-cyan-300">
+                  Academia técnica interactiva · DB Academy
                 </p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+                <h1 className="mt-3 font-display text-[clamp(2.2rem,4vw,3.5rem)] font-bold tracking-tight text-white leading-[1.08] text-balance">
+                  Domina habilidades técnicas con práctica guiada en vivo.
+                </h1>
+                <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300">
+                  Rutas estructuradas por nivel, laboratorio interactivo de Excel con Simulador 3D, seguimiento de progreso en tiempo real y certificados verificables.
+                </p>
 
-        {/* Problema y beneficios */}
-        <section id="beneficios" className="scroll-mt-20 py-16 sm:py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                {copy.problem.eyebrow}
-              </p>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-                {copy.problem.title}
-              </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-slate-300">
-                {copy.problem.subtitle}
-              </p>
-            </div>
-            <div className="mt-10 grid gap-4 md:grid-cols-2">
-              {copy.problem.items.map((item, index) => {
-                const Icon = index === 0 ? Wallet : Radio;
-                return (
-                  <article
-                    key={item.title}
-                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6"
+                <div className="mt-8 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onExplore}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px]"
                   >
-                    <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <h3 className="mt-4 font-display text-lg font-semibold">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                      {item.body}
-                    </p>
-                  </article>
-                );
-              })}
-            </div>
+                    <span>Explorar cursos</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => (user ? onOpenLearning() : void onSignIn())}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px]"
+                  >
+                    <span>{user ? 'Ir a Mi Panel' : 'Iniciar sesión con Google'}</span>
+                  </button>
+                </div>
 
-            <div className="mt-16">
-              <div className="max-w-3xl">
-                <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  {copy.features.eyebrow}
-                </p>
-                <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-                  {copy.features.title}
-                </h2>
-                <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-slate-300">
-                  {copy.features.subtitle}
-                </p>
+                <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
+                  <span>Acceso libre al catálogo</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Curso de Excel Básico gratuito</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Sincronización multi-dispositivo</span>
+                </div>
               </div>
-              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {copy.features.items.map((feature, index) => {
-                  const Icon = FEATURE_ICONS[index];
-                  return (
-                    <article
-                      key={feature.title}
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6"
-                    >
-                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <h3 className="mt-4 font-display text-base font-semibold">{feature.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                        {feature.body}
+
+              <div className="lg:col-span-6">
+                <div className="relative h-full min-h-[280px] lg:min-h-[420px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
+                  <img
+                    src="/src/assets/images/hero_db_academy_tech_1795271913703.jpg"
+                    alt="Estudiantes trabajando en el laboratorio tecnológico de DB Academy"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/30 to-transparent" />
+                  <div className="absolute bottom-5 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-mono text-cyan-300">Ruta destacada</p>
+                      <p className="mt-1 font-display text-lg font-semibold text-white">
+                        Excel Básico: Fundamentos, SI y Simulador 3D
                       </p>
-                    </article>
-                  );
-                })}
+                    </div>
+                    {excelCourse && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectCourse(excelCourse.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 hover:bg-white px-3.5 py-2 text-xs font-semibold text-slate-900 transition-colors whitespace-nowrap shrink-0 min-h-[38px]"
+                      >
+                        <span>Ver programa</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Cómo funciona */}
+        {/* Full-Width 4-Column Verifiable Metrics Strip */}
+        <section className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A]">
+          <div className="mx-auto max-w-7xl grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
+            <div className="p-6 sm:p-8">
+              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                {publishedCourses.length}
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                Programas activos en catálogo
+              </p>
+            </div>
+            <div className="p-6 sm:p-8">
+              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[#0052CC] dark:text-cyan-400">
+                218+
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                Ejercicios interactivos de Excel
+              </p>
+            </div>
+            <div className="p-6 sm:p-8">
+              <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                SHA-256
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                Certificados verificables en PDF
+              </p>
+            </div>
+            <div className="p-6 sm:p-8">
+              <p className="font-display text-xl sm:text-2xl font-bold font-mono text-slate-700 dark:text-slate-200">
+                [COMPLETAR]
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                Estudiantes egresados de DB Academy
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Rutas de Aprendizaje (Learning Paths) */}
+        <section id="rutas" className="scroll-mt-20 py-16 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                  01. Rutas de aprendizaje
+                </p>
+                <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                  Trayectorias técnicas desde fundamentos hasta práctica profesional
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={onExplore}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline whitespace-nowrap shrink-0"
+              >
+                <span>Ver todo el catálogo</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Marquee Track: Excel & Analítica */}
+              {excelCourse && (
+                <article className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden flex flex-col">
+                  <div className="aspect-[16/9] w-full bg-slate-900 relative overflow-hidden">
+                    <img
+                      src="/src/assets/images/track_data_analytics_1795271913869.jpg"
+                      alt="Ruta de Productividad y Analítica en Excel en DB Academy"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-6 sm:p-7 flex-1 flex flex-col">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                        Ruta Principal · {excelCourse.category}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>{levelLabel(excelCourse.level)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{excelCourse.totalLessons} lecciones</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                        Simulador 3D incluido
+                      </span>
+                    </div>
+                    <h3 className="mt-2.5 font-display text-xl font-bold text-slate-900 dark:text-slate-50">
+                      {excelCourse.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                      {excelCourse.description}
+                    </p>
+                    <div className="mt-auto pt-6 flex flex-wrap items-center justify-between gap-4">
+                      <span className="font-mono text-base font-bold text-emerald-700 dark:text-emerald-400">
+                        {formatPrice(excelCourse.priceCents, excelCourse.currency)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectCourse(excelCourse.id)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[42px]"
+                      >
+                        <span>Explorar ruta y temario</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              )}
+
+              {/* Secondary Tracks Stack */}
+              <div className="lg:col-span-5 flex flex-col gap-4">
+                {secondaryTracks.map((track) => (
+                  <article
+                    key={track.id}
+                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                          {track.category}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{levelLabel(track.level)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="tabular-nums">{track.modules.length} módulos</span>
+                      </div>
+                      <h3 className="mt-2 font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                        {track.title}
+                      </h3>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
+                        {track.subtitle}
+                      </p>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                      <span className="font-mono text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                        {formatPrice(track.priceCents, track.currency)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectCourse(track.id)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline min-h-[36px]"
+                      >
+                        <span>Ver programa</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Catálogo Completo Destacado */}
         <section
-          id="como-funciona"
-          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] py-16 sm:py-20"
+          id="cursos"
+          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              {copy.how.eyebrow}
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              {copy.how.title}
-            </h2>
-            <div className="mt-10 grid gap-6 md:grid-cols-3">
-              {copy.how.steps.map((step, index) => (
-                <div key={step.title} className="relative">
-                  <span className="font-display text-5xl font-bold text-blue-100 dark:text-blue-950">
-                    0{index + 1}
-                  </span>
-                  <h3 className="mt-2 font-display text-lg font-semibold">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                    {step.body}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Cursos reales del catálogo */}
-        <section id="cursos" className="scroll-mt-20 py-16 sm:py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                {copy.courses.eyebrow}
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                02. Catálogo de cursos
               </p>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-                {copy.courses.title}
+              <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                Programas estructurados por módulos y evaluación práctica
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-slate-300">
-                {copy.courses.subtitle}
-              </p>
             </div>
-            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {featuredCourses.map((course) => (
+
+            <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {publishedCourses.map((course) => (
                 <article
                   key={course.id}
-                  className="flex flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827]"
+                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
                 >
-                  <img
-                    src={course.coverImage}
-                    alt=""
-                    loading="lazy"
-                    className="h-40 w-full object-cover"
-                  />
-                  <div className="flex flex-1 flex-col p-5">
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
-                      <span className="rounded-full bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 text-blue-700 dark:text-blue-300">
+                  <div className="aspect-video w-full bg-slate-900 overflow-hidden">
+                    {course.coverImage ? (
+                      <img
+                        src={course.coverImage}
+                        alt={course.title}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                        <BookOpen className="w-8 h-8" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
                         {course.category}
                       </span>
-                      <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-slate-600 dark:text-slate-300">
-                        {levelLabel(course.level)}
-                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>{levelLabel(course.level)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{course.totalLessons} lecciones</span>
                     </div>
-                    <h3 className="mt-3 font-display text-base font-semibold leading-snug">
+                    <h3 className="mt-2 font-display text-base font-bold text-slate-900 dark:text-slate-100 leading-snug">
                       {course.title}
                     </h3>
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">
+                    <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
                       {course.subtitle}
                     </p>
-                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                      {course.modulesCount} {copy.courses.modules} · {course.totalLessons}{' '}
-                      {copy.courses.lessons}
-                    </p>
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-                      <span className="font-mono text-sm font-semibold tabular-nums">
+                    <div className="mt-auto pt-5 flex items-center justify-between gap-3">
+                      <span className="font-mono text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
                         {formatPrice(course.priceCents, course.currency)}
                       </span>
                       <button
                         type="button"
-                        onClick={onExplore}
-                        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700"
+                        onClick={() => onSelectCourse(course.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[40px]"
                       >
-                        {copy.courses.action}
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <span>Ver programa</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -378,81 +466,106 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onExplore, onSignIn })
           </div>
         </section>
 
-        {/* Profesores y seguridad */}
-        <section
-          id="seguridad"
-          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] py-16 sm:py-20"
-        >
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:items-start lg:px-8">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                {copy.instructors.eyebrow}
+        {/* Metodología y Capacidades Reales */}
+        <section id="metodologia" className="scroll-mt-20 py-16 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            <div className="lg:col-span-5">
+              <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                03. Metodología DB Academy
               </p>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight">
-                {copy.instructors.title}
+              <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                De la teoría al laboratorio en una sola plataforma
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-slate-300">
-                {copy.instructors.body}
+              <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                Cada programa combina lecciones guiadas, validación práctica inmediata, seguimiento de avance en tiempo real y emisión automática de certificados al completar el 100% del currículo.
               </p>
-              <ul className="mt-6 space-y-3">
-                {copy.instructors.points.map((point) => (
-                  <li key={point} className="flex gap-2.5 text-sm text-slate-700 dark:text-slate-200">
-                    <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={onExplore}
-                className="mt-7 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 px-4 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                {copy.instructors.action}
-                <ArrowRight className="h-4 w-4" />
-              </button>
+
+              <div className="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-2">
+                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                  Testimonios y alianzas institucionales
+                </p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  [COMPLETAR: Agrega aquí un testimonio verificado de un estudiante o institución aliada de DB Academy con nombre completo y rol.]
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111827] p-6 sm:p-8">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-white">
-                <ShieldCheck className="h-5 w-5" />
-              </span>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                {copy.security.eyebrow}
-              </p>
-              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight">
-                {copy.security.title}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {copy.security.body}
-              </p>
-              <ul className="mt-6 space-y-3">
-                {copy.security.points.map((point) => (
-                  <li key={point} className="flex gap-2.5 text-sm text-slate-700 dark:text-slate-200">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
+
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                {
+                  icon: Box,
+                  title: 'Simulador 3D y Laboratorio Excel',
+                  body: 'Practica fórmulas lógicas y matemáticas (=SI, =SI.ANIDADO, =CONTAR.SI, =SUMAR.SI) con validación instantánea.',
+                },
+                {
+                  icon: Layers,
+                  title: 'Progreso sincronizado en vivo',
+                  body: 'Tu avance por módulo, calendario de entregas y notas se mantienen sincronizados entre tus dispositivos.',
+                },
+                {
+                  icon: Award,
+                  title: 'Certificados con firma SHA-256',
+                  body: 'Al completar un programa obtienes un certificado PDF con código público verificable.',
+                },
+                {
+                  icon: LockKeyhole,
+                  title: 'Bóveda personal cifrada E2EE',
+                  body: 'Tus apuntes privados se cifran en el navegador con AES-GCM-256 antes de guardarse en la nube.',
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <article
+                    key={item.title}
+                    className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6"
+                  >
+                    <Icon className="w-5 h-5 text-[#0052CC] dark:text-cyan-400" />
+                    <h3 className="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      {item.body}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* FAQ */}
-        <section id="preguntas" className="scroll-mt-20 py-16 sm:py-20">
+        {/* Preguntas Frecuentes */}
+        <section
+          id="preguntas"
+          className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
+        >
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              {copy.faq.eyebrow}
+            <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+              04. Preguntas frecuentes
             </p>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              {copy.faq.title}
+            <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+              Información antes de comenzar
             </h2>
-            <div className="mt-8 divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-5">
-              {copy.faq.items.map((item) => (
+            <div className="mt-8 divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] px-5">
+              {[
+                {
+                  q: '¿Necesito cuenta para explorar los cursos y temarios?',
+                  a: 'No. Puedes revisar todo el catálogo, las rutas de aprendizaje y el temario completo de cada programa sin iniciar sesión.',
+                },
+                {
+                  q: '¿Cómo funciona el curso gratuito de Excel Básico?',
+                  a: 'Puedes inscribirte sin costo y practicar directamente en el Laboratorio Interactivo de Excel y el Simulador 3D de decisiones lógicas.',
+                },
+                {
+                  q: '¿Cómo se verifican los certificados emitidos?',
+                  a: 'Cada certificado emitido al alcanzar el 100% incluye un código único verificable en la sección de Certificados y descarga en PDF.',
+                },
+              ].map((item) => (
                 <details key={item.q} className="group py-4">
-                  <summary className="flex min-h-[24px] cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                    {item.q}
+                  <summary className="flex min-h-[28px] cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-slate-900 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+                    <span>{item.q}</span>
                     <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
                   </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                     {item.a}
                   </p>
                 </details>
@@ -461,56 +574,64 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onExplore, onSignIn })
           </div>
         </section>
 
-        {/* Cierre */}
-        <section className="px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8">
-          <div className="mx-auto max-w-7xl overflow-hidden rounded-2xl bg-slate-900 px-6 py-12 text-center sm:px-12 sm:py-16 dark:bg-[#141d2e]">
-            <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              {copy.final.title}
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-slate-300 sm:text-base">
-              {copy.final.subtitle}
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        {/* Cierre Oscuro CTA */}
+        <section className="bg-[#070E1D] text-slate-100 py-14 sm:py-16 border-t border-slate-800">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white text-balance">
+                Comienza tu formación técnica hoy en DB Academy
+              </h2>
+              <p className="mt-2 text-sm text-slate-300">
+                Accede con tu cuenta de Google o explora el catálogo abierto desde cualquier dispositivo.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => void onSignIn()}
-                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white hover:bg-blue-500"
+                onClick={user ? onOpenLearning : onExplore}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
               >
-                {copy.final.primary}
-                <ArrowRight className="h-4 w-4" />
+                <span>{user ? 'Ir a Mi Aprendizaje' : 'Ver catálogo'}</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={onExplore}
-                className="inline-flex min-h-[48px] items-center justify-center rounded-lg border border-slate-600 px-6 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                {copy.final.secondary}
-              </button>
+              {!user && (
+                <button
+                  type="button"
+                  onClick={() => void onSignIn()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 hover:bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
+                >
+                  <span>Iniciar sesión</span>
+                </button>
+              )}
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-white">
-                <GraduationCap className="h-4 w-4" />
-              </span>
-              <span className="font-display text-base font-bold">DB Academy</span>
-            </div>
-            <p className="mt-3 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              {copy.footer.tagline} {copy.footer.note}
-            </p>
+      <footer className="border-t border-slate-800 bg-[#050914] text-slate-400">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className="font-display text-sm font-bold text-white">DB Academy</span>
+            <span className="text-xs text-slate-400">· Formación técnica en tiempo real</span>
           </div>
-          <nav className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+
+          <div className="flex flex-wrap items-center gap-4 text-xs">
             {navLinks.map((link) => (
-              <a key={link.href} href={link.href} className="hover:text-blue-600 dark:hover:text-blue-400">
+              <a key={link.href} href={link.href} className="hover:text-white transition-colors">
                 {link.label}
               </a>
             ))}
-          </nav>
+            <button
+              type="button"
+              onClick={() => void toggleTheme()}
+              aria-label="Cambiar tema claro u oscuro"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800"
+            >
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+            </button>
+          </div>
         </div>
       </footer>
     </div>

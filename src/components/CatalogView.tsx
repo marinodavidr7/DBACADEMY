@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
 import { CheckoutModal } from './CheckoutModal';
+import { CourseProgressBar } from './ui/CourseProgressBar';
 
 export const CatalogView: React.FC = () => {
   const {
@@ -52,28 +53,29 @@ export const CatalogView: React.FC = () => {
   };
 
   const formatPrice = (cents: number, currency: Course['currency']) => {
+    if (cents === 0) return 'Gratis';
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
   };
 
   return (
     <div className="space-y-8">
-      {/* Editorial Hero Section */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+      {/* Dark Technological Catalog Header */}
+      <section className="rounded-xl border border-slate-800/90 bg-[#070E1D] text-slate-100 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
           <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center">
-            <p className="text-xs font-semibold tracking-wide text-blue-600 dark:text-blue-400">
-              {t('brand')}
+            <p className="text-xs font-semibold tracking-wide text-cyan-300">
+              {t('brand')} · Catálogo técnico
             </p>
-            <h1 className="mt-2 text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 leading-tight text-balance">
+            <h1 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight text-balance">
               {t('heroTitle')}
             </h1>
-            <p className="mt-3 text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
+            <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
               {t('heroSubtitle')}
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
                 href="#catalog-grid"
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap min-h-[44px]"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-2.5 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[44px]"
               >
                 <span>{t('exploreCatalog')}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -84,22 +86,24 @@ export const CatalogView: React.FC = () => {
                   setWorkspaceRole('instructor');
                   setActiveView('instructor');
                 }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap min-h-[44px]"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[44px]"
               >
                 <span>{t('openInstructor')}</span>
               </button>
             </div>
           </div>
-          <div className="lg:col-span-5 relative min-h-[220px] lg:min-h-full bg-slate-900">
+
+          <div className="lg:col-span-5 relative min-h-[220px] lg:min-h-full bg-[#0D1930]">
             <img
-              src="/src/assets/images/course_excel_basico_1795186770853.jpg"
-              alt="DB Academy — Formación técnica en tiempo real"
+              src="/src/assets/images/track_data_analytics_1795271913869.jpg"
+              alt="Laboratorio de Excel y Analítica de DB Academy"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/25 to-transparent" />
             <div className="absolute bottom-4 left-4 right-4 text-white">
-              <p className="text-xs text-slate-200">
+              <p className="text-xs font-mono text-cyan-300">Programa destacado</p>
+              <p className="text-sm font-semibold text-white mt-0.5">
                 Excel Básico · Módulos 0 y 1 · Simulador 3D Interactivo
               </p>
             </div>
@@ -117,12 +121,12 @@ export const CatalogView: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('searchCourses')}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[44px]"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[44px]"
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-x-auto max-w-full">
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-x-auto max-w-full">
               {categories.map((cat) => (
                 <button
                   key={cat}
@@ -130,7 +134,7 @@ export const CatalogView: React.FC = () => {
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
                     selectedCategory === cat
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#0052CC] text-white'
                       : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
@@ -143,7 +147,7 @@ export const CatalogView: React.FC = () => {
               value={selectedLevel}
               onChange={(e) => setSelectedLevel(e.target.value)}
               aria-label={t('allLevels')}
-              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[40px]"
+              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[40px]"
             >
               <option value="all">{t('allLevels')}</option>
               <option value="beginner">{t('beginner')}</option>
@@ -154,147 +158,168 @@ export const CatalogView: React.FC = () => {
         </div>
 
         {/* Course Cards Grid */}
-        <div
-          className={
-            filtered.length === 1
-              ? 'grid grid-cols-1 max-w-2xl gap-6'
-              : 'grid grid-cols-1 md:grid-cols-2 gap-6'
-          }
-        >
-          {filtered.map((course, idx) => {
-            const enrollment = enrollments.find((e) => e.courseId === course.id);
-            const isEnrolled = Boolean(enrollment);
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-8 text-center">
+            <BookOpen className="w-8 h-8 text-slate-400 mx-auto" />
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              No hay cursos que coincidan con tu búsqueda o filtros actuales.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setSelectedCategory('all');
+                setSelectedLevel('all');
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        ) : (
+          <div
+            className={
+              filtered.length === 1
+                ? 'grid grid-cols-1 max-w-2xl gap-6'
+                : 'grid grid-cols-1 md:grid-cols-2 gap-6'
+            }
+          >
+            {filtered.map((course, idx) => {
+              const enrollment = enrollments.find((e) => e.courseId === course.id);
+              const isEnrolled = Boolean(enrollment);
 
-            return (
-              <motion.article
-                key={course.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay: Math.min(idx * 0.06, 0.3), ease: 'easeOut' }}
-                whileHover={{ y: -3 }}
-                className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
-              >
-                <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
-                  {course.coverImage ? (
-                    <img
-                      src={course.coverImage}
-                      alt={course.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400">
-                      <BookOpen className="w-10 h-10" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-6 flex-1 flex flex-col">
-                  {/* Unboxed Typographic Metadata (Zero-Pill Rule) */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium text-blue-600 dark:text-blue-400">{course.category}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{levelLabel(course.level)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="tabular-nums">
-                      {course.modules.length} {t('modulesLabel')}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="tabular-nums">
-                      {course.totalLessons} {t('lessonsLabel')}
-                    </span>
-                    {(course.id === 'excel-basico-05' || /excel/i.test(course.title)) && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                          {t('navSimulator')}
-                        </span>
-                      </>
+              return (
+                <motion.article
+                  key={course.id}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, delay: Math.min(idx * 0.05, 0.25), ease: 'easeOut' }}
+                  whileHover={{ y: -2 }}
+                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
+                >
+                  <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
+                    {course.coverImage ? (
+                      <img
+                        src={course.coverImage}
+                        alt={course.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400">
+                        <BookOpen className="w-10 h-10" />
+                      </div>
                     )}
                   </div>
 
-                  <h2 className="mt-2.5 text-lg font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-                    {course.title}
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                    {course.subtitle}
-                  </p>
+                  <div className="p-6 flex-1 flex flex-col">
+                    {/* Unboxed Typographic Metadata (Zero-Pill Rule) */}
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                        {course.category}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>{levelLabel(course.level)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">
+                        {course.modules.length} {t('modulesLabel')}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">
+                        {course.totalLessons} {t('lessonsLabel')}
+                      </span>
+                      {(course.id === 'excel-basico-05' || /excel/i.test(course.title)) && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            {t('navSimulator')}
+                          </span>
+                        </>
+                      )}
+                    </div>
 
-                  {isEnrolled && enrollment && (
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between text-xs mb-1.5">
-                        <span className="text-slate-600 dark:text-slate-300 font-medium">
-                          {enrollment.progressPercent === 100 ? t('completedBadge') : t('continueCourse')}
-                        </span>
-                        <span className="font-mono tabular-nums font-semibold text-slate-900 dark:text-slate-100">
-                          {enrollment.progressPercent}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${enrollment.progressPercent}%` }}
-                          transition={{ duration: 0.55, ease: 'easeOut' }}
-                          className={`h-full ${
-                            enrollment.progressPercent === 100 ? 'bg-emerald-600' : 'bg-blue-600'
-                          }`}
+                    <h2 className="mt-2.5 font-display text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                      {course.title}
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                      {course.subtitle}
+                    </p>
+
+                    {isEnrolled && enrollment && (
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <CourseProgressBar
+                          percent={enrollment.progressPercent}
+                          label={t('continueCourse')}
                         />
                       </div>
-                    </div>
-                  )}
-
-                  <div className="mt-auto pt-5 flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{course.instructorName}</p>
-                      <p className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
-                        {course.priceCents === 0 ? 'Gratis' : formatPrice(course.priceCents, course.currency)}
-                      </p>
-                    </div>
-
-                    {isEnrolled || isAdmin || course.instructorId === user?.uid ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCourseId(course.id);
-                          setActiveView('learning');
-                        }}
-                        className="inline-flex items-center gap-2 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-medium text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 min-h-[40px]"
-                      >
-                        {enrollment?.progressPercent === 100 ? (
-                          <Check className="w-3.5 h-3.5" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5" />
-                        )}
-                        <span>
-                          {isEnrolled ? t('continueCourse') : 'Abrir curso'}
-                        </span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (course.priceCents === 0) {
-                            await enrollWithPayment(course, 'stripe');
-                            setSelectedCourseId(course.id);
-                            setActiveView('learning');
-                          } else {
-                            setCheckoutCourse(course);
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-                      >
-                        <span>
-                          {course.priceCents === 0 ? 'Inscribirse gratis' : t('enrollNow')}
-                        </span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
                     )}
+
+                    <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {course.instructorName}
+                        </p>
+                        <p className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
+                          {formatPrice(course.priceCents, course.currency)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCourseId(course.id);
+                            setActiveView('course-detail');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[40px]"
+                        >
+                          <span>Ver programa</span>
+                        </button>
+
+                        {isEnrolled || isAdmin || course.instructorId === user?.uid ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCourseId(course.id);
+                              setActiveView('learning');
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 min-h-[40px]"
+                          >
+                            {enrollment?.progressPercent === 100 ? (
+                              <Check className="w-3.5 h-3.5" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5" />
+                            )}
+                            <span>{isEnrolled ? t('continueCourse') : 'Abrir curso'}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (course.priceCents === 0) {
+                                await enrollWithPayment(course, 'stripe');
+                                setSelectedCourseId(course.id);
+                                setActiveView('learning');
+                              } else {
+                                setCheckoutCourse(course);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                          >
+                            <span>
+                              {course.priceCents === 0 ? 'Inscribirse gratis' : t('enrollNow')}
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </motion.article>
-            );
-          })}
-        </div>
+                </motion.article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {checkoutCourse && (

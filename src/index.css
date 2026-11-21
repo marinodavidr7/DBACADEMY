@@ -1,19 +1,67 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-display: 'IBM Plex Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
 @layer base {
   :root {
-    --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-display: 'IBM Plex Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* DB Academy Design System Tokens */
+    --dba-bg-canvas: #F8FAFC;
+    --dba-bg-surface: #FFFFFF;
+    --dba-bg-elevated: #F1F5F9;
+    --dba-bg-hero: #070E1D;
+    --dba-bg-hero-surface: #0D1930;
+    --dba-border: #E2E8F0;
+    --dba-border-strong: #CBD5E1;
+    --dba-text-primary: #0F172A;
+    --dba-text-secondary: #475569;
+    --dba-accent: #0052CC;
+    --dba-accent-hover: #0747A6;
+    --dba-cyan: #0891B2;
+    --dba-success: #047857;
+    --dba-excel: #107C41;
+  }
+
+  .dark {
+    --dba-bg-canvas: #070C17;
+    --dba-bg-surface: #0F172A;
+    --dba-bg-elevated: #17233B;
+    --dba-bg-hero: #050914;
+    --dba-bg-hero-surface: #0B1426;
+    --dba-border: #1E293B;
+    --dba-border-strong: #334155;
+    --dba-text-primary: #F8FAFC;
+    --dba-text-secondary: #94A3B8;
+    --dba-accent: #2563EB;
+    --dba-accent-hover: #3B82F6;
+    --dba-cyan: #06B6D4;
+    --dba-success: #10B981;
+  }
+
+  html {
+    font-size: 16px;
+    text-rendering: optimizeLegibility;
   }
 
   body {
     font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    background-color: var(--dba-bg-canvas);
+    color: var(--dba-text-primary);
   }
 
   h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);
+    letter-spacing: -0.015em;
   }
 
   .font-mono {
@@ -22,6 +70,16 @@
 
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--dba-accent);
+    outline-offset: 2px;
   }
 }
 

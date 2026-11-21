@@ -228,7 +228,7 @@
         "title": { "type": "string", "minLength": 2, "maxLength": 140 },
         "prompt": { "type": "string", "minLength": 5, "maxLength": 600 },
         "hint": { "type": "string", "maxLength": 400 },
-        "targetCell": { "type": "string", "minLength": 2, "maxLength": 4, "pattern": "^[A-D][1-6]$" },
+        "targetCell": { "type": "string", "minLength": 2, "maxLength": 4, "pattern": "^[A-L]([1-9]|[1-3][0-9]|40)$" },
         "solutionFormula": { "type": "string", "minLength": 2, "maxLength": 240 },
         "expectedResult": { "type": "string", "minLength": 1, "maxLength": 120 },
         "initialSheet": { "type": "object" },

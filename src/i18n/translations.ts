@@ -11,6 +11,7 @@ export const translations = {
   es: {
     brand: 'DB Academy',
     tagline: 'Formación técnica, en tiempo real.',
+    navHome: 'Inicio',
     navCatalog: 'Catálogo',
     navLearning: 'Mi Aprendizaje',
     navSimulator: 'Simulador 3D',
@@ -126,6 +127,7 @@ export const translations = {
   en: {
     brand: 'DB Academy',
     tagline: 'Technical training, in real time.',
+    navHome: 'Home',
     navCatalog: 'Catalog',
     navLearning: 'My Learning',
     navSimulator: '3D Simulator',
@@ -241,6 +243,7 @@ export const translations = {
   fr: {
     brand: 'DB Academy',
     tagline: 'Formation technique, en temps réel.',
+    navHome: 'Accueil',
     navCatalog: 'Catalogue',
     navLearning: 'Mon Parcours',
     navSimulator: 'Simulateur 3D',
@@ -356,6 +359,7 @@ export const translations = {
   pt: {
     brand: 'DB Academy',
     tagline: 'Formação técnica, em tempo real.',
+    navHome: 'Início',
     navCatalog: 'Catálogo',
     navLearning: 'Meu Aprendizado',
     navSimulator: 'Simulador 3D',

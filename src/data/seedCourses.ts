@@ -197,7 +197,7 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: 'Evalúa condiciones lógicas para tomar decisiones automáticas (=SI(prueba; verdadero; falso)), anidar niveles y combinar con Y / O.',
           content:
-            'La función SI comprueba si una prueba lógica es VERDADERO o FALSO y devuelve un resultado distinto para cada rama. Sintaxis: =SI(prueba_lógica; valor_si_verdadero; [valor_si_falso]). Puedes anidar múltiples SI para clasificar en 3 o más niveles, o combinarla con Y() y O() para evaluar múltiples condiciones simultáneas. Usa el Simulador 3D de =SI() integrado arriba para ver cómo cada dato toma decisiones en tiempo real.',
+            'La función SI comprueba si una prueba lógica es VERDADERO o FALSO y devuelve un resultado distinto para cada rama. Sintaxis: =SI(prueba_lógica; valor_si_verdadero; [valor_si_falso]). Puedes anidar múltiples SI para clasificar en 3 o más niveles, o combinarla con Y() y O() para evaluar múltiples condiciones simultáneas. Usa el Simulador 3D de =SI() integrado en esta lección para ver cómo cada dato toma decisiones en tiempo real.',
         },
       ],
     },

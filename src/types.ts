@@ -5,7 +5,9 @@ export type PaymentGateway = 'stripe' | 'mercadopago' | 'paypal';
 export type CloudProvider = 'none' | 'google_drive' | 'dropbox' | 'aws_s3' | 'gcs';
 
 export type AppView =
+  | 'landing'
   | 'catalog'
+  | 'course-detail'
   | 'learning'
   | 'instructor'
   | 'forums'

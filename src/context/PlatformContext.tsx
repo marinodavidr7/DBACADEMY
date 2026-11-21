@@ -126,7 +126,8 @@ function formatGoogleAuthError(err: unknown): string {
   const code = (err as { code?: string })?.code || '';
   const host = typeof window !== 'undefined' ? window.location.hostname : 'este dominio';
   if (code === 'auth/unauthorized-domain') {
-    return `El dominio "${host}" aún no está autorizado en Firebase Authentication. Agrega "${host}" (y dbacademy.vercel.app) en Firebase Console → Authentication → Settings → Authorized domains.`;
+    const extra = host !== 'dbacademy.vercel.app' ? ' (y dbacademy.vercel.app)' : '';
+    return `El dominio "${host}" aún no está autorizado en Firebase Authentication (proyecto river-pipe-m6tvw). Agrega "${host}"${extra} en Firebase Console → Authentication → Settings → Authorized domains.`;
   }
   if (code === 'auth/operation-not-allowed') {
     return 'El inicio de sesión con Google no está habilitado en Firebase Authentication.';
@@ -245,7 +246,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return 'es';
   });
 
-  const [activeView, setActiveView] = useState<AppView>('catalog');
+  const [activeView, setActiveView] = useState<AppView>('landing');
   const [zenMode, setZenMode] = useState<boolean>(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');

@@ -1,0 +1,352 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Award,
+  BookOpen,
+  Box,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Layers,
+  Play,
+  ShieldCheck,
+} from 'lucide-react';
+import { usePlatform } from '../context/PlatformContext';
+import type { Course } from '../types';
+import { CheckoutModal } from './CheckoutModal';
+import { CourseProgressBar } from './ui/CourseProgressBar';
+
+export const CourseDetailView: React.FC = () => {
+  const {
+    user,
+    isAdmin,
+    courses,
+    enrollments,
+    selectedCourseId,
+    setSelectedCourseId,
+    setActiveView,
+    enrollWithPayment,
+    t,
+  } = usePlatform();
+
+  const course = useMemo(() => {
+    return courses.find((c) => c.id === selectedCourseId) || courses[0] || null;
+  }, [courses, selectedCourseId]);
+
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(
+    () => course?.modules[0]?.id ?? null
+  );
+
+  useEffect(() => {
+    setExpandedModuleId(course?.modules[0]?.id ?? null);
+  }, [course?.id]);
+  const [checkoutCourse, setCheckoutCourse] = useState<Course | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
+
+  if (!course) {
+    return (
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-8 text-center">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Selecciona un curso del catálogo para consultar su programa completo.
+        </p>
+        <button
+          type="button"
+          onClick={() => setActiveView('catalog')}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#0052CC] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0747A6] min-h-[40px]"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Volver al catálogo</span>
+        </button>
+      </div>
+    );
+  }
+
+  const enrollment = enrollments.find((e) => e.courseId === course.id);
+  const isEnrolled = Boolean(enrollment);
+  const hasInstructorAccess = isAdmin || course.instructorId === user?.uid;
+  const isExcelCourse = course.id === 'excel-basico-05' || /excel/i.test(course.title);
+
+  const totalMinutes = course.modules.reduce((acc, m) => acc + (m.durationMinutes || 0), 0);
+  const totalHours = Math.max(1, Math.round((totalMinutes / 60) * 10) / 10);
+
+  const levelLabel = (lvl: Course['level']) => {
+    if (lvl === 'beginner') return t('beginner');
+    if (lvl === 'intermediate') return t('intermediate');
+    return t('advanced');
+  };
+
+  const formatPrice = (cents: number, currency: Course['currency']) => {
+    if (cents === 0) return 'Gratis';
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
+  };
+
+  const handlePrimaryAction = async () => {
+    if (isEnrolled || hasInstructorAccess) {
+      setSelectedCourseId(course.id);
+      setActiveView('learning');
+      return;
+    }
+    if (course.priceCents === 0) {
+      setEnrolling(true);
+      try {
+        await enrollWithPayment(course, 'stripe');
+        setSelectedCourseId(course.id);
+        setActiveView('learning');
+      } finally {
+        setEnrolling(false);
+      }
+      return;
+    }
+    setCheckoutCourse(course);
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Dark Technological Course Header */}
+      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-6 sm:p-8 lg:p-10">
+        <button
+          type="button"
+          onClick={() => setActiveView('catalog')}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-300 hover:text-cyan-200 transition-colors min-h-[36px]"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Volver al catálogo</span>
+        </button>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+          <span className="font-semibold text-cyan-300">{course.category}</span>
+          <span aria-hidden="true">·</span>
+          <span>{levelLabel(course.level)}</span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">
+            {course.modules.length} {t('modulesLabel')}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">
+            {course.totalLessons} {t('lessonsLabel')}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">{totalHours} h estimadas</span>
+        </div>
+
+        <h1 className="mt-3 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight max-w-4xl text-balance">
+          {course.title}
+        </h1>
+        <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed max-w-3xl">
+          {course.subtitle}
+        </p>
+
+        <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-slate-300">
+          <span>
+            Instructor: <strong className="text-white">{course.instructorName}</strong>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>Certificación verificable SHA-256 al completar el 100%</span>
+        </div>
+      </section>
+
+      {/* Main Content + Sticky Enrollment Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-8 space-y-8">
+          {/* Descripción y Enfoque */}
+          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 sm:p-7 space-y-4">
+            <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">
+              Acerca del programa
+            </h2>
+            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              {course.description}
+            </p>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {course.modules.map((mod, idx) => (
+                <div key={mod.id} className="flex items-start gap-2.5 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      0{idx + 1}. {mod.title}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                      {mod.lessons.length} lecciones · {mod.durationMinutes} min
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Temario Detallado */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">
+                Plan de estudios ({course.totalLessons} lecciones)
+              </h2>
+              <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                {course.modules.length} módulos
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
+              {course.modules.map((mod, modIdx) => {
+                const isOpen = expandedModuleId === mod.id;
+                return (
+                  <div key={mod.id}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedModuleId(isOpen ? null : mod.id)}
+                      aria-expanded={isOpen}
+                      className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-mono text-blue-700 dark:text-cyan-400 font-semibold">
+                          Módulo {modIdx}
+                        </p>
+                        <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
+                          {mod.title}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="hidden sm:inline text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                          {mod.lessons.length} lecciones · {mod.durationMinutes} min
+                        </span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                            isOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B1426]/60 px-5 py-3 divide-y divide-slate-200/70 dark:divide-slate-800/70">
+                        {mod.lessons.map((lesson) => (
+                          <div
+                            key={lesson.id}
+                            className="py-3 flex items-start justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-800 dark:text-slate-200">
+                                {lesson.title}
+                              </p>
+                              <p className="mt-0.5 text-slate-500 dark:text-slate-400 line-clamp-1">
+                                {lesson.summary}
+                              </p>
+                            </div>
+                            <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                              {lesson.durationMinutes} min
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        {/* Sticky Sidebar Card */}
+        <aside className="lg:col-span-4 lg:sticky lg:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
+          <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
+            {course.coverImage ? (
+              <img
+                src={course.coverImage}
+                alt={course.title}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-slate-400">
+                <BookOpen className="w-10 h-10" />
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 space-y-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                Acceso al programa
+              </span>
+              <span className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                {formatPrice(course.priceCents, course.currency)}
+              </span>
+            </div>
+
+            {isEnrolled && enrollment && (
+              <CourseProgressBar
+                percent={enrollment.progressPercent}
+                label="Tu avance actual"
+                size="md"
+              />
+            )}
+
+            <button
+              type="button"
+              disabled={enrolling}
+              onClick={() => void handlePrimaryAction()}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
+            >
+              {isEnrolled || hasInstructorAccess ? (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>{isEnrolled ? t('continueCourse') : 'Abrir curso'}</span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    {enrolling
+                      ? 'Procesando...'
+                      : course.priceCents === 0
+                        ? 'Inscribirse gratis'
+                        : t('enrollNow')}
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <ul className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+              <li className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <span className="tabular-nums">
+                  {course.modules.length} módulos · {course.totalLessons} lecciones
+                </span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <span className="tabular-nums">{totalHours} horas de estudio estimadas</span>
+              </li>
+              {isExcelCourse && (
+                <li className="flex items-center gap-2.5">
+                  <Box className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Laboratorio práctico y Simulador 3D interactivo</span>
+                </li>
+              )}
+              <li className="flex items-center gap-2.5">
+                <Award className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <span>Certificado PDF verificable al completar</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <span>Sincronización multi-dispositivo en tiempo real</span>
+              </li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      {checkoutCourse && (
+        <CheckoutModal
+          course={checkoutCourse}
+          onClose={() => setCheckoutCourse(null)}
+          onSuccess={(courseId) => {
+            setCheckoutCourse(null);
+            setSelectedCourseId(courseId);
+            setActiveView('learning');
+          }}
+        />
+      )}
+    </div>
+  );
+};

@@ -622,6 +622,7 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       setDraftMidLabel(preset.config.midLabel);
       setDraftFalseLabel(preset.config.falseLabel);
       setActiveFormula({ ...preset.config });
+      setFeedback(null);
       setTrueCount(0);
       setMidCount(0);
       setFalseCount(0);
@@ -681,6 +682,7 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       falseLabel: draftFalseLabel.trim() || 'Falso',
     };
     setActiveFormula(nextConfig);
+    setFeedback(null);
     setTrueCount(0);
     setMidCount(0);
     setFalseCount(0);
@@ -1495,9 +1497,13 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden shadow-xs">
-      <div className="grid grid-cols-1 lg:grid-cols-12">
+      <div className={compact ? 'grid grid-cols-1' : 'grid grid-cols-1 lg:grid-cols-12'}>
         {/* Left Main Stage: Header + Formula Bar + 3D WebGL Canvas */}
-        <div className="lg:col-span-9 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800">
+        <div
+          className={`flex flex-col border-slate-200 dark:border-slate-800 ${
+            compact ? 'border-b' : 'lg:col-span-9 border-b lg:border-b-0 lg:border-r'
+          }`}
+        >
           {/* Simulator Header + Formula Builder */}
           <div className="p-4 sm:p-5 space-y-3.5 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1608,13 +1614,13 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                 <button
                   type="button"
                   onClick={handleVerifyChallenge}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors min-h-[32px] ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors min-h-[32px] ${
                     feedback?.type === 'correct'
                       ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-xs'
                       : feedback?.type === 'retry'
                         ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 shadow-xs'
                         : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-emerald-500 hover:text-emerald-700'
-                  }"
+                  }`}
                 >
                   {feedback?.type === 'correct' ? (
                     <CheckCircle2 className="w-3 h-3 text-emerald-700" />
@@ -1876,7 +1882,11 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
         </div>
 
         {/* Right Panel: Live Animated Registro & Tally */}
-        <aside className="lg:col-span-3 flex flex-col bg-slate-50/70 dark:bg-[#0D1320] max-h-[680px]">
+        <aside
+          className={`flex flex-col bg-slate-50/70 dark:bg-[#0D1320] ${
+            compact ? 'max-h-[320px]' : 'lg:col-span-3 max-h-[680px]'
+          }`}
+        >
           <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-slate-600 dark:text-slate-300" />

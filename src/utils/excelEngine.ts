@@ -1,8 +1,39 @@
 export type CellPrimitive = string | number;
 export type SheetCells = Record<string, CellPrimitive>;
 
+export const ALL_COLS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as const;
+export const MAX_ROWS = 40;
 export const COLS = ['A', 'B', 'C', 'D'] as const;
 export const ROWS = [1, 2, 3, 4, 5, 6] as const;
+
+export function getSheetDimensions(
+  cells: SheetCells,
+  targetCell?: string,
+  minCols = 4,
+  minRows = 6,
+  extraCells?: SheetCells
+): { cols: string[]; rows: number[] } {
+  let maxColIdx = Math.max(0, minCols - 1);
+  let maxRow = minRows;
+
+  const inspectKey = (key: string) => {
+    const match = key.trim().match(/^([A-L])(\d+)$/i);
+    if (!match) return;
+    const colIdx = ALL_COLS.indexOf(match[1].toUpperCase() as (typeof ALL_COLS)[number]);
+    const rowNum = Number(match[2]);
+    if (colIdx > maxColIdx) maxColIdx = colIdx;
+    if (rowNum > maxRow && rowNum <= MAX_ROWS) maxRow = rowNum;
+  };
+
+  Object.keys(cells).forEach(inspectKey);
+  if (extraCells) Object.keys(extraCells).forEach(inspectKey);
+  if (targetCell) inspectKey(targetCell);
+
+  return {
+    cols: ALL_COLS.slice(0, Math.min(ALL_COLS.length, maxColIdx + 1)) as unknown as string[],
+    rows: Array.from({ length: Math.min(MAX_ROWS, maxRow) }, (_, i) => i + 1),
+  };
+}
 
 const EXCEL_ERRORS = new Set([
   '#DIV/0!',
@@ -78,7 +109,7 @@ function isWrappedInMatchingParens(s: string): boolean {
 
 function parseCellRef(token: string): { sheet?: string; col: string; row: number } | null {
   const cleaned = token.trim();
-  const match = cleaned.match(/^(?:([A-Za-z0-9_]+)!)?\$?([A-D])\$?([1-6])$/i);
+  const match = cleaned.match(/^(?:([A-Za-z0-9_]+)!)?\$?([A-L])\$?([1-9]|[1-3][0-9]|40)$/i);
   if (!match) return null;
   return {
     sheet: match[1],
@@ -107,8 +138,8 @@ function expandRange(
       ? secondary.cells
       : primary;
 
-  const c1 = COLS.indexOf(start.col as (typeof COLS)[number]);
-  const c2 = COLS.indexOf(end.col as (typeof COLS)[number]);
+  const c1 = ALL_COLS.indexOf(start.col as (typeof ALL_COLS)[number]);
+  const c2 = ALL_COLS.indexOf(end.col as (typeof ALL_COLS)[number]);
   if (c1 < 0 || c2 < 0) return null;
 
   const minC = Math.min(c1, c2);
@@ -121,7 +152,7 @@ function expandRange(
   for (let r = minR; r <= maxR; r++) {
     if (visibleRows && !visibleRows.has(r)) continue;
     for (let c = minC; c <= maxC; c++) {
-      const addr = `${COLS[c]}${r}`;
+      const addr = `${ALL_COLS[c]}${r}`;
       values.push(source[addr] ?? '');
       allRows.push(r);
     }

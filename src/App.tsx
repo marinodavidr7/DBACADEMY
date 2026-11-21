@@ -7,6 +7,7 @@ import {
   Calendar,
   Code2,
   GraduationCap,
+  Home,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -25,10 +26,12 @@ import { ApiIntegrationsView } from './components/ApiIntegrationsView';
 import { CalendarTasksView } from './components/CalendarTasksView';
 import { CatalogView } from './components/CatalogView';
 import { CertificatesView } from './components/CertificatesView';
+import { CourseDetailView } from './components/CourseDetailView';
 import { CoursePlayerView } from './components/CoursePlayerView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ForumView } from './components/ForumView';
 import { InstructorDashboard } from './components/InstructorDashboard';
+import { LandingPage } from './components/LandingPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -45,6 +48,7 @@ const AppShell: React.FC = () => {
     language,
     activeView,
     setActiveView,
+    setSelectedCourseId,
     zenMode,
     setWorkspaceRole,
     unreadCount,
@@ -84,6 +88,7 @@ const AppShell: React.FC = () => {
   };
 
   const navItems: Array<{ id: AppView; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { id: 'landing', label: t('navHome'), icon: Home },
     { id: 'catalog', label: t('navCatalog'), icon: BookOpen },
     { id: 'learning', label: t('navLearning'), icon: GraduationCap },
     { id: 'instructor', label: t('navInstructor'), icon: LayoutDashboard },
@@ -100,6 +105,26 @@ const AppShell: React.FC = () => {
     else if (view === 'learning') setWorkspaceRole('student');
     setMobileMenuOpen(false);
   };
+
+  if (activeView === 'landing') {
+    return (
+      <>
+        <LandingPage
+          onExplore={() => setActiveView('catalog')}
+          onSelectCourse={(courseId) => {
+            setSelectedCourseId(courseId);
+            setActiveView('course-detail');
+          }}
+          onOpenLearning={() => setActiveView('learning')}
+          onSignIn={async () => {
+            await signInWithGoogle();
+          }}
+        />
+        <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
+        <OfflineIndicator message={t('offlineBanner')} />
+      </>
+    );
+  }
 
   const isZenActive = zenMode && activeView === 'learning';
 
@@ -162,7 +187,7 @@ const AppShell: React.FC = () => {
                   sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
                 } ${
                   active
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-[#0052CC] text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
                 }`}
               >
@@ -336,7 +361,7 @@ const AppShell: React.FC = () => {
             </span>
             <span className="hidden lg:inline text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
               {sidebarCollapsed ? `${t('brand')} · ` : ''}
-              {navItems.find((n) => n.id === activeView)?.label}
+              {navItems.find((n) => n.id === activeView)?.label || 'Programa del curso'}
             </span>
           </div>
 
@@ -448,7 +473,19 @@ const AppShell: React.FC = () => {
             <div className="mb-5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300 flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{authError}</span>
+                <div className="space-y-1">
+                  <span className="block">{authError}</span>
+                  {authError.includes('Authorized domains') && (
+                    <a
+                      href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-semibold underline hover:text-red-900 dark:hover:text-red-100"
+                    >
+                      Abrir Firebase Console → Authentication → Settings
+                    </a>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
@@ -469,6 +506,7 @@ const AppShell: React.FC = () => {
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
               {activeView === 'catalog' && <CatalogView />}
+              {activeView === 'course-detail' && <CourseDetailView />}
               {activeView === 'learning' && <CoursePlayerView />}
               {activeView === 'instructor' && <InstructorDashboard />}
               {activeView === 'forums' && <ForumView />}

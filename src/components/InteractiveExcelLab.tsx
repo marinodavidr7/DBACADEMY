@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDownToLine,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -25,9 +26,8 @@ import {
   type ExcelPracticalExample,
 } from '../data/excelCurriculum';
 import {
-  COLS,
-  ROWS,
   evaluateExcelFormula,
+  getSheetDimensions,
   isExcelError,
   toNumeric,
   type CellPrimitive,
@@ -42,7 +42,10 @@ type LabExercise = ExcelExercise & { isCustom?: boolean; ownerId?: string };
 interface InteractiveExcelLabProps {
   lessonId: string;
   lessonTitle: string;
-  mode: 'lab' | 'syntax';
+  mode: 'guide' | 'practice' | 'lab' | 'syntax';
+  requestedExampleId?: string | null;
+  onRequestExamplePractice?: (exampleId: string) => void;
+  onGoToPractice?: () => void;
   onSolved?: () => void;
 }
 
@@ -71,6 +74,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   lessonId,
   lessonTitle,
   mode,
+  requestedExampleId,
+  onRequestExamplePractice,
+  onGoToPractice,
   onSolved,
 }) => {
   const { user, isAdmin, customExercises, deleteCustomExercise } = usePlatform();
@@ -187,9 +193,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   useEffect(() => {
     setExerciseIdx(0);
     setSolvedIds(loadSolvedSet(lessonId));
-    setLoadedExampleId(null);
+    setLoadedExampleId(requestedExampleId ?? null);
     setShowHint(false);
-  }, [lessonId]);
+  }, [lessonId, requestedExampleId]);
 
   // Sync spreadsheet whenever active exercise or loaded example changes
   useEffect(() => {
@@ -206,12 +212,25 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     setShowHint(false);
   }, [activeContext, activeExample]);
 
+  const { cols: activeCols, rows: activeRows } = useMemo(
+    () =>
+      getSheetDimensions(
+        sheet,
+        activeContext.targetCell,
+        4,
+        6,
+        activeContext.secondarySheet?.cells
+      ),
+    [sheet, activeContext.targetCell, activeContext.secondarySheet]
+  );
+
   const visibleRows = useMemo(() => {
     const set = new Set<number>();
     const col = activeContext.filterColumn || 'A';
     const expected = (activeContext.filterValue || 'norte').toLowerCase();
-    ROWS.forEach((r) => {
-      if (r === 1 || r === 6) {
+    const lastRow = activeRows[activeRows.length - 1] ?? 6;
+    activeRows.forEach((r) => {
+      if (r === 1 || r === lastRow) {
         set.add(r);
         return;
       }
@@ -224,7 +243,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       }
     });
     return set;
-  }, [filterOnlyValue, activeContext, sheet]);
+  }, [filterOnlyValue, activeContext, sheet, activeRows]);
 
   const computedGrid = useMemo(() => {
     void recalcTick;
@@ -233,15 +252,15 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       activeSheetTab === 'secondary' && activeContext.secondarySheet
         ? activeContext.secondarySheet.cells
         : sheet;
-    for (const r of ROWS) {
-      for (const c of COLS) {
+    for (const r of activeRows) {
+      for (const c of activeCols) {
         const addr = `${c}${r}`;
         const raw = activeCells[addr] ?? '';
         out[addr] = evaluateExcelFormula(raw, sheet, activeContext.secondarySheet, visibleRows);
       }
     }
     return out;
-  }, [sheet, activeSheetTab, activeContext.secondarySheet, visibleRows, recalcTick]);
+  }, [sheet, activeSheetTab, activeContext.secondarySheet, visibleRows, recalcTick, activeRows, activeCols]);
 
   const handleSelectCell = useCallback(
     (addr: string) => {
@@ -268,6 +287,68 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     },
     [activeSheetTab, selectedCell]
   );
+
+  const shiftFormulaRows = (formula: string, delta: number): string => {
+    let inQuotes = false;
+    let out = '';
+    let i = 0;
+    while (i < formula.length) {
+      const ch = formula[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (!inQuotes) {
+        const match = formula.slice(i).match(/^(\$?[A-L])(\$?)(\d+)(?![A-Za-z0-9_])/i);
+        if (match) {
+          const [full, colPart, rowPin, rowStr] = match;
+          if (rowPin === '$') {
+            out += full;
+          } else {
+            const nextRow = Math.max(1, Number(rowStr) + delta);
+            out += `${colPart}${nextRow}`;
+          }
+          i += full.length;
+          continue;
+        }
+      }
+      out += ch;
+      i++;
+    }
+    return out;
+  };
+
+  const handleFillDown = useCallback(() => {
+    if (activeSheetTab === 'secondary') return;
+    const match = selectedCell.match(/^([A-L])(\d+)$/i);
+    if (!match) return;
+    const selCol = match[1].toUpperCase();
+    const startRow = Number(match[2]);
+    const baseRaw = formulaDraft.trim() || String(sheet[selectedCell] ?? '').trim();
+    if (!baseRaw.startsWith('=')) return;
+
+    let lastDataRow = startRow;
+    for (const r of activeRows) {
+      if (r <= startRow) continue;
+      const hasAdjacentData = activeCols.some(
+        (c) => c !== selCol && String(sheet[`${c}${r}`] ?? '').trim() !== ''
+      );
+      if (hasAdjacentData) lastDataRow = r;
+    }
+    if (lastDataRow <= startRow) return;
+
+    setSheet((prev) => {
+      const next: SheetCells = { ...prev, [selectedCell]: baseRaw };
+      for (let r = startRow + 1; r <= lastDataRow; r++) {
+        next[`${selCol}${r}`] = shiftFormulaRows(baseRaw, r - startRow);
+      }
+      return next;
+    });
+    setFormulaDraft(baseRaw);
+    setRecalcTick((t) => t + 1);
+  }, [activeSheetTab, selectedCell, formulaDraft, sheet, activeRows, activeCols]);
 
   const markExerciseSolved = useCallback(
     (exId: string) => {
@@ -333,23 +414,19 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
-  const quickFunctionChips = useMemo(() => {
-    const base = [
-      '=SUMA(',
-      '=PROMEDIO(',
+  const quickFunctionChips = useMemo(
+    () => [
       '=CONTAR.SI(',
-      '=SUMAR.SI(',
+      '=O(',
+      '=PROMEDIO(',
+      '=SI(',
       '=SI.ERROR(',
-      '=REDONDEAR(',
-    ];
-    const fromLesson = curriculum.functions
-      .map((fn) => {
-        const match = fn.syntax.match(/^=([A-ZÁÉÍÓÚÑ0-9_.]+)\(/i);
-        return match ? `=${match[1].toUpperCase()}(` : null;
-      })
-      .filter((x): x is string => Boolean(x));
-    return Array.from(new Set([...fromLesson, ...base])).slice(0, 7);
-  }, [curriculum.functions]);
+      '=SUMA(',
+      '=SUMAR.SI(',
+      '=Y(',
+    ],
+    []
+  );
 
   const solvedCount = useMemo(
     () => allExercises.filter((ex) => solvedIds.includes(ex.id)).length,
@@ -419,9 +496,14 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     );
   }
 
+  const showGuide = mode === 'guide' || mode === 'lab';
+  const showPractice = mode === 'practice' || mode === 'lab';
+
   return (
     <div className="space-y-6">
       {/* 1. INTRODUCCIÓN A LAS FUNCIONES */}
+      {showGuide && (
+      <>
       <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
           <BookOpen className="w-4 h-4" />
@@ -555,7 +637,13 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleLoadExample(ex)}
+                  onClick={() => {
+                    if (mode === 'guide' && onRequestExamplePractice) {
+                      onRequestExamplePractice(ex.id);
+                    } else {
+                      handleLoadExample(ex);
+                    }
+                  }}
                   className={`w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
                     isLoaded
                       ? 'bg-[#107C41] text-white'
@@ -563,7 +651,13 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                   }`}
                 >
                   <Play className="w-3.5 h-3.5" />
-                  <span>{isLoaded ? 'Ejemplo cargado en la hoja' : 'Probar ejemplo en la hoja'}</span>
+                  <span>
+                    {mode === 'guide' && onRequestExamplePractice
+                      ? 'Probar este ejemplo en el laboratorio'
+                      : isLoaded
+                        ? 'Ejemplo cargado en la hoja'
+                        : 'Probar ejemplo en la hoja'}
+                  </span>
                 </button>
               </div>
             );
@@ -571,7 +665,32 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         </div>
       </section>
 
+      {mode === 'guide' && onGoToPractice && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              ¿Listo para practicar en la hoja de cálculo?
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Tienes {allExercises.length} ejercicios interactivos listos ({solvedCount} resueltos).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onGoToPractice}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[40px]"
+          >
+            <span>Ir a los ejercicios en Excel</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      </>
+      )}
+
       {/* 4. MÍNIMO 10 EJERCICIOS INTERACTIVOS EN EXCEL */}
+      {showPractice && (
+      <>
       <section
         ref={gridRef}
         className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden"
@@ -844,7 +963,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               }
             }}
             onBlur={() => commitFormula(formulaDraft)}
-            placeholder={`Escribe un valor o fórmula en ${selectedCell} (ej. ${activeContext.solutionFormula})`}
+            placeholder={`Escribe un valor o fórmula en ${selectedCell} (inicia con =)`}
             className="flex-1 min-w-[200px] rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#107C41] disabled:opacity-60"
           />
           <button
@@ -855,6 +974,21 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
           >
             Aplicar
           </button>
+          {activeRows.length > 6 && (
+            <button
+              type="button"
+              disabled={
+                activeSheetTab === 'secondary' ||
+                !(formulaDraft.trim() || String(sheet[selectedCell] ?? '').trim()).startsWith('=')
+              }
+              onClick={handleFillDown}
+              title="Copiar fórmula hacia las filas inferiores con referencias relativas"
+              className="inline-flex items-center gap-1 rounded-md border border-[#107C41]/40 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-40"
+            >
+              <ArrowDownToLine className="w-3.5 h-3.5" />
+              <span>Rellenar abajo</span>
+            </button>
+          )}
         </div>
 
         {/* Autocomplete quick function chips */}
@@ -879,12 +1013,12 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         </div>
 
         {/* Spreadsheet Grid */}
-        <div className="overflow-x-auto bg-white dark:bg-[#0D1320]">
+        <div className="overflow-auto max-h-[460px] bg-white dark:bg-[#0D1320]">
           <table className="w-full border-collapse text-xs font-mono">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400">
                 <th className="w-9 border border-slate-200 dark:border-slate-800 py-1.5 text-center font-semibold" />
-                {COLS.map((c) => (
+                {activeCols.map((c) => (
                   <th
                     key={c}
                     className="border border-slate-200 dark:border-slate-800 py-1.5 px-3 text-center font-semibold min-w-[110px]"
@@ -895,7 +1029,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               </tr>
             </thead>
             <tbody>
-              {ROWS.map((r) => {
+              {activeRows.map((r) => {
                 const hiddenByFilter = !visibleRows.has(r);
                 if (hiddenByFilter) return null;
                 return (
@@ -903,7 +1037,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                     <td className="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/70 text-center text-[11px] text-slate-500 dark:text-slate-400 font-semibold py-1.5">
                       {r}
                     </td>
-                    {COLS.map((c) => {
+                    {activeCols.map((c) => {
                       const addr = `${c}${r}`;
                       const isSelected = selectedCell === addr;
                       const isTarget =
@@ -1000,6 +1134,8 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
           setExerciseIdx(allExercises.length);
         }}
       />
+      </>
+      )}
     </div>
   );
 };
