@@ -104,7 +104,7 @@ export const CourseDetailView: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Dark Technological Course Header */}
-      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-6 sm:p-8 lg:p-10">
+      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-6 sm:p-8 lg:p-10 2xl:p-12">
         <button
           type="button"
           onClick={() => setActiveView('catalog')}
@@ -130,10 +130,10 @@ export const CourseDetailView: React.FC = () => {
           <span className="tabular-nums">{totalHours} h estimadas</span>
         </div>
 
-        <h1 className="mt-3 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight max-w-4xl text-balance">
+        <h1 className="mt-3 font-display text-3xl lg:text-4xl 2xl:text-5xl font-bold tracking-tight text-white leading-tight max-w-[70ch] text-balance">
           {course.title}
         </h1>
-        <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed max-w-3xl">
+        <p className="mt-3 text-sm sm:text-base 2xl:text-lg text-slate-300 leading-relaxed max-w-[70ch]">
           {course.subtitle}
         </p>
 
@@ -147,18 +147,18 @@ export const CourseDetailView: React.FC = () => {
       </section>
 
       {/* Main Content + Sticky Enrollment Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-8 space-y-8">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(360px,24vw,480px)] gap-8 2xl:gap-10 items-start">
+        <div className="min-w-0 space-y-8 2xl:space-y-10">
           {/* Descripción y Enfoque */}
-          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 sm:p-7 space-y-4">
-            <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">
+          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 sm:p-7 2xl:p-8 space-y-4">
+            <h2 className="font-display text-xl 2xl:text-2xl font-bold text-slate-900 dark:text-slate-100">
               Acerca del programa
             </h2>
-            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            <p className="text-sm 2xl:text-base leading-relaxed text-slate-600 dark:text-slate-300 max-w-[70ch]">
               {course.description}
             </p>
 
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
               {course.modules.map((mod, idx) => (
                 <div key={mod.id} className="flex items-start gap-2.5 text-sm">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
@@ -218,11 +218,11 @@ export const CourseDetailView: React.FC = () => {
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B1426]/60 px-5 py-3 divide-y divide-slate-200/70 dark:divide-slate-800/70">
+                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B1426]/60 px-5 py-3 grid grid-cols-1 2xl:grid-cols-2 gap-x-6">
                         {mod.lessons.map((lesson) => (
                           <div
                             key={lesson.id}
-                            className="py-3 flex items-start justify-between gap-3 text-xs"
+                            className="py-3 flex items-start justify-between gap-3 text-xs border-b border-slate-200/70 dark:border-slate-800/70 last:border-b-0"
                           >
                             <div className="min-w-0">
                               <p className="font-medium text-slate-800 dark:text-slate-200">
@@ -247,8 +247,8 @@ export const CourseDetailView: React.FC = () => {
         </div>
 
         {/* Sticky Sidebar Card */}
-        <aside className="lg:col-span-4 lg:sticky lg:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
-          <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
+        <aside className="xl:sticky xl:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
+          <div className="w-full aspect-[16/10] bg-slate-900 relative overflow-hidden">
             {course.coverImage ? (
               <img
                 src={course.coverImage}

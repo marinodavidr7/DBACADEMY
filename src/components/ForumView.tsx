@@ -204,8 +204,8 @@ export const ForumView: React.FC = () => {
       </div>
 
       {/* Split Thread List + Conversation View */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(320px,28vw)_minmax(0,1fr)] gap-6 2xl:gap-10 items-start">
+        <div className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] divide-y divide-slate-100 dark:divide-slate-800">
           {filteredThreads.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
               No hay debates en esta vista. Inicia el primer tema de discusión.
@@ -252,7 +252,7 @@ export const ForumView: React.FC = () => {
           )}
         </div>
 
-        <div className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6">
+        <div className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6">
           {activeThread ? (
             <div className="space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">

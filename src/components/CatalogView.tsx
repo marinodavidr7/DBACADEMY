@@ -66,10 +66,10 @@ export const CatalogView: React.FC = () => {
             <p className="text-xs font-semibold tracking-wide text-cyan-300">
               {t('brand')} · Catálogo técnico
             </p>
-            <h1 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight text-balance">
+            <h1 className="mt-2 font-display text-3xl lg:text-4xl 2xl:text-5xl font-bold tracking-tight text-white leading-tight text-balance">
               {t('heroTitle')}
             </h1>
-            <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+            <p className="mt-3 text-sm sm:text-base 2xl:text-lg text-slate-300 leading-relaxed max-w-2xl">
               {t('heroSubtitle')}
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -179,13 +179,7 @@ export const CatalogView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div
-            className={
-              filtered.length === 1
-                ? 'grid grid-cols-1 max-w-2xl gap-6'
-                : 'grid grid-cols-1 md:grid-cols-2 gap-6'
-            }
-          >
+          <div className="grid gap-6 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
             {filtered.map((course, idx) => {
               const enrollment = enrollments.find((e) => e.courseId === course.id);
               const isEnrolled = Boolean(enrollment);

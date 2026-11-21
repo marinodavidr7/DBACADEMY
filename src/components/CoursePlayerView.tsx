@@ -717,8 +717,8 @@ export const CoursePlayerView: React.FC = () => {
       )}
 
       {/* Two-Zone Course Stage + Syllabus (Syllabus hidden & stage maximized in Zen Mode) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className={zenMode ? 'lg:col-span-12 space-y-6' : 'lg:col-span-8 space-y-6'}>
+      <div className={`grid grid-cols-1 ${zenMode ? '' : 'xl:grid-cols-[minmax(0,1fr)_clamp(320px,24vw,400px)]'} gap-6 2xl:gap-10 items-start`}>
+        <div className="min-w-0 space-y-6">
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             {/* Compact Lesson Header (no giant 16:9 image pushing content off-screen) */}
             <div className="relative bg-[#070E1D] border-b border-slate-800 p-5 sm:p-6 overflow-hidden">
@@ -1260,7 +1260,7 @@ export const CoursePlayerView: React.FC = () => {
 
         {/* Right Syllabus Tree (Module Explorer) */}
         {!zenMode && (
-          <aside className="lg:col-span-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+          <aside className="min-w-0 xl:sticky xl:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             {/* Syllabus Search Header */}
             <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-2.5">
               <div className="relative">

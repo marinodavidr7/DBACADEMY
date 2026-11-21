@@ -33,6 +33,7 @@ import { ForumView } from './components/ForumView';
 import { InstructorDashboard } from './components/InstructorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
+import { PageContainer } from './components/ui/PageContainer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { SecurityCloudView } from './components/SecurityCloudView';
@@ -451,11 +452,12 @@ const AppShell: React.FC = () => {
           </header>
         )}
 
-        <main
-          className={`flex-1 w-full mx-auto transition-all duration-200 ${
-            isZenActive ? 'p-4 sm:p-6 max-w-5xl' : 'p-4 sm:p-6 lg:p-8 max-w-[1360px]'
-          }`}
-        >
+        <main className="flex-1 min-w-0 w-full">
+          <PageContainer
+            className={`transition-all duration-200 ${
+              isZenActive ? 'py-4 sm:py-6 max-w-5xl' : 'py-4 sm:py-6 lg:py-8 2xl:py-12'
+            }`}
+          >
           {authError && (
             <div className="mb-5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300 flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
@@ -503,6 +505,7 @@ const AppShell: React.FC = () => {
               {activeView === 'integrations' && <ApiIntegrationsView />}
             </motion.div>
           </AnimatePresence>
+          </PageContainer>
         </main>
       </div>
 
