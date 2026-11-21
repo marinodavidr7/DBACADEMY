@@ -3,10 +3,18 @@ import { AlertCircle, KeyRound, Lock, LogIn, Mail, ShieldCheck, User } from 'luc
 import { usePlatform } from '../context/PlatformContext';
 
 export const AuthGateNotice: React.FC = () => {
-  const { t, signInWithGoogle, signInWithEmail, signInAsAdmin, signInAsDemo } = usePlatform();
+  const {
+    t,
+    signInWithGoogle,
+    signInWithEmail,
+    signInAsAdmin,
+    signInAsDemo,
+    authError: platformAuthError,
+    clearAuthError,
+  } = usePlatform();
 
-  const [email, setEmail] = useState('Marinodavidr7@gmail.com');
-  const [password, setPassword] = useState('@David8734');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -33,10 +41,10 @@ export const AuthGateNotice: React.FC = () => {
         {t('signInRequiredTitle')}
       </h2>
       <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-        Ingresa con tus credenciales de Administrador o utiliza los accesos rápidos directos.
+        Ingresa con tu cuenta o utiliza el acceso con Google.
       </p>
 
-      {/* Formulario de credenciales con tus datos de Administrador pre-cargados */}
+      {/* Formulario de inicio de sesión */}
       <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-3">
         <div>
           <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -72,10 +80,21 @@ export const AuthGateNotice: React.FC = () => {
           </div>
         </div>
 
-        {authError && (
-          <div className="p-3 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{authError}</span>
+        {(authError || platformAuthError) && (
+          <div className="p-3 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/20 text-xs text-red-600 dark:text-red-400 flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{authError || platformAuthError}</span>
+            </div>
+            {platformAuthError && !authError && (
+              <button
+                type="button"
+                onClick={clearAuthError}
+                className="text-[11px] font-semibold underline shrink-0"
+              >
+                Cerrar
+              </button>
+            )}
           </div>
         )}
 

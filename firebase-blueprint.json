@@ -214,6 +214,45 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "ownerId", "label", "keyPrefix", "keyHash", "active", "createdAt"]
+    },
+    "CustomExcelExercise": {
+      "title": "CustomExcelExercise",
+      "description": "User or instructor-created interactive Excel spreadsheet exercise.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "lessonId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "functionTag": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "prompt": { "type": "string", "minLength": 5, "maxLength": 600 },
+        "hint": { "type": "string", "maxLength": 400 },
+        "targetCell": { "type": "string", "minLength": 2, "maxLength": 4, "pattern": "^[A-D][1-6]$" },
+        "solutionFormula": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "expectedResult": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "initialSheet": { "type": "object" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "authorName",
+        "lessonId",
+        "functionTag",
+        "title",
+        "prompt",
+        "hint",
+        "targetCell",
+        "solutionFormula",
+        "expectedResult",
+        "initialSheet",
+        "published",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -260,6 +299,10 @@
     "/apiKeys/{keyId}": {
       "schema": { "$ref": "#/entities/ApiIntegrationKey" },
       "description": "Third-party REST API keys and webhook URLs."
+    },
+    "/customExercises/{exerciseId}": {
+      "schema": { "$ref": "#/entities/CustomExcelExercise" },
+      "description": "Custom interactive Excel exercises authored by users and instructors."
     }
   }
 }

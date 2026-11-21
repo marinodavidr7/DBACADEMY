@@ -257,7 +257,7 @@ async function startServer() {
       event: eventName,
       timestamp: new Date().toISOString(),
       data: samplePayload || {
-        courseId: 'sys-arch-01',
+        courseId: 'excel-basico-05',
         progressPercent: 100,
         certificateIssued: true,
       },

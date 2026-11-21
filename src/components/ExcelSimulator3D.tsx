@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   ClipboardCheck,
+  GitBranch,
   Pause,
   Play,
   Plus,
@@ -14,31 +15,159 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { usePlatform } from '../context/PlatformContext';
 
-type FormulaMode = 'SI' | 'CONTAR.SI' | 'SUMAR.SI';
+export type FormulaMode = 'SI' | 'SI.ANIDADO' | 'Y' | 'O' | 'CONTAR.SI' | 'SUMAR.SI';
 type ComparisonOp = '>' | '<' | '>=' | '<=' | '=' | '<>';
 
 interface FormulaConfig {
   mode: FormulaMode;
   operator: ComparisonOp;
   threshold: number;
+  midThreshold: number;
+  secondOperator: ComparisonOp;
+  secondThreshold: number;
   trueLabel: string;
+  midLabel: string;
   falseLabel: string;
 }
 
+interface DecisionPreset {
+  id: string;
+  label: string;
+  badge: string;
+  config: FormulaConfig;
+  sampleCrates: Array<{ value: number; secondaryVal: number; isVip: boolean }>;
+}
+
+const DECISION_PRESETS: DecisionPreset[] = [
+  {
+    id: 'si-aprobado',
+    label: 'Nota mínima (=SI)',
+    badge: '=SI',
+    config: {
+      mode: 'SI',
+      operator: '>=',
+      threshold: 60,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Aprobado',
+      midLabel: 'Regular',
+      falseLabel: 'Reprobado',
+    },
+    sampleCrates: [
+      { value: 85, secondaryVal: 40, isVip: false },
+      { value: 42, secondaryVal: 55, isVip: false },
+      { value: 60, secondaryVal: 30, isVip: true },
+    ],
+  },
+  {
+    id: 'si-anidado-3-vias',
+    label: '3 Niveles (SI Anidado)',
+    badge: 'ANIDADO',
+    config: {
+      mode: 'SI.ANIDADO',
+      operator: '>=',
+      threshold: 80,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Excelente',
+      midLabel: 'Regular',
+      falseLabel: 'Refuerzo',
+    },
+    sampleCrates: [
+      { value: 92, secondaryVal: 40, isVip: false },
+      { value: 64, secondaryVal: 45, isVip: false },
+      { value: 31, secondaryVal: 70, isVip: false },
+    ],
+  },
+  {
+    id: 'si-y-envio',
+    label: 'Doble filtro (=SI + Y)',
+    badge: 'Y()',
+    config: {
+      mode: 'Y',
+      operator: '>=',
+      threshold: 50,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Despachar',
+      midLabel: 'Revisión',
+      falseLabel: 'Retener',
+    },
+    sampleCrates: [
+      { value: 78, secondaryVal: 45, isVip: false },
+      { value: 82, secondaryVal: 85, isVip: false },
+      { value: 35, secondaryVal: 30, isVip: false },
+    ],
+  },
+  {
+    id: 'si-o-express',
+    label: 'Prioridad VIP (=SI + O)',
+    badge: 'O()',
+    config: {
+      mode: 'O',
+      operator: '>=',
+      threshold: 80,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Express',
+      midLabel: 'Medio',
+      falseLabel: 'Normal',
+    },
+    sampleCrates: [
+      { value: 30, secondaryVal: 25, isVip: true },
+      { value: 88, secondaryVal: 50, isVip: false },
+      { value: 45, secondaryVal: 40, isVip: false },
+    ],
+  },
+  {
+    id: 'contar-calidad',
+    label: 'Control Calidad (CONTAR.SI)',
+    badge: 'CONTAR.SI',
+    config: {
+      mode: 'CONTAR.SI',
+      operator: '>=',
+      threshold: 70,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Apto',
+      midLabel: 'Medio',
+      falseLabel: 'Descarte',
+    },
+    sampleCrates: [
+      { value: 74, secondaryVal: 40, isVip: false },
+      { value: 58, secondaryVal: 60, isVip: false },
+      { value: 91, secondaryVal: 35, isVip: false },
+    ],
+  },
+];
+
 interface SimLogEntry {
   id: string;
-  kind: 'true' | 'false' | 'info';
+  kind: 'true' | 'mid' | 'false' | 'info';
   badge: string;
   text: string;
+}
+
+interface QueuedCrateSpec {
+  value: number;
+  secondaryVal: number;
+  isVip: boolean;
 }
 
 interface CrateEntity {
   id: number;
   value: number;
+  secondaryVal: number;
+  isVip: boolean;
   group: THREE.Group;
   numberTexture: THREE.CanvasTexture;
   phase: 'intake' | 'scanning' | 'branching' | 'exiting';
-  branch: 'true' | 'false' | null;
+  branch: 'true' | 'mid' | 'false' | null;
   progress: number;
   scanTimer: number;
   evaluated: boolean;
@@ -129,7 +258,13 @@ function createBeltTexture(baseHex: string, stripeHex: string, maxAniso: number)
   return tex;
 }
 
-function createCrateNumberTexture(value: number, maxAniso: number): THREE.CanvasTexture {
+function createCrateNumberTexture(
+  value: number,
+  secondaryVal: number,
+  isVip: boolean,
+  mode: FormulaMode,
+  maxAniso: number
+): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
@@ -141,7 +276,6 @@ function createCrateNumberTexture(value: number, maxAniso: number): THREE.Canvas
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
 
-  // Subtle recessed crate border
   ctx.strokeStyle = '#92400e';
   ctx.lineWidth = 16;
   ctx.strokeRect(8, 8, 240, 240);
@@ -150,15 +284,32 @@ function createCrateNumberTexture(value: number, maxAniso: number): THREE.Canvas
   ctx.lineWidth = 4;
   ctx.strokeRect(22, 22, 212, 212);
 
-  // Crisp centered number with subtle shadow
+  const hasSubBadge = mode === 'Y' || mode === 'O';
   const text = String(value);
-  ctx.font = '800 108px ui-sans-serif, system-ui, -apple-system, sans-serif';
+  ctx.font = hasSubBadge
+    ? '800 94px ui-sans-serif, system-ui, -apple-system, sans-serif'
+    : '800 108px ui-sans-serif, system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const yCenter = hasSubBadge ? 102 : 130;
   ctx.fillStyle = 'rgba(120, 53, 15, 0.35)';
-  ctx.fillText(text, 132, 136);
+  ctx.fillText(text, 132, yCenter + 6);
   ctx.fillStyle = '#f8fafc';
-  ctx.fillText(text, 128, 130);
+  ctx.fillText(text, 128, yCenter);
+
+  if (mode === 'Y') {
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.86)';
+    ctx.fillRect(36, 174, 184, 44);
+    ctx.font = '700 26px ui-monospace, SFMono-Regular, monospace';
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(`Peso: ${secondaryVal}`, 128, 197);
+  } else if (mode === 'O') {
+    ctx.fillStyle = isVip ? '#1e3a8a' : 'rgba(15, 23, 42, 0.8)';
+    ctx.fillRect(36, 174, 184, 44);
+    ctx.font = '800 25px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillStyle = isVip ? '#fde047' : '#cbd5e1';
+    ctx.fillText(isVip ? '★ VIP' : 'ESTÁNDAR', 128, 197);
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -166,14 +317,13 @@ function createCrateNumberTexture(value: number, maxAniso: number): THREE.Canvas
   return tex;
 }
 
-function createFloatingLabelSprite(text: string, colorHex: string, maxAniso: number): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 140;
+function drawSpriteLabelCanvas(canvas: HTMLCanvasElement, text: string, colorHex: string) {
   const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, 512, 140);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.font = '900 70px ui-sans-serif, system-ui, -apple-system, sans-serif';
+  const label = text.slice(0, 14).toUpperCase();
+  const fontSize = label.length > 10 ? 52 : 66;
+  ctx.font = `900 ${fontSize}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
@@ -181,10 +331,17 @@ function createFloatingLabelSprite(text: string, colorHex: string, maxAniso: num
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 6;
   ctx.lineWidth = 10;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-  ctx.strokeText(text, 256, 72);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.strokeText(label, 256, 72);
   ctx.fillStyle = colorHex;
-  ctx.fillText(text, 256, 72);
+  ctx.fillText(label, 256, 72);
+}
+
+function createFloatingLabelSprite(text: string, colorHex: string, maxAniso: number): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 140;
+  drawSpriteLabelCanvas(canvas, text, colorHex);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -200,10 +357,24 @@ function createFloatingLabelSprite(text: string, colorHex: string, maxAniso: num
   return sprite;
 }
 
+function updateFloatingLabelSprite(sprite: THREE.Sprite, text: string, colorHex: string) {
+  const tex = sprite.material.map as THREE.CanvasTexture | null;
+  if (!tex || !tex.image) return;
+  drawSpriteLabelCanvas(tex.image as HTMLCanvasElement, text, colorHex);
+  tex.needsUpdate = true;
+}
+
+export interface SimulatorExternalPreset {
+  mode: FormulaMode;
+  presetId?: string;
+  nonce: number;
+}
+
 interface ExcelSimulator3DProps {
   compact?: boolean;
   initialMode?: FormulaMode;
   externalMode?: FormulaMode;
+  externalPreset?: SimulatorExternalPreset | null;
   onInteract?: () => void;
 }
 
@@ -211,24 +382,36 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
   compact = false,
   initialMode = 'SI',
   externalMode,
+  externalPreset,
   onInteract,
 }) => {
   const { theme, t } = usePlatform();
 
+  const initialPreset =
+    DECISION_PRESETS.find((p) => p.config.mode === (externalMode ?? initialMode)) ??
+    DECISION_PRESETS[0];
+
   // Draft formula controls (applied on "APLICAR")
   const [draftMode, setDraftMode] = useState<FormulaMode>(externalMode ?? initialMode);
-  const [draftOperator, setDraftOperator] = useState<ComparisonOp>('>');
-  const [draftThreshold, setDraftThreshold] = useState<number>(50);
-  const [draftTrueLabel, setDraftTrueLabel] = useState<string>('Verdadero');
-  const [draftFalseLabel, setDraftFalseLabel] = useState<string>('Falso');
+  const [draftOperator, setDraftOperator] = useState<ComparisonOp>(initialPreset.config.operator);
+  const [draftThreshold, setDraftThreshold] = useState<number>(initialPreset.config.threshold);
+  const [draftMidThreshold, setDraftMidThreshold] = useState<number>(
+    initialPreset.config.midThreshold
+  );
+  const [draftSecondOp, setDraftSecondOp] = useState<ComparisonOp>(
+    initialPreset.config.secondOperator
+  );
+  const [draftSecondThreshold, setDraftSecondThreshold] = useState<number>(
+    initialPreset.config.secondThreshold
+  );
+  const [draftTrueLabel, setDraftTrueLabel] = useState<string>(initialPreset.config.trueLabel);
+  const [draftMidLabel, setDraftMidLabel] = useState<string>(initialPreset.config.midLabel);
+  const [draftFalseLabel, setDraftFalseLabel] = useState<string>(initialPreset.config.falseLabel);
 
   // Active formula used by the 3D scanner
   const [activeFormula, setActiveFormula] = useState<FormulaConfig>({
+    ...initialPreset.config,
     mode: externalMode ?? initialMode,
-    operator: '>',
-    threshold: 50,
-    trueLabel: 'Verdadero',
-    falseLabel: 'Falso',
   });
   const activeFormulaRef = useRef<FormulaConfig>(activeFormula);
   activeFormulaRef.current = activeFormula;
@@ -242,7 +425,10 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
   speedRef.current = speed;
 
   const [customCrateValue, setCustomCrateValue] = useState<string>('75');
+  const [customCrateSecondary, setCustomCrateSecondary] = useState<string>('45');
+  const [customCrateVip, setCustomCrateVip] = useState<boolean>(true);
   const [trueCount, setTrueCount] = useState(0);
+  const [midCount, setMidCount] = useState(0);
   const [falseCount, setFalseCount] = useState(0);
   const [trueSum, setTrueSum] = useState(0);
   const [logs, setLogs] = useState<SimLogEntry[]>([
@@ -250,12 +436,17 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       id: 'init-0',
       kind: 'info',
       badge: 'INFO',
-      text: 'Sistema iniciado.',
+      text: 'Sistema de decisión iniciado.',
     },
   ]);
 
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const spawnQueueRef = useRef<number[]>([57, 98, 43, 7]);
+  const spawnQueueRef = useRef<QueuedCrateSpec[]>([
+    { value: 85, secondaryVal: 40, isVip: false },
+    { value: 58, secondaryVal: 80, isVip: true },
+    { value: 36, secondaryVal: 35, isVip: false },
+    { value: 94, secondaryVal: 50, isVip: true },
+  ]);
   const resetCameraFnRef = useRef<(() => void) | null>(null);
   const themeRef = useRef(theme);
   themeRef.current = theme;
@@ -270,6 +461,33 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     ]);
   }, []);
 
+  const applyPreset = useCallback(
+    (preset: DecisionPreset) => {
+      onInteract?.();
+      setDraftMode(preset.config.mode);
+      setDraftOperator(preset.config.operator);
+      setDraftThreshold(preset.config.threshold);
+      setDraftMidThreshold(preset.config.midThreshold);
+      setDraftSecondOp(preset.config.secondOperator);
+      setDraftSecondThreshold(preset.config.secondThreshold);
+      setDraftTrueLabel(preset.config.trueLabel);
+      setDraftMidLabel(preset.config.midLabel);
+      setDraftFalseLabel(preset.config.falseLabel);
+      setActiveFormula({ ...preset.config });
+      setTrueCount(0);
+      setMidCount(0);
+      setFalseCount(0);
+      setTrueSum(0);
+      spawnQueueRef.current.unshift(...preset.sampleCrates.map((c) => ({ ...c })));
+      appendLog({
+        kind: 'info',
+        badge: preset.badge,
+        text: `Escenario cargado: ${preset.label}`,
+      });
+    },
+    [appendLog, onInteract]
+  );
+
   // Sync formula mode when student switches Excel sub-modules
   useEffect(() => {
     if (!externalMode) return;
@@ -280,28 +498,60 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     });
   }, [externalMode]);
 
+  // Trigger preset externally from CoursePlayerView quick decision buttons
+  useEffect(() => {
+    if (!externalPreset) return;
+    const found =
+      (externalPreset.presetId &&
+        DECISION_PRESETS.find((p) => p.id === externalPreset.presetId)) ||
+      DECISION_PRESETS.find((p) => p.config.mode === externalPreset.mode);
+    if (found) {
+      applyPreset(found);
+    } else {
+      setDraftMode(externalPreset.mode);
+      setActiveFormula((prev) => ({ ...prev, mode: externalPreset.mode }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalPreset?.nonce]);
+
   const handleApplyFormula = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     onInteract?.();
     const sanitizedThreshold = Number.isFinite(draftThreshold) ? draftThreshold : 0;
+    const sanitizedMid = Number.isFinite(draftMidThreshold) ? draftMidThreshold : 0;
+    const sanitizedSecond = Number.isFinite(draftSecondThreshold) ? draftSecondThreshold : 0;
+
     const nextConfig: FormulaConfig = {
       mode: draftMode,
       operator: draftOperator,
       threshold: sanitizedThreshold,
+      midThreshold: sanitizedMid,
+      secondOperator: draftSecondOp,
+      secondThreshold: sanitizedSecond,
       trueLabel: draftTrueLabel.trim() || 'Verdadero',
+      midLabel: draftMidLabel.trim() || 'Regular',
       falseLabel: draftFalseLabel.trim() || 'Falso',
     };
     setActiveFormula(nextConfig);
     setTrueCount(0);
+    setMidCount(0);
     setFalseCount(0);
     setTrueSum(0);
 
-    const formulaPreview =
-      nextConfig.mode === 'SI'
-        ? `=SI([Caja] ${nextConfig.operator} ${nextConfig.threshold} ; "${nextConfig.trueLabel}" ; "${nextConfig.falseLabel}")`
-        : nextConfig.mode === 'CONTAR.SI'
-          ? `=CONTAR.SI(Cajas; "${nextConfig.operator}${nextConfig.threshold}")`
-          : `=SUMAR.SI(Cajas; "${nextConfig.operator}${nextConfig.threshold}")`;
+    let formulaPreview = '';
+    if (nextConfig.mode === 'SI') {
+      formulaPreview = `=SI([Caja]${nextConfig.operator}${nextConfig.threshold}; "${nextConfig.trueLabel}"; "${nextConfig.falseLabel}")`;
+    } else if (nextConfig.mode === 'SI.ANIDADO') {
+      formulaPreview = `=SI([Caja]${nextConfig.operator}${nextConfig.threshold}; "${nextConfig.trueLabel}"; SI([Caja]>=${nextConfig.midThreshold}; "${nextConfig.midLabel}"; "${nextConfig.falseLabel}"))`;
+    } else if (nextConfig.mode === 'Y') {
+      formulaPreview = `=SI(Y([Caja]${nextConfig.operator}${nextConfig.threshold}; [Peso]${nextConfig.secondOperator}${nextConfig.secondThreshold}); "${nextConfig.trueLabel}"; "${nextConfig.falseLabel}")`;
+    } else if (nextConfig.mode === 'O') {
+      formulaPreview = `=SI(O([Caja]${nextConfig.operator}${nextConfig.threshold}; [VIP]="SÍ"); "${nextConfig.trueLabel}"; "${nextConfig.falseLabel}")`;
+    } else if (nextConfig.mode === 'CONTAR.SI') {
+      formulaPreview = `=CONTAR.SI(Cajas; "${nextConfig.operator}${nextConfig.threshold}")`;
+    } else {
+      formulaPreview = `=SUMAR.SI(Cajas; "${nextConfig.operator}${nextConfig.threshold}")`;
+    }
 
     appendLog({
       kind: 'info',
@@ -316,10 +566,20 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       typeof explicitValue === 'number' && Number.isFinite(explicitValue)
         ? Math.round(explicitValue)
         : Math.floor(Math.random() * 99) + 1;
-    spawnQueueRef.current.push(val);
+    const secVal = Number.isFinite(Number(customCrateSecondary))
+      ? Math.round(Number(customCrateSecondary))
+      : Math.floor(Math.random() * 95) + 10;
+    spawnQueueRef.current.push({
+      value: val,
+      secondaryVal: typeof explicitValue === 'number' ? secVal : Math.floor(Math.random() * 95) + 10,
+      isVip: typeof explicitValue === 'number' ? customCrateVip : Math.random() < 0.4,
+    });
   };
 
   const formulaTitle = useMemo(() => {
+    if (draftMode === 'SI.ANIDADO') return '=SI() Anidado';
+    if (draftMode === 'Y') return '=SI(Y(...))';
+    if (draftMode === 'O') return '=SI(O(...))';
     if (draftMode === 'CONTAR.SI') return '=CONTAR.SI()';
     if (draftMode === 'SUMAR.SI') return '=SUMAR.SI()';
     return '=SI()';
@@ -334,14 +594,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
     const getBgColor = () => (themeRef.current === 'dark' ? 0x0b111e : 0xdce4ee);
     scene.background = new THREE.Color(getBgColor());
-    scene.fog = new THREE.FogExp2(getBgColor(), 0.022);
+    scene.fog = new THREE.FogExp2(getBgColor(), 0.02);
 
     const width = Math.max(container.clientWidth, 320);
     const height = Math.max(container.clientHeight, 320);
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    const defaultCameraPos = new THREE.Vector3(0.4, 7.6, 12.6);
-    const defaultTarget = new THREE.Vector3(0, 0.85, -0.4);
+    const defaultCameraPos = new THREE.Vector3(0.4, 7.8, 13.0);
+    const defaultTarget = new THREE.Vector3(0, 0.85, 0.1);
     camera.position.copy(defaultCameraPos);
 
     const renderer = new THREE.WebGLRenderer({
@@ -427,11 +687,7 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
     // Studio floor shadow plane
     const floorGeo = trackGeo(new THREE.PlaneGeometry(60, 60));
-    const floorMat = trackMat(
-      new THREE.ShadowMaterial({
-        opacity: 0.14,
-      })
-    );
+    const floorMat = trackMat(new THREE.ShadowMaterial({ opacity: 0.14 }));
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.01;
@@ -440,37 +696,22 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
     // Materials
     const metalMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x334155,
-        roughness: 0.42,
-        metalness: 0.55,
-      })
+      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.42, metalness: 0.55 })
     );
     const railMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x475569,
-        roughness: 0.35,
-        metalness: 0.65,
-      })
+      new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.35, metalness: 0.65 })
     );
     const archBlueMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x2563eb,
-        roughness: 0.28,
-        metalness: 0.25,
-      })
+      new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.28, metalness: 0.25 })
     );
     const crateTrimMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0xb45309,
-        roughness: 0.45,
-        metalness: 0.2,
-      })
+      new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.45, metalness: 0.2 })
     );
 
     const intakeBeltTex = trackTex(createBeltTexture('#70849c', '#54667d', maxAniso));
     const falseBeltTex = trackTex(createBeltTexture('#ef4444', '#dc2626', maxAniso));
     const trueBeltTex = trackTex(createBeltTexture('#22c55e', '#16a34a', maxAniso));
+    const midBeltTex = trackTex(createBeltTexture('#f59e0b', '#d97706', maxAniso));
 
     const intakeBeltMat = trackMat(
       new THREE.MeshStandardMaterial({ map: intakeBeltTex, roughness: 0.55, metalness: 0.08 })
@@ -480,6 +721,9 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     );
     const trueBeltMat = trackMat(
       new THREE.MeshStandardMaterial({ map: trueBeltTex, roughness: 0.5, metalness: 0.08 })
+    );
+    const midBeltMat = trackMat(
+      new THREE.MeshStandardMaterial({ map: midBeltTex, roughness: 0.5, metalness: 0.08 })
     );
 
     // 1. Intake conveyor (-Z to junction)
@@ -500,7 +744,6 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     rightRail.castShadow = true;
     intakeGroup.add(leftRail, rightRail);
 
-    // Rollers along intake
     const rollerGeo = trackGeo(new THREE.CylinderGeometry(0.09, 0.09, 2.25, 12));
     for (let z = -8.0; z <= -1.2; z += 1.1) {
       const roller = new THREE.Mesh(rollerGeo, metalMat);
@@ -524,11 +767,7 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     diverterPivot.position.set(0, 0.44, 1.15);
     const diverterArmGeo = trackGeo(new THREE.BoxGeometry(0.16, 0.28, 1.55));
     const diverterArmMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x94a3b8,
-        roughness: 0.3,
-        metalness: 0.7,
-      })
+      new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.3, metalness: 0.7 })
     );
     const diverterArm = new THREE.Mesh(diverterArmGeo, diverterArmMat);
     diverterArm.position.set(0, 0.14, -0.75);
@@ -566,7 +805,33 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     trueBackRail.position.set(1.45 + branchLength / 2, 0.22, -1.22);
     scene.add(trueFrontRail, trueBackRail);
 
-    // Floating 3D Labels matching screenshot
+    // 3b. Forward Middle Branch (MEDIO -> +Z, visible when mode === 'SI.ANIDADO')
+    const midLength = 6.6;
+    const midConveyorGroup = new THREE.Group();
+    const midBranchGeo = trackGeo(new THREE.BoxGeometry(2.3, 0.28, midLength));
+    const midRailGeo = trackGeo(new THREE.BoxGeometry(0.14, 0.36, midLength));
+
+    const midBranchMesh = new THREE.Mesh(midBranchGeo, midBeltMat);
+    midBranchMesh.position.set(0, 0.18, 1.5 + midLength / 2);
+    midBranchMesh.receiveShadow = true;
+    midBranchMesh.castShadow = true;
+    midConveyorGroup.add(midBranchMesh);
+
+    const midLeftRail = new THREE.Mesh(midRailGeo, railMat);
+    midLeftRail.position.set(-1.22, 0.22, 1.5 + midLength / 2);
+    const midRightRail = new THREE.Mesh(midRailGeo, railMat);
+    midRightRail.position.set(1.22, 0.22, 1.5 + midLength / 2);
+    midConveyorGroup.add(midLeftRail, midRightRail);
+
+    const midSprite = createFloatingLabelSprite('REGULAR', '#f59e0b', maxAniso);
+    midSprite.position.set(0, 2.75, 4.6);
+    if (midSprite.material.map) trackTex(midSprite.material.map);
+    trackMat(midSprite.material);
+    midConveyorGroup.add(midSprite);
+    midConveyorGroup.visible = activeFormulaRef.current.mode === 'SI.ANIDADO';
+    scene.add(midConveyorGroup);
+
+    // Floating 3D Labels
     const falseSprite = createFloatingLabelSprite('FALSO', '#ef4444', maxAniso);
     falseSprite.position.set(-4.6, 3.1, -0.4);
     if (falseSprite.material.map) trackTex(falseSprite.material.map);
@@ -579,7 +844,9 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     trackMat(trueSprite.material);
     scene.add(trueSprite);
 
-    // 4. Optical Scanner Arch (multi-part composite)
+    let lastLabelSig = '';
+
+    // 4. Optical Scanner Arch
     const archGroup = new THREE.Group();
     archGroup.position.set(0, 0, -0.85);
 
@@ -606,7 +873,6 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     const sensorPod = new THREE.Mesh(sensorPodGeo, metalMat);
     sensorPod.position.set(0, 2.52, 0);
 
-    // Status LED indicators on arch top
     const ledGeo = trackGeo(new THREE.BoxGeometry(0.46, 0.12, 0.48));
     const ledMat = trackMat(
       new THREE.MeshStandardMaterial({
@@ -619,7 +885,6 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     const ledBar = new THREE.Mesh(ledGeo, ledMat);
     ledBar.position.set(0, 2.94, 0);
 
-    // Laser scan curtain inside arch
     const laserGeo = trackGeo(new THREE.PlaneGeometry(2.3, 2.0));
     const laserMat = trackMat(
       new THREE.MeshBasicMaterial({
@@ -656,8 +921,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     let ledPulseTimer = 0;
     let diverterTargetAngle = 0;
 
-    const createCrate = (val: number): CrateEntity => {
-      const tex = createCrateNumberTexture(val, maxAniso);
+    const createCrate = (spec: QueuedCrateSpec): CrateEntity => {
+      const tex = createCrateNumberTexture(
+        spec.value,
+        spec.secondaryVal,
+        spec.isVip,
+        activeFormulaRef.current.mode,
+        maxAniso
+      );
       const faceMat = new THREE.MeshStandardMaterial({
         map: tex,
         roughness: 0.38,
@@ -680,7 +951,9 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
       return {
         id: nextCrateId++,
-        value: val,
+        value: spec.value,
+        secondaryVal: spec.secondaryVal,
+        isVip: spec.isVip,
         group,
         numberTexture: tex,
         phase: 'intake',
@@ -704,11 +977,13 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       crate.numberTexture.dispose();
     };
 
-    // Spawn first crate immediately for instant motion
-    const initialVal = spawnQueueRef.current.shift() ?? 57;
-    crates.push(createCrate(initialVal));
+    const initialSpec = spawnQueueRef.current.shift() ?? {
+      value: 75,
+      secondaryVal: 45,
+      isVip: false,
+    };
+    crates.push(createCrate(initialSpec));
 
-    // ResizeObserver for crisp responsive viewport
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width < 10 || rect.height < 10) return;
@@ -730,35 +1005,63 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       lastTime = now;
       const dt = isPlayingRef.current ? rawDt * speedRef.current : 0;
 
-      // Sync scene background/fog smoothly when user toggles theme
       const targetBgHex = getBgColor();
       if ((scene.background as THREE.Color).getHex() !== targetBgHex) {
         (scene.background as THREE.Color).setHex(targetBgHex);
         (scene.fog as THREE.FogExp2).color.setHex(targetBgHex);
       }
 
+      // Sync 3rd conveyor visibility & floating labels when active formula updates
+      const cfgNow = activeFormulaRef.current;
+      const isNested = cfgNow.mode === 'SI.ANIDADO';
+      midConveyorGroup.visible = isNested;
+      const tLbl =
+        cfgNow.mode === 'CONTAR.SI'
+          ? 'CONTAR'
+          : cfgNow.mode === 'SUMAR.SI'
+            ? 'SUMAR'
+            : cfgNow.trueLabel;
+      const mLbl = cfgNow.midLabel;
+      const fLbl =
+        cfgNow.mode === 'CONTAR.SI' || cfgNow.mode === 'SUMAR.SI' ? 'OMITIDO' : cfgNow.falseLabel;
+      const nextSig = `${cfgNow.mode}|${tLbl}|${mLbl}|${fLbl}`;
+      if (nextSig !== lastLabelSig) {
+        lastLabelSig = nextSig;
+        updateFloatingLabelSprite(trueSprite, tLbl, '#22c55e');
+        updateFloatingLabelSprite(midSprite, mLbl, '#f59e0b');
+        updateFloatingLabelSprite(falseSprite, fLbl, '#ef4444');
+      }
+
       if (dt > 0) {
-        // Animate belt chevrons
         intakeBeltTex.offset.y -= dt * 1.15;
         falseBeltTex.offset.y -= dt * 1.45;
         trueBeltTex.offset.y += dt * 1.45;
+        if (isNested) {
+          midBeltTex.offset.y -= dt * 1.45;
+        }
 
-        // Spawn next crate periodically or from manual queue
         spawnCooldown -= dt;
         const canSpawnBySpacing =
           crates.length === 0 ||
           crates.every((c) => c.phase !== 'intake' || c.group.position.z > -4.2);
 
-        if (crates.length < 5 && canSpawnBySpacing && (spawnQueueRef.current.length > 0 || spawnCooldown <= 0)) {
-          const nextValue =
+        if (
+          crates.length < 5 &&
+          canSpawnBySpacing &&
+          (spawnQueueRef.current.length > 0 || spawnCooldown <= 0)
+        ) {
+          const nextSpec: QueuedCrateSpec =
             spawnQueueRef.current.length > 0
               ? spawnQueueRef.current.shift()!
-              : Math.floor(Math.random() * 99) + 1;
-          crates.push(createCrate(nextValue));
+              : {
+                  value: Math.floor(Math.random() * 99) + 1,
+                  secondaryVal: Math.floor(Math.random() * 95) + 10,
+                  isVip: Math.random() < 0.4,
+                };
+          crates.push(createCrate(nextSpec));
           spawnCooldown = 2.05;
         }
 
-        // Update LED recovery
         if (ledPulseTimer > 0) {
           ledPulseTimer = Math.max(0, ledPulseTimer - dt);
           if (ledPulseTimer === 0) {
@@ -769,16 +1072,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
           }
         }
 
-        // Update diverter paddle rotation smoothly
-        diverterPivot.rotation.y += (diverterTargetAngle - diverterPivot.rotation.y) * Math.min(1, dt * 10);
+        diverterPivot.rotation.y +=
+          (diverterTargetAngle - diverterPivot.rotation.y) * Math.min(1, dt * 10);
 
-        // Update crates
         for (let i = crates.length - 1; i >= 0; i--) {
           const c = crates[i];
 
           if (c.phase === 'intake') {
             c.group.position.z += dt * 2.9;
-            // Subtle belt bounce
             c.group.position.y = 0.84 + Math.sin(now * 0.008 + c.id) * 0.012;
             if (c.group.position.z >= -0.85) {
               c.group.position.z = -0.85;
@@ -790,11 +1091,38 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
             if (!c.evaluated) {
               c.evaluated = true;
               const cfg = activeFormulaRef.current;
-              const passed = evaluateCondition(c.value, cfg.operator, cfg.threshold);
-              c.branch = passed ? 'true' : 'false';
-              diverterTargetAngle = passed ? -0.58 : 0.58;
 
-              if (passed) {
+              let outcome: 'true' | 'mid' | 'false' = 'false';
+              let logDetail = `[${c.value}]`;
+
+              if (cfg.mode === 'SI.ANIDADO') {
+                const cond1 = evaluateCondition(c.value, cfg.operator, cfg.threshold);
+                const midOp: ComparisonOp =
+                  cfg.operator === '<' || cfg.operator === '<=' ? '<=' : '>=';
+                const cond2 = evaluateCondition(c.value, midOp, cfg.midThreshold);
+                outcome = cond1 ? 'true' : cond2 ? 'mid' : 'false';
+              } else if (cfg.mode === 'Y') {
+                const cond1 = evaluateCondition(c.value, cfg.operator, cfg.threshold);
+                const cond2 = evaluateCondition(
+                  c.secondaryVal,
+                  cfg.secondOperator,
+                  cfg.secondThreshold
+                );
+                outcome = cond1 && cond2 ? 'true' : 'false';
+                logDetail = `[${c.value} | Peso ${c.secondaryVal}]`;
+              } else if (cfg.mode === 'O') {
+                const cond1 = evaluateCondition(c.value, cfg.operator, cfg.threshold);
+                outcome = cond1 || c.isVip ? 'true' : 'false';
+                logDetail = `[${c.value} | ${c.isVip ? 'VIP' : 'STD'}]`;
+              } else {
+                const passed = evaluateCondition(c.value, cfg.operator, cfg.threshold);
+                outcome = passed ? 'true' : 'false';
+              }
+
+              c.branch = outcome;
+              diverterTargetAngle = outcome === 'true' ? -0.58 : outcome === 'mid' ? 0 : 0.58;
+
+              if (outcome === 'true') {
                 ledMat.color.setHex(0x22c55e);
                 ledMat.emissive.setHex(0x16a34a);
                 laserMat.color.setHex(0x22c55e);
@@ -802,15 +1130,26 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                 setTrueCount((n) => n + 1);
                 setTrueSum((s) => s + c.value);
                 const resultText =
-                  cfg.mode === 'SI'
-                    ? cfg.trueLabel
-                    : cfg.mode === 'CONTAR.SI'
-                      ? 'Contado (+1)'
-                      : `Sumado (+${c.value})`;
+                  cfg.mode === 'CONTAR.SI'
+                    ? 'Contado (+1)'
+                    : cfg.mode === 'SUMAR.SI'
+                      ? `Sumado (+${c.value})`
+                      : cfg.trueLabel;
                 appendLog({
                   kind: 'true',
                   badge: 'VERD.',
-                  text: `[${c.value}] -> ${resultText}`,
+                  text: `${logDetail} -> ${resultText}`,
+                });
+              } else if (outcome === 'mid') {
+                ledMat.color.setHex(0xf59e0b);
+                ledMat.emissive.setHex(0xd97706);
+                laserMat.color.setHex(0xf59e0b);
+                laserMat.opacity = 0.45;
+                setMidCount((n) => n + 1);
+                appendLog({
+                  kind: 'mid',
+                  badge: 'MEDIO',
+                  text: `${logDetail} -> ${cfg.midLabel}`,
                 });
               } else {
                 ledMat.color.setHex(0xef4444);
@@ -819,40 +1158,52 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                 laserMat.opacity = 0.45;
                 setFalseCount((n) => n + 1);
                 const resultText =
-                  cfg.mode === 'SI'
-                    ? cfg.falseLabel
-                    : cfg.mode === 'CONTAR.SI'
-                      ? 'Omitido'
-                      : 'No suma';
+                  cfg.mode === 'CONTAR.SI'
+                    ? 'Omitido'
+                    : cfg.mode === 'SUMAR.SI'
+                      ? 'No suma'
+                      : cfg.falseLabel;
                 appendLog({
                   kind: 'false',
                   badge: 'FALSO',
-                  text: `[${c.value}] -> ${resultText}`,
+                  text: `${logDetail} -> ${resultText}`,
                 });
               }
               ledPulseTimer = 0.65;
             }
 
-            // Advance into junction center
             c.group.position.z = THREE.MathUtils.lerp(c.group.position.z, 0, Math.min(1, dt * 8));
             if (c.scanTimer <= 0) {
               c.group.position.z = 0;
               c.phase = 'branching';
             }
           } else if (c.phase === 'branching') {
-            const dir = c.branch === 'true' ? 1 : -1;
-            c.group.position.x += dir * dt * 3.35;
-            c.group.position.y = 0.86 + Math.sin(now * 0.01 + c.id) * 0.014;
-            c.group.rotation.y += (dir * -0.18 - c.group.rotation.y) * Math.min(1, dt * 6);
+            if (c.branch === 'mid') {
+              c.group.position.z += dt * 3.2;
+              c.group.position.y = 0.86 + Math.sin(now * 0.01 + c.id) * 0.014;
+              if (c.group.position.z >= 7.6) {
+                c.phase = 'exiting';
+                c.progress = 0;
+              }
+            } else {
+              const dir = c.branch === 'true' ? 1 : -1;
+              c.group.position.x += dir * dt * 3.35;
+              c.group.position.y = 0.86 + Math.sin(now * 0.01 + c.id) * 0.014;
+              c.group.rotation.y += (dir * -0.18 - c.group.rotation.y) * Math.min(1, dt * 6);
 
-            if (Math.abs(c.group.position.x) >= 8.6) {
-              c.phase = 'exiting';
-              c.progress = 0;
+              if (Math.abs(c.group.position.x) >= 8.6) {
+                c.phase = 'exiting';
+                c.progress = 0;
+              }
             }
           } else if (c.phase === 'exiting') {
-            const dir = c.branch === 'true' ? 1 : -1;
             c.progress += dt * 3.2;
-            c.group.position.x += dir * dt * 2.1;
+            if (c.branch === 'mid') {
+              c.group.position.z += dt * 2.0;
+            } else {
+              const dir = c.branch === 'true' ? 1 : -1;
+              c.group.position.x += dir * dt * 2.1;
+            }
             c.group.position.y -= dt * 3.4;
             const s = Math.max(0.01, 1 - c.progress);
             c.group.scale.setScalar(s);
@@ -864,9 +1215,9 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
         }
       }
 
-      // Gentle float on FALSO / VERDADERO 3D markers
       falseSprite.position.y = 3.1 + Math.sin(now * 0.0022) * 0.08;
       trueSprite.position.y = 3.1 + Math.sin(now * 0.0022 + 1.2) * 0.08;
+      midSprite.position.y = 2.75 + Math.sin(now * 0.0022 + 2.4) * 0.08;
 
       controls.update();
       renderer.render(scene, camera);
@@ -912,52 +1263,95 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
         {/* Left Main Stage: Header + Formula Bar + 3D WebGL Canvas */}
         <div className="lg:col-span-9 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800">
           {/* Simulator Header + Formula Builder */}
-          <div className="p-4 sm:p-6 space-y-4 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800">
+          <div className="p-4 sm:p-5 space-y-3.5 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center justify-center w-9 h-7 rounded-md bg-[#107C41] text-white font-serif italic font-bold text-sm shadow-xs shrink-0">
                   fx
                 </span>
-                <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-                  Simulador de <span className="text-[#107C41] dark:text-emerald-400">{formulaTitle}</span>
+                <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                  Simulador de Toma de Decisiones:{' '}
+                  <span className="text-[#107C41] dark:text-emerald-400">{formulaTitle}</span>
                 </h2>
               </div>
 
               {/* Formula Mode Tabs */}
-              <div className="flex items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                {(['SI', 'CONTAR.SI', 'SUMAR.SI'] as const).map((m) => (
+              <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                {(
+                  [
+                    { id: 'SI', label: '=SI()' },
+                    { id: 'SI.ANIDADO', label: '=SI Anidado' },
+                    { id: 'Y', label: '=SI(Y)' },
+                    { id: 'O', label: '=SI(O)' },
+                    { id: 'CONTAR.SI', label: '=CONTAR.SI' },
+                    { id: 'SUMAR.SI', label: '=SUMAR.SI' },
+                  ] as const
+                ).map((m) => (
                   <button
-                    key={m}
+                    key={m.id}
                     type="button"
                     onClick={() => {
-                      setDraftMode(m);
-                      setActiveFormula((prev) => ({ ...prev, mode: m }));
+                      setDraftMode(m.id);
+                      setActiveFormula((prev) => ({ ...prev, mode: m.id }));
+                      setTrueCount(0);
+                      setMidCount(0);
+                      setFalseCount(0);
+                      setTrueSum(0);
                       appendLog({
                         kind: 'info',
-                        badge: 'INFO',
-                        text: `Modo cambiado a =${m}()`,
+                        badge: 'MODO',
+                        text: `Simulación cambiada a ${m.label}`,
                       });
                     }}
-                    className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors whitespace-nowrap ${
-                      draftMode === m
+                    className={`px-2 py-1 rounded-md text-[11px] font-mono font-semibold transition-colors whitespace-nowrap ${
+                      draftMode === m.id
                         ? 'bg-[#107C41] text-white'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800'
                     }`}
                   >
-                    ={m}()
+                    {m.label}
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* 1-Click Decision Scenario Presets */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-500 dark:text-slate-400 mr-1">
+                <GitBranch className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                Escenarios de decisión:
+              </span>
+              {DECISION_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-medium transition-colors ${
+                    activeFormula.mode === preset.config.mode &&
+                    activeFormula.trueLabel === preset.config.trueLabel
+                      ? 'border-[#107C41] bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500'
+                  }`}
+                >
+                  <span className="font-mono text-[10px] font-bold text-[#107C41] dark:text-emerald-400">
+                    {preset.badge}
+                  </span>
+                  <span>{preset.label}</span>
+                </button>
+              ))}
+            </div>
+
             {/* Interactive Excel Formula Bar */}
-            <form
-              onSubmit={handleApplyFormula}
-              className="flex flex-wrap items-center gap-2.5"
-            >
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/90 px-3 py-2 font-mono text-xs sm:text-sm">
+            <form onSubmit={handleApplyFormula} className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/90 px-3 py-2 font-mono text-xs">
                 <span className="font-bold text-slate-800 dark:text-slate-200">
-                  ={draftMode}(
+                  {draftMode === 'Y'
+                    ? '=SI(Y('
+                    : draftMode === 'O'
+                      ? '=SI(O('
+                      : draftMode === 'SI.ANIDADO'
+                        ? '=SI('
+                        : `=${draftMode}(`}
                 </span>
 
                 <span className="rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 px-2 py-1 text-blue-700 dark:text-blue-300 font-semibold">
@@ -968,7 +1362,7 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                   value={draftOperator}
                   onChange={(e) => setDraftOperator(e.target.value as ComparisonOp)}
                   aria-label="Operador lógico"
-                  className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 min-h-[34px]"
+                  className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-1.5 py-1 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600 min-h-[32px]"
                 >
                   <option value=">">&gt;</option>
                   <option value="<">&lt;</option>
@@ -983,29 +1377,94 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                   value={draftThreshold}
                   onChange={(e) => setDraftThreshold(Number(e.target.value))}
                   aria-label="Valor umbral"
-                  className="w-20 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-900 dark:text-slate-100 font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-600 min-h-[34px]"
+                  className="w-16 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-slate-900 dark:text-slate-100 font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-600 min-h-[32px]"
                 />
 
-                {draftMode === 'SI' && (
+                {draftMode === 'Y' && (
+                  <>
+                    <span className="text-slate-500 font-bold">;</span>
+                    <span className="rounded border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 px-1.5 py-1 text-sky-700 dark:text-sky-300 font-semibold">
+                      [Peso]
+                    </span>
+                    <select
+                      value={draftSecondOp}
+                      onChange={(e) => setDraftSecondOp(e.target.value as ComparisonOp)}
+                      aria-label="Segundo operador"
+                      className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-1.5 py-1 text-slate-900 dark:text-slate-100 font-bold min-h-[32px]"
+                    >
+                      <option value=">">&gt;</option>
+                      <option value="<">&lt;</option>
+                      <option value=">=">&gt;=</option>
+                      <option value="<=">&lt;=</option>
+                      <option value="=">=</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={draftSecondThreshold}
+                      onChange={(e) => setDraftSecondThreshold(Number(e.target.value))}
+                      aria-label="Umbral de peso"
+                      className="w-16 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-slate-900 dark:text-slate-100 font-semibold tabular-nums min-h-[32px]"
+                    />
+                    <span className="font-bold text-slate-800 dark:text-slate-200">)</span>
+                  </>
+                )}
+
+                {draftMode === 'O' && (
+                  <>
+                    <span className="text-slate-500 font-bold">;</span>
+                    <span className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/60 px-2 py-1 text-amber-800 dark:text-amber-300 font-semibold">
+                      [VIP]=&quot;SÍ&quot;)
+                    </span>
+                  </>
+                )}
+
+                {(draftMode === 'SI' ||
+                  draftMode === 'SI.ANIDADO' ||
+                  draftMode === 'Y' ||
+                  draftMode === 'O') && (
                   <>
                     <span className="text-slate-500 font-bold">;</span>
                     <input
                       type="text"
                       value={draftTrueLabel}
                       onChange={(e) => setDraftTrueLabel(e.target.value)}
-                      maxLength={16}
+                      maxLength={14}
                       aria-label="Texto si es verdadero"
-                      className="w-28 rounded border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-emerald-700 dark:text-emerald-300 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                      className="w-24 rounded border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 text-emerald-700 dark:text-emerald-300 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600"
                     />
+                    {draftMode === 'SI.ANIDADO' && (
+                      <>
+                        <span className="text-slate-500 font-bold">; SI([Caja]&gt;=</span>
+                        <input
+                          type="number"
+                          value={draftMidThreshold}
+                          onChange={(e) => setDraftMidThreshold(Number(e.target.value))}
+                          aria-label="Umbral intermedio"
+                          className="w-14 rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-1.5 py-1 text-slate-900 dark:text-slate-100 font-semibold tabular-nums"
+                        />
+                        <span className="text-slate-500 font-bold">;</span>
+                        <input
+                          type="text"
+                          value={draftMidLabel}
+                          onChange={(e) => setDraftMidLabel(e.target.value)}
+                          maxLength={14}
+                          aria-label="Texto nivel intermedio"
+                          className="w-22 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 text-amber-700 dark:text-amber-300 font-semibold"
+                        />
+                      </>
+                    )}
                     <span className="text-slate-500 font-bold">;</span>
                     <input
                       type="text"
                       value={draftFalseLabel}
                       onChange={(e) => setDraftFalseLabel(e.target.value)}
-                      maxLength={16}
+                      maxLength={14}
                       aria-label="Texto si es falso"
                       className="w-24 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 px-2 py-1 text-red-700 dark:text-red-300 font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
+                    {draftMode === 'SI.ANIDADO' && (
+                      <span className="font-bold text-slate-800 dark:text-slate-200">)</span>
+                    )}
                   </>
                 )}
 
@@ -1014,14 +1473,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
 
               <button
                 type="submit"
-                className="rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-5 py-2.5 text-xs font-bold tracking-wider uppercase text-white transition-colors shadow-xs min-h-[42px] whitespace-nowrap"
+                className="rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2 text-xs font-bold tracking-wider uppercase text-white transition-colors shadow-xs min-h-[40px] whitespace-nowrap"
               >
                 APLICAR
               </button>
             </form>
 
             {/* Compact Transport & Crate Spawner Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-xs">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -1047,8 +1506,31 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                     value={customCrateValue}
                     onChange={(e) => setCustomCrateValue(e.target.value)}
                     aria-label="Valor de caja personalizado"
-                    className="w-14 bg-transparent px-2 py-1 text-xs font-mono tabular-nums text-slate-900 dark:text-slate-100 focus:outline-none"
+                    className="w-12 bg-transparent px-2 py-1 text-xs font-mono tabular-nums text-slate-900 dark:text-slate-100 focus:outline-none"
                   />
+                  {draftMode === 'Y' && (
+                    <input
+                      type="number"
+                      value={customCrateSecondary}
+                      onChange={(e) => setCustomCrateSecondary(e.target.value)}
+                      title="Peso"
+                      aria-label="Peso de caja"
+                      className="w-12 bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs font-mono tabular-nums text-sky-600 dark:text-sky-400 focus:outline-none"
+                    />
+                  )}
+                  {draftMode === 'O' && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomCrateVip((v) => !v)}
+                      className={`px-2 py-1 text-[10px] font-bold border-l border-slate-200 dark:border-slate-700 ${
+                        customCrateVip
+                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                          : 'bg-slate-50 dark:bg-slate-900 text-slate-500'
+                      }`}
+                    >
+                      {customCrateVip ? 'VIP' : 'STD'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleSpawnCrate(Number(customCrateValue))}
@@ -1089,8 +1571,12 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
             </div>
           </div>
 
-          {/* Isolated Three.js WebGL Mount + Solid Non-Blurred Hint Badge */}
-          <div className={`relative w-full ${compact ? 'h-[360px] sm:h-[420px]' : 'h-[430px] sm:h-[510px]'}`}>
+          {/* Isolated Three.js WebGL Mount */}
+          <div
+            className={`relative w-full ${
+              compact ? 'h-[350px] sm:h-[400px]' : 'h-[430px] sm:h-[510px]'
+            }`}
+          >
             <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
             <button
               type="button"
@@ -1118,8 +1604,12 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
           </div>
 
           {/* Live Metric Strip */}
-          <div className="grid grid-cols-3 divide-x divide-slate-200 dark:divide-slate-800 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] text-center">
-            <div className="py-2.5 px-2">
+          <div
+            className={`grid ${
+              activeFormula.mode === 'SI.ANIDADO' ? 'grid-cols-4' : 'grid-cols-3'
+            } divide-x divide-slate-200 dark:divide-slate-800 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] text-center`}
+          >
+            <div className="py-2.5 px-1.5">
               <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 VERD.
               </p>
@@ -1127,7 +1617,17 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                 {trueCount}
               </p>
             </div>
-            <div className="py-2.5 px-2">
+            {activeFormula.mode === 'SI.ANIDADO' && (
+              <div className="py-2.5 px-1.5">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  MEDIO
+                </p>
+                <p className="text-sm font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400">
+                  {midCount}
+                </p>
+              </div>
+            )}
+            <div className="py-2.5 px-1.5">
               <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 FALSO
               </p>
@@ -1135,12 +1635,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                 {falseCount}
               </p>
             </div>
-            <div className="py-2.5 px-2">
+            <div className="py-2.5 px-1.5">
               <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {activeFormula.mode === 'SUMAR.SI' ? 'SUMA' : 'TOTAL'}
               </p>
               <p className="text-sm font-bold font-mono tabular-nums text-blue-600 dark:text-blue-400">
-                {activeFormula.mode === 'SUMAR.SI' ? trueSum : trueCount + falseCount}
+                {activeFormula.mode === 'SUMAR.SI'
+                  ? trueSum
+                  : trueCount + midCount + falseCount}
               </p>
             </div>
           </div>
@@ -1155,15 +1657,17 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="py-2.5 flex items-center gap-2.5 text-xs font-mono"
+                  className="py-2.5 flex items-center gap-2 text-xs font-mono"
                 >
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
                       entry.kind === 'true'
                         ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                        : entry.kind === 'false'
-                          ? 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300'
-                          : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                        : entry.kind === 'mid'
+                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                          : entry.kind === 'false'
+                            ? 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300'
+                            : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
                     }`}
                   >
                     {entry.badge}
@@ -1177,11 +1681,13 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
           <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#107C41] shrink-0" />
             <span className="truncate">
-              {activeFormula.mode === 'SI'
-                ? `Criterio activo: [Caja] ${activeFormula.operator} ${activeFormula.threshold}`
-                : activeFormula.mode === 'CONTAR.SI'
-                  ? `Contando cajas ${activeFormula.operator} ${activeFormula.threshold}`
-                  : `Sumando cajas ${activeFormula.operator} ${activeFormula.threshold}`}
+              {activeFormula.mode === 'SI.ANIDADO'
+                ? `${activeFormula.operator}${activeFormula.threshold} | >=${activeFormula.midThreshold} | Sino`
+                : activeFormula.mode === 'Y'
+                  ? `[Caja]${activeFormula.operator}${activeFormula.threshold} Y [Peso]${activeFormula.secondOperator}${activeFormula.secondThreshold}`
+                  : activeFormula.mode === 'O'
+                    ? `[Caja]${activeFormula.operator}${activeFormula.threshold} O [VIP]="SÍ"`
+                    : `Criterio: [Caja] ${activeFormula.operator} ${activeFormula.threshold}`}
             </span>
           </div>
         </aside>

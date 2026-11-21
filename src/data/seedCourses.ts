@@ -15,7 +15,7 @@ export const EXCEL_BASICO_COURSE: Course = {
   instructorName: 'Equipo DB Academy',
   published: true,
   modulesCount: 2,
-  totalLessons: 19,
+  totalLessons: 20,
   modules: [
     {
       id: 'mod-excel-0',
@@ -90,7 +90,7 @@ export const EXCEL_BASICO_COURSE: Course = {
     {
       id: 'mod-excel-1',
       title: 'MÓDULO 1 — FUNCIONES MATEMÁTICAS Y ESTADÍSTICAS BÁSICAS',
-      durationMinutes: 180,
+      durationMinutes: 200,
       quizQuestion: '¿Qué función suma celdas únicamente cuando cumplen múltiples condiciones simultáneas?',
       quizOptions: ['SUMAR.SI.CONJUNTO', 'CONTAR.BLANCO', 'SUBTOTALES'],
       quizCorrectIndex: 0,
@@ -191,353 +191,24 @@ export const EXCEL_BASICO_COURSE: Course = {
           content:
             'SUBTOTALES(núm_función; ref1) permite calcular suma (9), promedio (1), contar (2) o máximo (4) respetando automáticamente los filtros aplicados en una tabla. Usar códigos 101–111 ignora también filas ocultadas manualmente.',
         },
+        {
+          id: 'les-excel-1-13',
+          title: '1.13 SI (Función lógica de decisión)',
+          durationMinutes: 20,
+          summary: 'Evalúa condiciones lógicas para tomar decisiones automáticas (=SI(prueba; verdadero; falso)), anidar niveles y combinar con Y / O.',
+          content:
+            'La función SI comprueba si una prueba lógica es VERDADERO o FALSO y devuelve un resultado distinto para cada rama. Sintaxis: =SI(prueba_lógica; valor_si_verdadero; [valor_si_falso]). Puedes anidar múltiples SI para clasificar en 3 o más niveles, o combinarla con Y() y O() para evaluar múltiples condiciones simultáneas. Usa el Simulador 3D de =SI() integrado arriba para ver cómo cada dato toma decisiones en tiempo real.',
+        },
       ],
     },
   ],
 };
 
-export const SEED_COURSES: Course[] = [
-  EXCEL_BASICO_COURSE,
-  {
-    id: 'sys-arch-distributed-01',
-    title: 'Arquitectura de Sistemas Distribuidos y Alta Disponibilidad',
-    subtitle: 'Consenso, replicación multi-región, colas de eventos y tolerancia a fallos en producción.',
-    description:
-      'Domina los fundamentos de ingeniería detrás de plataformas resilientes: particionamiento consistente, patrones CQRS, replicación sin punto único de fallo y observabilidad distribuida.',
-    category: 'Ingeniería',
-    level: 'advanced',
-    priceCents: 14900,
-    currency: 'USD',
-    coverImage: '/src/assets/images/course_system_architecture_1795146988857.jpg',
-    instructorId: 'platform-faculty',
-    instructorName: 'Dra. Elena Valdivia',
-    published: true,
-    modulesCount: 3,
-    totalLessons: 6,
-    modules: [
-      {
-        id: 'mod-sys-1',
-        title: '01. Fundamentos de Consenso y Replicación',
-        durationMinutes: 55,
-        quizQuestion: '¿Qué propiedad garantiza el protocolo Raft cuando existe una partición de red?',
-        quizOptions: [
-          'Consistencia linealizable en la mayoría de nodos (quorum)',
-          'Disponibilidad total sin coordinación entre réplicas',
-          'Eliminación automática de latencia entre continentes',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-sys-1a',
-            title: 'Teorema CAP y PACELC en sistemas reales',
-            durationMinutes: 25,
-            summary: 'Compromisos reales entre latencia y consistencia fuerte bajo particiones.',
-            content:
-              'En entornos distribuidos globales, las particiones de red son inevitables. El modelo PACELC amplía el teorema CAP analizando el equilibrio entre latencia (L) y consistencia (C) incluso durante operación normal sin fallos.',
-          },
-          {
-            id: 'les-sys-1b',
-            title: 'Elección de líder y logs replicados con Raft',
-            durationMinutes: 30,
-            summary: 'Mecanismos de heartbeat, términos lógicos y confirmación por mayoría.',
-            content:
-              'Cada término en Raft inicia con una elección de líder. Un nodo solo gana si su log está al menos tan actualizado como el de la mayoría del clúster, asegurando que ninguna entrada confirmada se pierda.',
-          },
-        ],
-      },
-      {
-        id: 'mod-sys-2',
-        title: '02. Mensajería Asíncrona y Event Sourcing',
-        durationMinutes: 60,
-        quizQuestion: '¿Por qué es indispensable la idempotencia en consumidores de eventos?',
-        quizOptions: [
-          'Para evitar efectos duplicados ante entregas "at-least-once"',
-          'Para reducir el tamaño de los encabezados HTTP',
-          'Para deshabilitar el cifrado TLS en redes internas',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-sys-2a',
-            title: 'Patrón Outbox Transaccional',
-            durationMinutes: 30,
-            summary: 'Publicación fiable de eventos sin transacciones distribuidas 2PC.',
-            content:
-              'Al persistir el evento de dominio en la misma transacción local que la entidad de negocio y publicarlo mediante un relé asíncrono, garantizamos coherencia eventual sin bloqueos globales.',
-          },
-          {
-            id: 'les-sys-2b',
-            title: 'Diseño de consumidores idempotentes y Dead Letter Queues',
-            durationMinutes: 30,
-            summary: 'Claves de deduplicación y recuperación segura ante fallos transitorios.',
-            content:
-              'Todo consumidor debe registrar el identificador único del mensaje procesado o usar operaciones conmutativas para que los reintentos automáticos nunca corrompan el estado.',
-          },
-        ],
-      },
-      {
-        id: 'mod-sys-3',
-        title: '03. Circuit Breakers y Multi-Región Activo-Activo',
-        durationMinutes: 50,
-        quizQuestion: '¿Cuándo pasa un Circuit Breaker al estado Half-Open?',
-        quizOptions: [
-          'Tras vencer el temporizador de enfriamiento para probar recuperación',
-          'Inmediatamente después de la primera petición exitosa',
-          'Cuando el servidor alcanza 100% de uso de disco',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-sys-3a',
-            title: 'Aislamiento de fallos con Bulkheads y Timeouts adaptativos',
-            durationMinutes: 25,
-            summary: 'Cómo evitar fallos en cascada en arquitecturas de microservicios.',
-            content:
-              'Limitar los pools de conexiones por dependencia crítica impide que un servicio degradado consuma todos los hilos del sistema principal.',
-          },
-          {
-            id: 'les-sys-3b',
-            title: 'Enrutamiento geográfico y resolución de conflictos CRDT',
-            durationMinutes: 25,
-            summary: 'Sincronización multi-dispositivo y multi-región sin bloqueos.',
-            content:
-              'Los tipos de datos replicados libres de conflictos (CRDT) permiten que múltiples usuarios o dispositivos editen concurrentemente convergiendo al mismo estado matemático.',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'data-science-applied-02',
-    title: 'Ciencia de Datos Aplicada y Analítica Predictiva',
-    subtitle: 'Modelado estadístico, pipelines reproducibles, métricas de negocio y despliegue seguro.',
-    description:
-      'Construye modelos predictivos auditables desde la exploración inicial de datos hasta su integración mediante APIs en tiempo real, con rigor estadístico y visualización clara.',
-    category: 'Datos',
-    level: 'intermediate',
-    priceCents: 11900,
-    currency: 'USD',
-    coverImage: '/src/assets/images/course_data_science_1795146987818.jpg',
-    instructorId: 'platform-faculty',
-    instructorName: 'Dr. Mateo Navarro',
-    published: true,
-    modulesCount: 2,
-    totalLessons: 4,
-    modules: [
-      {
-        id: 'mod-ds-1',
-        title: '01. Ingeniería de Características y Validación Cruzada',
-        durationMinutes: 45,
-        quizQuestion: '¿Qué problema previene la separación estricta antes de escalar variables?',
-        quizOptions: [
-          'Fuga de datos (Data Leakage) del conjunto de prueba al entrenamiento',
-          'Exceso de memoria RAM en la tarjeta gráfica',
-          'Duplicación de columnas en archivos CSV',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-ds-1a',
-            title: 'Prevención de Data Leakage en pipelines temporales',
-            durationMinutes: 20,
-            summary: 'Validación temporal por ventanas deslizantes para series reales.',
-            content:
-              'Nunca mezcles observaciones futuras dentro de folds de entrenamiento en problemas temporales. Toda transformación de media o varianza debe ajustarse exclusivamente sobre el conjunto de entrenamiento.',
-          },
-          {
-            id: 'les-ds-1b',
-            title: 'Selección de métricas según costo de error',
-            durationMinutes: 25,
-            summary: 'Cuándo priorizar PR-AUC, F1 calibrado o pérdida asimétrica.',
-            content:
-              'En conjuntos desbalanceados como detección de fraude o deserción estudiantil, la exactitud (accuracy) es engañosa; la curva Precisión-Recall revela el rendimiento real.',
-          },
-        ],
-      },
-      {
-        id: 'mod-ds-2',
-        title: '02. Calibración, Explicabilidad y Monitoreo de Deriva',
-        durationMinutes: 50,
-        quizQuestion: '¿Qué indica un incremento sostenido en el Population Stability Index (PSI)?',
-        quizOptions: [
-          'Desviación en la distribución de datos de entrada (Data Drift)',
-          'Mejora automática de la precisión del modelo',
-          'Reducción del costo de almacenamiento en la nube',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-ds-2a',
-            title: 'Valores SHAP para decisiones transparentes',
-            durationMinutes: 25,
-            summary: 'Atribución local y global de características en modelos de ensamble.',
-            content:
-              'SHAP descompone cada predicción individual en contribuciones aditivas exactas basadas en teoría de juegos, permitiendo auditar sesgos.',
-          },
-          {
-            id: 'les-ds-2b',
-            title: 'Alertas tempranas de Concept Drift en producción',
-            durationMinutes: 25,
-            summary: 'Umbrales estadísticos y reentrenamiento automatizado.',
-            content:
-              'Comparar la distribución de producción frente al baseline de entrenamiento permite detectar cambios de comportamiento antes de que impacten los KPIs.',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'ux-design-systems-03',
-    title: 'Ingeniería de Sistemas de Diseño y UX Multiplataforma',
-    subtitle: 'Tokens semánticos, accesibilidad WCAG AA, tipografía de precisión y modo oscuro nativo.',
-    description:
-      'Diseña e implementa sistemas de interfaz escalables que funcionan con fluidez en móvil y escritorio, priorizando legibilidad, contraste y consistencia visual.',
-    category: 'Diseño',
-    level: 'beginner',
-    priceCents: 8900,
-    currency: 'USD',
-    coverImage: '/src/assets/images/course_ux_engineering_1795146988343.jpg',
-    instructorId: 'platform-faculty',
-    instructorName: 'Camila Mendoza',
-    published: true,
-    modulesCount: 2,
-    totalLessons: 4,
-    modules: [
-      {
-        id: 'mod-ux-1',
-        title: '01. Jerarquía Tipográfica y Tokens Dual-Theme',
-        durationMinutes: 40,
-        quizQuestion: '¿Cuál es el contraste mínimo WCAG AA para texto de cuerpo estándar?',
-        quizOptions: ['4.5:1 respecto al fondo', '1.8:1 respecto al fondo', '12:1 obligatorio'],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-ux-1a',
-            title: 'Arquitectura de color 60-30-10 y compensación en modo oscuro',
-            durationMinutes: 20,
-            summary: 'Evita contrastes agresivos o texto ilegible en superficies oscuras.',
-            content:
-              'En modo oscuro, las superficies elevadas deben incrementar sutilmente su luminosidad sin saturar el lienzo, y el texto claro requiere ajuste de peso y espaciado.',
-          },
-          {
-            id: 'les-ux-1b',
-            title: 'Ritmo espacial y diseño responsivo táctil',
-            durationMinutes: 20,
-            summary: 'Objetivos táctiles >= 44px y jerarquía móvil sin pérdida de función.',
-            content:
-              'Un sistema responsivo real adapta la densidad y el flujo de navegación a la ergonomía del pulgar en móvil sin recortar capacidades críticas.',
-          },
-        ],
-      },
-      {
-        id: 'mod-ux-2',
-        title: '02. Internacionalización (i18n) y Estados Completos',
-        durationMinutes: 45,
-        quizQuestion: '¿Qué regla asegura alineación vertical en tablas financieras?',
-        quizOptions: [
-          'Usar numerales tabulares (tabular-nums)',
-          'Centrar todos los párrafos de texto',
-          'Usar sombras múltiples en cada celda',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-ux-2a',
-            title: 'Diseño resistente a expansión de texto multilingüe',
-            durationMinutes: 22,
-            summary: 'Evita desbordamientos entre español, inglés, francés y portugués.',
-            content:
-              'Las traducciones al español o francés suelen ser un 20-35% más extensas que el inglés. Usar truncamiento controlado y contenedores flexibles previene roturas.',
-          },
-          {
-            id: 'les-ux-2b',
-            title: 'Estados vacíos, carga y retroalimentación inmediata',
-            durationMinutes: 23,
-            summary: 'Cada vista de datos debe guiar la siguiente acción útil.',
-            content:
-              'Un buen estado vacío explica qué aparecerá y ofrece una acción directa, reduciendo la fricción del usuario en su primera sesión.',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'cybersecurity-e2ee-04',
-    title: 'Criptografía Aplicada y Seguridad Zero-Trust E2EE',
-    subtitle: 'Web Crypto API, AES-GCM-256, intercambio de claves y protección de datos en la nube.',
-    description:
-      'Implementa cifrado de extremo a extremo real en aplicaciones web modernas, protegiendo documentos sensibles antes de salir del dispositivo del usuario.',
-    category: 'Seguridad',
-    level: 'advanced',
-    priceCents: 13500,
-    currency: 'USD',
-    coverImage: '/src/assets/images/course_cybersecurity_e2ee_1795146988090.jpg',
-    instructorId: 'platform-faculty',
-    instructorName: 'Ing. RodrigoSalazar',
-    published: true,
-    modulesCount: 2,
-    totalLessons: 4,
-    modules: [
-      {
-        id: 'mod-sec-1',
-        title: '01. Cifrado Autenticado con AES-GCM y Derivación PBKDF2',
-        durationMinutes: 50,
-        quizQuestion: '¿Por qué es crítico generar un vector de inicialización (IV) único por cada cifrado AES-GCM?',
-        quizOptions: [
-          'Reutilizar un IV con la misma clave compromete la confidencialidad y autenticación',
-          'Para hacer que el texto cifrado sea más corto',
-          'Para permitir que el servidor lea el contenido sin clave',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-sec-1a',
-            title: 'Uso seguro de window.crypto.subtle en navegadores',
-            durationMinutes: 25,
-            summary: 'Generación de claves simétricas de 256 bits y vectores de 96 bits.',
-            content:
-              'AES-GCM combina cifrado de flujo con autenticación integrada (AEAD), detectando cualquier manipulación del texto cifrado durante el tránsito o almacenamiento.',
-          },
-          {
-            id: 'les-sec-1b',
-            title: 'Derivación robusta desde frase de recuperación',
-            durationMinutes: 25,
-            summary: 'PBKDF2 con al menos 120,000 iteraciones y verificación por huella SHA-256.',
-            content:
-              'Al derivar claves localmente, el usuario mantiene soberanía total: la plataforma almacena únicamente el sobre cifrado y su IV.',
-          },
-        ],
-      },
-      {
-        id: 'mod-sec-2',
-        title: '02. Reglas Zero-Trust y Auditoría de APIs',
-        durationMinutes: 45,
-        quizQuestion: '¿Cuál es la función del encabezado HMAC-SHA256 en un Webhook?',
-        quizOptions: [
-          'Verificar autenticidad e integridad del emisor antes de procesar el evento',
-          'Comprimir el archivo JSON enviado',
-          'Evitar el uso de certificados HTTPS',
-        ],
-        quizCorrectIndex: 0,
-        lessons: [
-          {
-            id: 'les-sec-2a',
-            title: 'Aislamiento de PII y validación estricta de esquemas',
-            durationMinutes: 20,
-            summary: 'Principio de mínimo privilegio en bases de datos en tiempo real.',
-            content:
-              'Separar perfiles públicos de documentos privados con datos personales evita filtraciones accidentales en consultas de listado.',
-          },
-          {
-            id: 'les-sec-2b',
-            title: 'Firma HMAC para webhooks e integraciones externas',
-            durationMinutes: 25,
-            summary: 'Protege tus endpoints de terceros frente a peticiones suplantadas.',
-            content:
-              'Firmar el cuerpo exacto de la petición permite al receptor validar criptográficamente el origen y evitar ataques de repetición.',
-          },
-        ],
-      },
-    ],
-  },
+export const REMOVED_SEED_COURSE_IDS: readonly string[] = [
+  'sys-arch-distributed-01',
+  'data-science-applied-02',
+  'ux-design-systems-03',
+  'cybersecurity-e2ee-04',
 ];
+
+export const SEED_COURSES: Course[] = [EXCEL_BASICO_COURSE];

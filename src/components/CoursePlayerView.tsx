@@ -15,9 +15,9 @@ import {
   Compass,
   Copy,
   Download,
-  Eye,
   FileSpreadsheet,
   FileText,
+  GitBranch,
   HelpCircle,
   Image as ImageIcon,
   Keyboard,
@@ -25,6 +25,7 @@ import {
   Maximize2,
   Minimize2,
   Paperclip,
+  Pencil,
   PlayCircle,
   Search,
   Sparkles,
@@ -37,12 +38,12 @@ import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
 import { formatFileSize } from '../services/storageService';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
+import { InteractiveExcelLab } from './InteractiveExcelLab';
 
 const ExcelSimulator3D = lazy(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
 );
-
-const VIEW_COMPLETION_MS = 5000;
 
 /* ------------------------------------------------------------------ */
 /*  MaterialsTab — pestaña de descarga de materiales                   */
@@ -124,12 +125,14 @@ function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
 export const CoursePlayerView: React.FC = () => {
   const {
     user,
+    isAdmin,
     courses,
     enrollments,
     certificates,
     selectedCourseId,
     setSelectedCourseId,
     setActiveView,
+    setWorkspaceRole,
     zenMode,
     setZenMode,
     toggleZenMode,
@@ -137,10 +140,12 @@ export const CoursePlayerView: React.FC = () => {
     t,
   } = usePlatform();
 
-  const enrolledCourses = useMemo(
-    () => courses.filter((c) => enrollments.some((e) => e.courseId === c.id)),
-    [courses, enrollments]
-  );
+  const enrolledCourses = useMemo(() => {
+    if (isAdmin) return courses;
+    return courses.filter(
+      (c) => enrollments.some((e) => e.courseId === c.id) || c.instructorId === user?.uid
+    );
+  }, [courses, enrollments, isAdmin, user?.uid]);
 
   const activeCourse = useMemo(() => {
     if (selectedCourseId) {
@@ -150,20 +155,35 @@ export const CoursePlayerView: React.FC = () => {
     return enrolledCourses[0] || null;
   }, [enrolledCourses, selectedCourseId]);
 
-  const activeEnrollment = useMemo(
-    () => enrollments.find((e) => e.courseId === activeCourse?.id) || null,
-    [enrollments, activeCourse]
-  );
+  const activeEnrollment = useMemo(() => {
+    if (!activeCourse) return null;
+    const real = enrollments.find((e) => e.courseId === activeCourse.id);
+    if (real) return real;
+    if (isAdmin || activeCourse.instructorId === user?.uid) {
+      return {
+        id: `preview_${activeCourse.id}`,
+        courseId: activeCourse.id,
+        courseTitle: activeCourse.title,
+        studentId: user?.uid || 'admin-preview',
+        studentName: user?.displayName || user?.email || 'Administrador',
+        instructorId: activeCourse.instructorId,
+        completedModuleIds: [],
+        completedLessonIds: [],
+        progressPercent: 0,
+        studyMinutes: 0,
+        status: 'active' as const,
+      };
+    }
+    return null;
+  }, [enrollments, activeCourse, isAdmin, user]);
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [quizFeedback, setQuizFeedback] = useState<Record<string, 'passed' | 'failed'>>({});
   const [saving, setSaving] = useState(false);
   const [newlyIssuedCert, setNewlyIssuedCert] = useState<Certificate | null>(null);
-  const [autoTrackEnabled, setAutoTrackEnabled] = useState(true);
-  const [viewProgressPct, setViewProgressPct] = useState(0);
-  const [autoCompletedLessonTitle, setAutoCompletedLessonTitle] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(true);
+  const [externalPreset, setExternalPreset] = useState<SimulatorExternalPreset | null>(null);
   const [activeTab, setActiveTab] = useState<'reader' | 'syntax' | 'lab' | 'materials'>('reader');
   const [searchTopic, setSearchTopic] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
@@ -176,6 +196,7 @@ export const CoursePlayerView: React.FC = () => {
   });
 
   const inFlightLessonsRef = useRef<Set<string>>(new Set());
+  const simulatorWrapRef = useRef<HTMLDivElement | null>(null);
 
   const allLessons = useMemo(
     () =>
@@ -197,7 +218,7 @@ export const CoursePlayerView: React.FC = () => {
   );
 
   const markSubModuleComplete = useCallback(
-    async (lessonId: string, lessonTitle: string, durationMinutes: number, automatic = false) => {
+    async (lessonId: string, _lessonTitle: string, durationMinutes: number) => {
       if (!activeCourse || !activeEnrollment) return;
       if (activeEnrollment.completedLessonIds.includes(lessonId)) return;
       if (inFlightLessonsRef.current.has(lessonId)) return;
@@ -209,9 +230,6 @@ export const CoursePlayerView: React.FC = () => {
         if (res.certificateIssued) {
           setNewlyIssuedCert(res.certificateIssued);
         }
-        if (automatic) {
-          setAutoCompletedLessonTitle(lessonTitle);
-        }
       } finally {
         inFlightLessonsRef.current.delete(lessonId);
         setSaving(false);
@@ -220,49 +238,13 @@ export const CoursePlayerView: React.FC = () => {
     [activeCourse, activeEnrollment, completeLesson]
   );
 
-  // Automatic viewing progress tracker: marks sub-module complete after viewing content
+  // Reset tab and spotlight SI simulator when switching sub-modules
   useEffect(() => {
-    setAutoCompletedLessonTitle(null);
-    setActiveTab('reader'); // Reset to reader tab on lesson change
-    if (!currentLesson || !activeCourse || !activeEnrollment) {
-      setViewProgressPct(0);
-      return;
+    setActiveTab('reader');
+    if (currentLesson?.id === 'les-excel-1-13') {
+      setShowSimulator(true);
     }
-    if (isLessonDone) {
-      setViewProgressPct(100);
-      return;
-    }
-    if (!autoTrackEnabled) {
-      return;
-    }
-
-    setViewProgressPct(0);
-    const startedAt = Date.now();
-    const interval = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const pct = Math.min(100, Math.round((elapsed / VIEW_COMPLETION_MS) * 100));
-      setViewProgressPct(pct);
-      if (elapsed >= VIEW_COMPLETION_MS) {
-        window.clearInterval(interval);
-        void markSubModuleComplete(
-          currentLesson.id,
-          currentLesson.title,
-          currentLesson.durationMinutes,
-          true
-        );
-      }
-    }, 150);
-
-    return () => window.clearInterval(interval);
-  }, [
-    currentLesson?.id,
-    currentLesson?.title,
-    currentLesson?.durationMinutes,
-    activeCourse?.id,
-    isLessonDone,
-    autoTrackEnabled,
-    markSubModuleComplete,
-  ]);
+  }, [currentLesson?.id]);
 
   // Esc key exits Zen Mode cleanly and leaving view resets Zen Mode
   useEffect(() => {
@@ -305,13 +287,21 @@ export const CoursePlayerView: React.FC = () => {
     newlyIssuedCert || certificates.find((c) => c.courseId === activeCourse.id) || null;
   const isExcelCourse =
     activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title);
-  const recommendedSimMode: 'SI' | 'CONTAR.SI' | 'SUMAR.SI' = /CONTAR\.SI/i.test(
-    currentLesson.title
-  )
+  const recommendedSimMode: FormulaMode = /CONTAR\.SI/i.test(currentLesson.title)
     ? 'CONTAR.SI'
     : /SUMAR\.SI/i.test(currentLesson.title)
       ? 'SUMAR.SI'
-      : 'SI';
+      : /ANIDADO/i.test(currentLesson.title)
+        ? 'SI.ANIDADO'
+        : 'SI';
+
+  const launchDecisionSimulation = (mode: FormulaMode, presetId: string) => {
+    setShowSimulator(true);
+    setExternalPreset({ mode, presetId, nonce: Date.now() });
+    window.setTimeout(() => {
+      simulatorWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 80);
+  };
 
   const prevLesson = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1] : null;
   const nextLesson =
@@ -323,8 +313,7 @@ export const CoursePlayerView: React.FC = () => {
     await markSubModuleComplete(
       currentLesson.id,
       currentLesson.title,
-      currentLesson.durationMinutes,
-      false
+      currentLesson.durationMinutes
     );
   };
 
@@ -333,25 +322,10 @@ export const CoursePlayerView: React.FC = () => {
       await markSubModuleComplete(
         currentLesson.id,
         currentLesson.title,
-        currentLesson.durationMinutes,
-        true
+        currentLesson.durationMinutes
       );
     }
     setActiveLessonId(targetLessonId);
-  };
-
-  const handleContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isLessonDone || !autoTrackEnabled) return;
-    const el = e.currentTarget;
-    if (el.scrollHeight > el.clientHeight && el.scrollTop + el.clientHeight >= el.scrollHeight - 12) {
-      setViewProgressPct(100);
-      void markSubModuleComplete(
-        currentLesson.id,
-        currentLesson.title,
-        currentLesson.durationMinutes,
-        true
-      );
-    }
   };
 
   const handleCheckQuiz = (moduleId: string, correctIndex: number) => {
@@ -361,14 +335,11 @@ export const CoursePlayerView: React.FC = () => {
       ...prev,
       [moduleId]: passed ? 'passed' : 'failed',
     }));
-    // Interacting with the module quiz also marks the currently viewed sub-module complete
     if (passed && !isLessonDone) {
-      setViewProgressPct(100);
       void markSubModuleComplete(
         currentLesson.id,
         currentLesson.title,
-        currentLesson.durationMinutes,
-        true
+        currentLesson.durationMinutes
       );
     }
   };
@@ -411,6 +382,21 @@ export const CoursePlayerView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {(isAdmin || activeCourse.instructorId === user.uid) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkspaceRole('instructor');
+                  setSelectedCourseId(activeCourse.id);
+                  setActiveView('instructor');
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors whitespace-nowrap min-h-[42px]"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Editar curso</span>
+              </button>
+            )}
+
             {isExcelCourse && (
               <button
                 type="button"
@@ -455,41 +441,42 @@ export const CoursePlayerView: React.FC = () => {
       )}
 
       {/* Integrated 3D Formula Simulator Lab inside the Excel Course (temporarily hidden in Zen Mode) */}
-      <AnimatePresence initial={false}>
-        {!zenMode && isExcelCourse && showSimulator && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.28, ease: 'easeOut' }}
-            className="overflow-hidden"
-          >
-            <Suspense
-              fallback={
-                <div className="h-[420px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
-                  Cargando Simulador 3D...
-                </div>
-              }
+      <div ref={simulatorWrapRef}>
+        <AnimatePresence initial={false}>
+          {!zenMode && isExcelCourse && showSimulator && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+              className="overflow-hidden"
             >
-              <ExcelSimulator3D
-                compact
-                externalMode={recommendedSimMode}
-                onInteract={() => {
-                  if (!isLessonDone) {
-                    setViewProgressPct(100);
-                    void markSubModuleComplete(
-                      currentLesson.id,
-                      currentLesson.title,
-                      currentLesson.durationMinutes,
-                      true
-                    );
-                  }
-                }}
-              />
-            </Suspense>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <Suspense
+                fallback={
+                  <div className="h-[420px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                    Cargando Simulador 3D...
+                  </div>
+                }
+              >
+                <ExcelSimulator3D
+                  compact
+                  externalMode={recommendedSimMode}
+                  externalPreset={externalPreset}
+                  onInteract={() => {
+                    if (!isLessonDone) {
+                      void markSubModuleComplete(
+                        currentLesson.id,
+                        currentLesson.title,
+                        currentLesson.durationMinutes
+                      );
+                    }
+                  }}
+                />
+              </Suspense>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Live Progress Bar & Auto Certificate Banner (hidden in Zen Mode for minimal clutter) */}
       {!zenMode && (
@@ -564,41 +551,6 @@ export const CoursePlayerView: React.FC = () => {
               </div>
             </div>
 
-            {/* Sub-Module Viewing Progress Tracker Bar */}
-            <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                  {isLessonDone ? t('lessonCompleted') : t('readingProgressLabel')}
-                </span>
-                <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                  {isLessonDone ? '100%' : `${viewProgressPct}%`}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-24 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-150 ${
-                      isLessonDone ? 'bg-emerald-600' : 'bg-blue-600'
-                    }`}
-                    style={{ width: `${isLessonDone ? 100 : viewProgressPct}%` }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAutoTrackEnabled((v) => !v)}
-                  className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors whitespace-nowrap ${
-                    autoTrackEnabled
-                      ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
-                  }`}
-                >
-                  {t('autoTrackLabel')}
-                </button>
-              </div>
-            </div>
-
             {/* NetAcad Multi-Tab Switcher: Concepto / Sintaxis & Terminal / Notas de Laboratorio */}
             <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 px-4 text-xs font-semibold">
               <button
@@ -657,23 +609,6 @@ export const CoursePlayerView: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              <AnimatePresence>
-                {autoCompletedLessonTitle && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.22 }}
-                    className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 flex items-center gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-300"
-                  >
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>
-                      {t('autoCompletedNotice')}: {autoCompletedLessonTitle}
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               {/* Tab 1: Reader Text */}
               {activeTab === 'reader' && (
                 <AnimatePresence mode="wait">
@@ -683,10 +618,7 @@ export const CoursePlayerView: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
-                    onScroll={handleContentScroll}
-                    className={`space-y-4 pr-1 overflow-y-auto ${
-                      zenMode ? 'max-h-[460px]' : 'max-h-80'
-                    }`}
+                    className="space-y-4"
                   >
                     <div className="rounded-lg border border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4">
                       <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
@@ -719,8 +651,101 @@ export const CoursePlayerView: React.FC = () => {
                 </AnimatePresence>
               )}
 
+              {activeTab === 'reader' && isExcelCourse && (
+                <div className="pt-2 space-y-5">
+                  {currentLesson.id === 'les-excel-1-13' && (
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                          <GitBranch className="w-4 h-4" />
+                          <span>Simulador de =SI() y Toma de Decisiones</span>
+                        </div>
+                        <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                          Elige un escenario para verlo en la cinta 3D
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => launchDecisionSimulation('SI', 'si-aprobado')}
+                          className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 px-3 py-2 text-left hover:border-[#107C41] transition-colors"
+                        >
+                          <span className="block font-mono text-[11px] font-bold text-[#107C41] dark:text-emerald-400">
+                            =SI(Caja&gt;=60)
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            Nota Aprobatoria
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => launchDecisionSimulation('SI.ANIDADO', 'si-anidado-3-vias')}
+                          className="rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 px-3 py-2 text-left hover:border-amber-500 transition-colors"
+                        >
+                          <span className="block font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                            =SI() Anidado (3 vías)
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            Clasificación 3 niveles
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => launchDecisionSimulation('Y', 'si-y-envio')}
+                          className="rounded-lg border border-sky-300 dark:border-sky-800 bg-white dark:bg-slate-900 px-3 py-2 text-left hover:border-sky-500 transition-colors"
+                        >
+                          <span className="block font-mono text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                            =SI(Y(...))
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            Doble condición (Peso)
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => launchDecisionSimulation('O', 'si-o-express')}
+                          className="rounded-lg border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 px-3 py-2 text-left hover:border-indigo-500 transition-colors"
+                        >
+                          <span className="block font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            =SI(O(...))
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            Prioridad Express / VIP
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <InteractiveExcelLab
+                    lessonId={currentLesson.id}
+                    lessonTitle={currentLesson.title}
+                    mode="lab"
+                    onSolved={() => {
+                      if (!isLessonDone) {
+                        void markSubModuleComplete(
+                          currentLesson.id,
+                          currentLesson.title,
+                          currentLesson.durationMinutes
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Tab 2: Syntax & Troubleshooting Inspector */}
               {activeTab === 'syntax' && (
+                isExcelCourse ? (
+                  <InteractiveExcelLab
+                    lessonId={currentLesson.id}
+                    lessonTitle={currentLesson.title}
+                    mode="syntax"
+                    onSolved={() => {
+                      setActiveTab('reader');
+                    }}
+                  />
+                ) : (
                 <div className="space-y-4 text-xs font-mono">
                   <div className="rounded-xl bg-[#090D16] border border-slate-800 p-4 space-y-3">
                     <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
@@ -759,6 +784,7 @@ export const CoursePlayerView: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                )
               )}
 
               {/* Tab 3: Field Engineering Notes */}
@@ -828,7 +854,7 @@ export const CoursePlayerView: React.FC = () => {
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={() => void handleNavigateLesson(nextLesson.id, true)}
+                      onClick={() => void handleNavigateLesson(nextLesson.id, false)}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-medium text-white dark:text-slate-900 hover:opacity-90 transition-opacity min-h-[42px]"
                     >
                       <span>{t('nextSubModule')}</span>

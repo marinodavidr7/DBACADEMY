@@ -142,7 +142,7 @@ export function MaterialUploader({
   const [dragging, setDragging] = useState(false);
 
   const onDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       setDragging(false);
       void handleFiles(e.dataTransfer.files);

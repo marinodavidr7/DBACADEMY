@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   Award,
   Bell,
   BookOpen,
@@ -55,6 +56,8 @@ const AppShell: React.FC = () => {
     signInAsDemo,
     signInAsAdmin,
     logout,
+    authError,
+    clearAuthError,
     t,
   } = usePlatform();
 
@@ -441,6 +444,22 @@ const AppShell: React.FC = () => {
             isZenActive ? 'p-4 sm:p-6 max-w-5xl' : 'p-4 sm:p-6 lg:p-8 max-w-[1360px]'
           }`}
         >
+          {authError && (
+            <div className="mb-5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearAuthError}
+                aria-label="Cerrar aviso"
+                className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/40 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeView}

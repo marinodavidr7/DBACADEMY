@@ -7,6 +7,8 @@ import { CheckoutModal } from './CheckoutModal';
 
 export const CatalogView: React.FC = () => {
   const {
+    user,
+    isAdmin,
     courses,
     enrollments,
     setActiveView,
@@ -27,6 +29,9 @@ export const CatalogView: React.FC = () => {
 
   const filtered = useMemo(() => {
     return courses.filter((c) => {
+      if (!c.published && !isAdmin && c.instructorId !== user?.uid) {
+        return false;
+      }
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
@@ -37,7 +42,7 @@ export const CatalogView: React.FC = () => {
       const matchesLevel = selectedLevel === 'all' || c.level === selectedLevel;
       return matchesSearch && matchesCategory && matchesLevel;
     });
-  }, [courses, search, selectedCategory, selectedLevel]);
+  }, [courses, isAdmin, user?.uid, search, selectedCategory, selectedLevel]);
 
   const levelLabel = (lvl: Course['level']) => {
     if (lvl === 'beginner') return t('beginner');
@@ -94,7 +99,7 @@ export const CatalogView: React.FC = () => {
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent" />
             <div className="absolute bottom-4 left-4 right-4 text-white">
               <p className="text-xs text-slate-200">
-                Excel Básico · Sistemas Distribuidos · Ciencia de Datos · Seguridad E2EE
+                Excel Básico · Módulos 0 y 1 · Simulador 3D Interactivo
               </p>
             </div>
           </div>
@@ -148,7 +153,13 @@ export const CatalogView: React.FC = () => {
         </div>
 
         {/* Course Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+          className={
+            filtered.length === 1
+              ? 'grid grid-cols-1 max-w-2xl gap-6'
+              : 'grid grid-cols-1 md:grid-cols-2 gap-6'
+          }
+        >
           {filtered.map((course, idx) => {
             const enrollment = enrollments.find((e) => e.courseId === course.id);
             const isEnrolled = Boolean(enrollment);
@@ -239,7 +250,7 @@ export const CatalogView: React.FC = () => {
                       </p>
                     </div>
 
-                    {isEnrolled ? (
+                    {isEnrolled || isAdmin || course.instructorId === user?.uid ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -253,7 +264,9 @@ export const CatalogView: React.FC = () => {
                         ) : (
                           <Play className="w-3.5 h-3.5" />
                         )}
-                        <span>{t('continueCourse')}</span>
+                        <span>
+                          {isEnrolled ? t('continueCourse') : 'Abrir curso'}
+                        </span>
                       </button>
                     ) : (
                       <button

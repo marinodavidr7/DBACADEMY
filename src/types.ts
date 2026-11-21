@@ -212,3 +212,22 @@ export interface InAppNotification {
   createdAtIso: string;
   read: boolean;
 }
+
+export interface CustomExcelExercise {
+  id: string;
+  ownerId: string;
+  authorName: string;
+  lessonId: string;
+  functionTag: string;
+  title: string;
+  prompt: string;
+  hint: string;
+  targetCell: string;
+  solutionFormula: string;
+  expectedResult: string;
+  initialSheet: Record<string, string | number>;
+  published: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
