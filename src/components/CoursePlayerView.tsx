@@ -1,17 +1,29 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Award,
   BookOpen,
   Box,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle,
   Clock,
+  Code,
+  Compass,
+  Copy,
   Eye,
+  FileText,
+  HelpCircle,
+  Keyboard,
+  Lightbulb,
   Maximize2,
   Minimize2,
   PlayCircle,
+  Search,
+  Sparkles,
+  Terminal,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
@@ -68,6 +80,16 @@ export const CoursePlayerView: React.FC = () => {
   const [viewProgressPct, setViewProgressPct] = useState(0);
   const [autoCompletedLessonTitle, setAutoCompletedLessonTitle] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(true);
+  const [activeTab, setActiveTab] = useState<'reader' | 'syntax' | 'lab'>('reader');
+  const [searchTopic, setSearchTopic] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [quickNotes, setQuickNotes] = useState<string>(() => {
+    try {
+      return localStorage.getItem('dbacademy_reader_notes') || '';
+    } catch {
+      return '';
+    }
+  });
 
   const inFlightLessonsRef = useRef<Set<string>>(new Set());
 
@@ -492,6 +514,46 @@ export const CoursePlayerView: React.FC = () => {
               </div>
             </div>
 
+            {/* NetAcad Multi-Tab Switcher: Concepto / Sintaxis & Terminal / Notas de Laboratorio */}
+            <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 px-4 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setActiveTab('reader')}
+                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors ${
+                  activeTab === 'reader'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>1. Teoría & Fundamento</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('syntax')}
+                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors ${
+                  activeTab === 'syntax'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Terminal className="w-4 h-4" />
+                <span>2. Sintaxis & Troubleshooting</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('lab')}
+                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors ${
+                  activeTab === 'lab'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Code className="w-4 h-4" />
+                <span>3. Notas de Campo</span>
+              </button>
+            </div>
+
             <div className="p-6 space-y-4">
               <AnimatePresence>
                 {autoCompletedLessonTitle && (
@@ -510,30 +572,118 @@ export const CoursePlayerView: React.FC = () => {
                 )}
               </AnimatePresence>
 
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentLesson.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.2 }}
-                  onScroll={handleContentScroll}
-                  className={`space-y-3 pr-1 overflow-y-auto ${
-                    zenMode ? 'max-h-[440px]' : 'max-h-72'
-                  }`}
-                >
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                    {currentLesson.summary}
-                  </p>
-                  <p
-                    className={`${
-                      zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'
-                    } text-slate-600 dark:text-slate-300`}
+              {/* Tab 1: Reader Text */}
+              {activeTab === 'reader' && (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentLesson.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                    onScroll={handleContentScroll}
+                    className={`space-y-4 pr-1 overflow-y-auto ${
+                      zenMode ? 'max-h-[460px]' : 'max-h-80'
+                    }`}
                   >
-                    {currentLesson.content}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
+                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                        <Lightbulb className="w-4 h-4" />
+                        <span>Objetivo de Competencia (Skill Target)</span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-snug">
+                        {currentLesson.summary}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 text-slate-700 dark:text-slate-300 leading-relaxed text-sm">
+                      <p className={zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}>
+                        {currentLesson.content}
+                      </p>
+                    </div>
+
+                    {/* Pro Tip Callout (Cisco NetAcad Insight style) */}
+                    <div className="rounded-lg border border-amber-200/70 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold block mb-0.5">Buenas Prácticas de Ingeniería:</span>
+                        <span>
+                          En producción, nunca anides más de 3 niveles sin documentar la jerarquía.
+                          Verifica siempre las referencias absolutas ($) antes de duplicar bloques de fórmulas a escala.
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              )}
+
+              {/* Tab 2: Syntax & Troubleshooting Inspector */}
+              {activeTab === 'syntax' && (
+                <div className="space-y-4 text-xs font-mono">
+                  <div className="rounded-xl bg-[#090D16] border border-slate-800 p-4 space-y-3">
+                    <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
+                      <span className="flex items-center gap-1.5 font-sans font-semibold text-[11px] text-blue-400">
+                        <Terminal className="w-3.5 h-3.5" />
+                        CONSOLA DE SINTAXIS Y PARSEO
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(`=PROMEDIO(A1:A50)`);
+                          setCopiedCode(true);
+                          setTimeout(() => setCopiedCode(false), 2000);
+                        }}
+                        className="flex items-center gap-1 text-[11px] hover:text-white transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedCode ? '¡Copiado!' : 'Copiar'}</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 text-slate-200 font-mono text-xs">
+                      <p className="text-slate-500">// Anatomía de función estándar:</p>
+                      <p className="text-emerald-400 font-bold">=FUNCION(argumento_requerido, [argumento_opcional])</p>
+                      <p className="text-slate-500 mt-2">// Casos frecuentes de error y resolución:</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 font-sans">
+                        <div className="p-2.5 rounded border border-red-900/60 bg-red-950/20 text-red-300">
+                          <span className="font-mono font-bold block">#¡VALOR!</span>
+                          <span className="text-[11px] text-slate-400">Tipo de dato incompatible (ej. texto sumado a número).</span>
+                        </div>
+                        <div className="p-2.5 rounded border border-amber-900/60 bg-amber-950/20 text-amber-300">
+                          <span className="font-mono font-bold block">#REF!</span>
+                          <span className="text-[11px] text-slate-400">Celda o rango eliminado físicamente de la hoja.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Field Engineering Notes */}
+              {activeTab === 'lab' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <FileText className="w-3.5 h-3.5 text-blue-500" />
+                      Cuaderno de Laboratorio del Alumno (Guardado local automático)
+                    </span>
+                    <span className="text-[10px] text-slate-400">Persistente en tu navegador</span>
+                  </div>
+                  <textarea
+                    rows={6}
+                    value={quickNotes}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuickNotes(val);
+                      try {
+                        localStorage.setItem('dbacademy_reader_notes', val);
+                      } catch {}
+                    }}
+                    placeholder="Escribe aquí tus observaciones, pruebas de fórmulas o dudas antes del examen modular..."
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-3.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                  />
+                </div>
+              )}
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
@@ -638,72 +788,99 @@ export const CoursePlayerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Syllabus Tree (temporarily hidden in Zen Mode) */}
+        {/* Right Syllabus Tree (NetAcad Style Module Explorer) */}
         {!zenMode && (
-          <aside className="lg:col-span-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] divide-y divide-slate-200 dark:divide-slate-800">
-          {activeCourse.modules.map((mod) => {
-            const modDone = activeEnrollment.completedModuleIds.includes(mod.id);
-            const doneInModule = mod.lessons.filter((l) =>
-              activeEnrollment.completedLessonIds.includes(l.id)
-            ).length;
-            const modPct = Math.round((doneInModule / (mod.lessons.length || 1)) * 100);
-
-            return (
-              <div key={mod.id} className="p-4 space-y-2.5">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                      {mod.title}
-                    </h4>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
-                      {doneInModule}/{mod.lessons.length}
-                      {modDone && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      )}
-                    </span>
-                  </div>
-                  <div className="h-1 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        modDone ? 'bg-emerald-600' : 'bg-blue-600'
-                      }`}
-                      style={{ width: `${modPct}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {mod.lessons.map((lesson) => {
-                    const done = activeEnrollment.completedLessonIds.includes(lesson.id);
-                    const active = currentLesson.id === lesson.id;
-                    return (
-                      <button
-                        key={lesson.id}
-                        type="button"
-                        onClick={() => setActiveLessonId(lesson.id)}
-                        className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors min-h-[40px] ${
-                          active
-                            ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-medium'
-                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2 min-w-0">
-                          {done ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          ) : (
-                            <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          )}
-                          <span className="truncate">{lesson.title}</span>
-                        </span>
-                        <span className="font-mono tabular-nums text-[11px] text-slate-400 shrink-0">
-                          {lesson.durationMinutes}m
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+          <aside className="lg:col-span-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+            {/* NetAcad Search Header */}
+            <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchTopic}
+                  onChange={(e) => setSearchTopic(e.target.value)}
+                  placeholder="Buscar tema en el temario..."
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
               </div>
-            );
-          })}
+            </div>
+
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[700px] overflow-y-auto">
+            {activeCourse.modules.map((mod) => {
+              const modDone = activeEnrollment.completedModuleIds.includes(mod.id);
+              const doneInModule = mod.lessons.filter((l) =>
+                activeEnrollment.completedLessonIds.includes(l.id)
+              ).length;
+              const modPct = Math.round((doneInModule / (mod.lessons.length || 1)) * 100);
+
+              const filteredLessons = mod.lessons.filter(
+                (l) =>
+                  !searchTopic ||
+                  l.title.toLowerCase().includes(searchTopic.toLowerCase()) ||
+                  l.summary.toLowerCase().includes(searchTopic.toLowerCase())
+              );
+
+              if (searchTopic && filteredLessons.length === 0) return null;
+
+              return (
+                <div key={mod.id} className="p-4 space-y-2.5">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-tight">
+                        {mod.title}
+                      </h4>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
+                        {doneInModule}/{mod.lessons.length}
+                        {modDone && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          modDone ? 'bg-emerald-600' : 'bg-blue-600'
+                        }`}
+                        style={{ width: `${modPct}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {filteredLessons.map((lesson) => {
+                      const done = activeEnrollment.completedLessonIds.includes(lesson.id);
+                      const active = currentLesson.id === lesson.id;
+                      return (
+                        <button
+                          key={lesson.id}
+                          type="button"
+                          onClick={() => setActiveLessonId(lesson.id)}
+                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors min-h-[38px] ${
+                            active
+                              ? 'bg-blue-600 text-white font-medium shadow-xs'
+                              : done
+                                ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            {done ? (
+                              <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+                            ) : (
+                              <Circle className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-blue-200' : 'text-slate-400'}`} />
+                            )}
+                            <span className="truncate">{lesson.title}</span>
+                          </span>
+                          <span className={`font-mono tabular-nums text-[10px] shrink-0 ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                            {lesson.durationMinutes}m
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            </div>
           </aside>
         )}
       </div>

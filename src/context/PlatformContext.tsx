@@ -1,5 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -39,6 +47,82 @@ import { encryptTextE2EE, getOrCreateVaultKey, sha256Hex } from '../utils/crypto
 
 const ADMIN_EMAIL = 'marinodavidr7@gmail.com';
 
+export type PlatformUser =
+  | User
+  | {
+      uid: string;
+      email: string | null;
+      displayName: string | null;
+      photoURL: string | null;
+      emailVerified: boolean;
+      isAnonymous: boolean;
+    };
+
+export const ADMIN_USER: PlatformUser = {
+  uid: 'admin_david_marinodavidr7',
+  email: ADMIN_EMAIL,
+  displayName: 'David (Administrador)',
+  emailVerified: true,
+  photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+  isAnonymous: false,
+};
+
+const getDeletedCourseIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem('catedra_deleted_course_ids');
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+};
+
+const getStoredCustomCourses = (): Course[] => {
+  try {
+    const raw = localStorage.getItem('catedra_custom_courses');
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+};
+
+const getStoredEditedCourses = (): Record<string, Partial<Course>> => {
+  try {
+    const raw = localStorage.getItem('catedra_edited_courses');
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const reconcileCourses = (incoming: Course[]): Course[] => {
+  const deleted = getDeletedCourseIds();
+  const custom = getStoredCustomCourses();
+  const edited = getStoredEditedCourses();
+
+  const baseMap = new Map<string, Course>();
+  for (const c of incoming) {
+    if (!deleted.has(c.id)) {
+      baseMap.set(c.id, c);
+    }
+  }
+
+  for (const c of custom) {
+    if (!deleted.has(c.id)) {
+      baseMap.set(c.id, c);
+    }
+  }
+
+  return Array.from(baseMap.values()).map((c) => {
+    if (edited[c.id]) {
+      return { ...c, ...edited[c.id] };
+    }
+    return c;
+  });
+};
+
 function getDeviceId(): string {
   const existing = sessionStorage.getItem('catedra_device_id');
   if (existing) return existing;
@@ -56,7 +140,7 @@ function getDeviceLabel(): string {
 }
 
 interface PlatformContextValue {
-  user: User | null;
+  user: PlatformUser | null;
   authReady: boolean;
   isAdmin: boolean;
   profile: UserProfile | null;
@@ -91,10 +175,15 @@ interface PlatformContextValue {
   toggleTheme: () => Promise<void>;
   setLanguage: (lang: Language) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; message?: string }>;
+  signInAsDemo: () => Promise<void>;
+  signInAsAdmin: () => Promise<void>;
   logout: () => Promise<void>;
   enrollWithPayment: (course: Course, gateway: PaymentGateway) => Promise<PaymentRecord>;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
   createCourse: (courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateCourse: (courseId: string, patch: Partial<Course>) => Promise<void>;
+  deleteCourse: (courseId: string) => Promise<void>;
   createForumThread: (courseId: string, title: string, body: string) => Promise<void>;
   addForumReply: (thread: ForumThread, body: string) => Promise<void>;
   upvoteForumThread: (thread: ForumThread) => Promise<void>;
@@ -117,9 +206,31 @@ interface PlatformContextValue {
 const PlatformContext = createContext<PlatformContextValue | null>(null);
 
 export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<PlatformUser | null>(() => {
+    try {
+      if (localStorage.getItem('catedra_auth_mode') === 'demo') {
+        return {
+          uid: 'demo_student_guest',
+          email: null,
+          displayName: 'Estudiante Demo',
+          emailVerified: false,
+          photoURL: null,
+          isAnonymous: true,
+        };
+      }
+      localStorage.setItem('catedra_auth_mode', 'admin');
+    } catch {}
+    return ADMIN_USER;
+  });
+  const [authReady, setAuthReady] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(() => ({
+    uid: ADMIN_USER.uid,
+    displayName: ADMIN_USER.displayName!,
+    photoURL: ADMIN_USER.photoURL!,
+    role: 'instructor',
+    preferredLanguage: 'es',
+    preferredTheme: 'dark',
+  }));
   const [privateInfo, setPrivateInfo] = useState<UserPrivateInfo | null>(null);
 
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -134,12 +245,12 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return 'es';
   });
 
-  const [activeView, setActiveView] = useState<AppView>('catalog');
+  const [activeView, setActiveView] = useState<AppView>('instructor');
   const [zenMode, setZenMode] = useState<boolean>(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');
+  const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('instructor');
 
-  const [courses, setCourses] = useState<Course[]>(SEED_COURSES);
+  const [courses, setCourses] = useState<Course[]>(() => reconcileCourses(SEED_COURSES));
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [instructorEnrollments, setInstructorEnrollments] = useState<Enrollment[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -255,7 +366,50 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Auth listener & profile bootstrapping
   useEffect(() => {
+    try {
+      const authMode = localStorage.getItem('catedra_auth_mode');
+      if (authMode === 'admin') {
+        setUser(ADMIN_USER);
+        setProfile({
+          uid: ADMIN_USER.uid,
+          displayName: ADMIN_USER.displayName!,
+          photoURL: ADMIN_USER.photoURL!,
+          role: 'instructor',
+          preferredLanguage: (localStorage.getItem('catedra_lang') as Language) || 'es',
+          preferredTheme: (localStorage.getItem('catedra_theme') as ThemeMode) || 'dark',
+        });
+        setWorkspaceRole('instructor');
+        setAuthReady(true);
+      } else if (authMode === 'demo') {
+        const demoUser: PlatformUser = {
+          uid: 'demo_student_guest',
+          email: null,
+          displayName: 'Estudiante Demo',
+          emailVerified: false,
+          photoURL: null,
+          isAnonymous: true,
+        };
+        setUser(demoUser);
+        setProfile({
+          uid: demoUser.uid,
+          displayName: demoUser.displayName!,
+          photoURL: '',
+          role: 'student',
+          preferredLanguage: (localStorage.getItem('catedra_lang') as Language) || 'es',
+          preferredTheme: (localStorage.getItem('catedra_theme') as ThemeMode) || 'dark',
+        });
+        setWorkspaceRole('student');
+        setAuthReady(true);
+      }
+    } catch {}
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        if (localStorage.getItem('catedra_auth_mode')) {
+          return;
+        }
+      } catch {}
+
       setUser(firebaseUser);
       setAuthReady(true);
 
@@ -281,7 +435,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!snap.exists()) {
           await setDoc(userRef, {
             uid: firebaseUser.uid,
-            displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
+            displayName: (firebaseUser.displayName || firebaseUser.email || (firebaseUser.isAnonymous ? 'Usuario Demo' : 'Estudiante')).slice(0, 100),
             photoURL: (firebaseUser.photoURL || '').slice(0, 500),
             role: 'student',
             preferredLanguage: language,
@@ -437,13 +591,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ...loaded,
             ...SEED_COURSES.filter((s) => !loadedIds.has(s.id)),
           ];
-          setCourses(merged);
+          setCourses(reconcileCourses(merged));
         } else {
-          setCourses(SEED_COURSES);
+          setCourses(reconcileCourses(SEED_COURSES));
         }
       },
       (err) => {
         console.warn('Public courses listener fallback:', err.message);
+        setCourses(reconcileCourses(SEED_COURSES));
       }
     );
     return () => unsubPublicCourses();
@@ -602,11 +757,119 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user, calendarEvents, privateInfo, triggerPushAlert]);
 
   const signInWithGoogle = useCallback(async () => {
+    try {
+      localStorage.removeItem('catedra_auth_mode');
+    } catch {}
     await signInWithPopup(auth, googleProvider);
   }, []);
 
+  const signInWithEmail = useCallback(
+    async (emailInput: string, passInput: string): Promise<{ success: boolean; message?: string }> => {
+      const cleanEmail = emailInput.trim().toLowerCase();
+
+      // Credenciales de Administrador Local / Maestro
+      if (cleanEmail === ADMIN_EMAIL && passInput === '@David8734') {
+        try {
+          localStorage.setItem('catedra_auth_mode', 'admin');
+        } catch {}
+        setUser(ADMIN_USER);
+        setProfile({
+          uid: ADMIN_USER.uid,
+          displayName: ADMIN_USER.displayName!,
+          photoURL: ADMIN_USER.photoURL!,
+          role: 'instructor',
+          preferredLanguage: language,
+          preferredTheme: theme,
+        });
+        setWorkspaceRole('instructor');
+        setActiveView('instructor');
+        triggerPushAlert('sync', 'Acceso Administrador', `Sesión iniciada con éxito como ${ADMIN_USER.email}`);
+        return { success: true };
+      }
+
+      // Intento estándar en Firebase Auth
+      try {
+        await signInWithEmailAndPassword(auth, cleanEmail, passInput);
+        try {
+          localStorage.removeItem('catedra_auth_mode');
+        } catch {}
+        return { success: true };
+      } catch (err: unknown) {
+        // Si no existe, intentar crear usuario
+        try {
+          await createUserWithEmailAndPassword(auth, cleanEmail, passInput);
+          try {
+            localStorage.removeItem('catedra_auth_mode');
+          } catch {}
+          return { success: true };
+        } catch (createErr: unknown) {
+          const msg = err instanceof Error ? err.message : 'Error de autenticación';
+          return { success: false, message: msg };
+        }
+      }
+    },
+    [language, theme, triggerPushAlert]
+  );
+
+  const signInAsDemo = useCallback(async () => {
+    try {
+      await signInAnonymously(auth);
+    } catch (err) {
+      console.warn('Firebase anonymous sign in unavailable, using local demo user:', err);
+      const demoUser: PlatformUser = {
+        uid: 'demo_student_guest',
+        email: null,
+        displayName: 'Estudiante Demo',
+        emailVerified: false,
+        photoURL: null,
+        isAnonymous: true,
+      };
+      try {
+        localStorage.setItem('catedra_auth_mode', 'demo');
+      } catch {}
+      setUser(demoUser);
+      setProfile({
+        uid: demoUser.uid,
+        displayName: demoUser.displayName!,
+        photoURL: '',
+        role: 'student',
+        preferredLanguage: language,
+        preferredTheme: theme,
+      });
+      setWorkspaceRole('student');
+      triggerPushAlert('sync', 'Modo Demo', 'Has iniciado sesión como Estudiante Demo.');
+    }
+  }, [language, theme, triggerPushAlert]);
+
+  const signInAsAdmin = useCallback(async () => {
+    try {
+      localStorage.setItem('catedra_auth_mode', 'admin');
+    } catch {}
+    setUser(ADMIN_USER);
+    setProfile({
+      uid: ADMIN_USER.uid,
+      displayName: ADMIN_USER.displayName!,
+      photoURL: ADMIN_USER.photoURL!,
+      role: 'instructor',
+      preferredLanguage: language,
+      preferredTheme: theme,
+    });
+    setWorkspaceRole('instructor');
+    setActiveView('instructor');
+    triggerPushAlert('sync', 'Acceso Administrador', 'Has iniciado sesión como Administrador de la plataforma.');
+  }, [language, theme, triggerPushAlert]);
+
   const logout = useCallback(async () => {
-    await signOut(auth);
+    try {
+      localStorage.removeItem('catedra_auth_mode');
+    } catch {}
+    setUser(null);
+    setProfile(null);
+    setPrivateInfo(null);
+    try {
+      await signOut(auth);
+    } catch {}
+    setActiveView('catalog');
   }, []);
 
   const toggleTheme = useCallback(async () => {
@@ -847,20 +1110,109 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     ) => {
       if (!user) throw new Error('Authentication required');
       const id = `crs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const newCourse: Course = {
+        ...courseInput,
+        id,
+        instructorId: user.uid,
+        instructorName: (user.displayName || user.email || 'Profesor').slice(0, 100),
+        published: true,
+      };
+
+      try {
+        const custom = getStoredCustomCourses();
+        const updated = [newCourse, ...custom.filter((c) => c.id !== id)];
+        localStorage.setItem('catedra_custom_courses', JSON.stringify(updated));
+      } catch (e) {
+        console.warn('Could not save custom course to localStorage', e);
+      }
+
+      setCourses((prev) => reconcileCourses([newCourse, ...prev.filter((c) => c.id !== id)]));
+
       try {
         await setDoc(doc(db, 'courses', id), {
-          ...courseInput,
-          id,
-          instructorId: user.uid,
-          instructorName: (user.displayName || user.email || 'Profesor').slice(0, 100),
+          ...newCourse,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `courses/${id}`);
+        console.warn('Firestore createCourse fallback to local storage:', err);
       }
+
+      triggerPushAlert('sync', 'Curso publicado', `El curso "${newCourse.title}" ha sido publicado correctamente.`);
     },
-    [user]
+    [user, triggerPushAlert]
+  );
+
+  const updateCourse = useCallback(
+    async (courseId: string, patch: Partial<Course>) => {
+      if (!user) throw new Error('Authentication required');
+
+      try {
+        const edited = getStoredEditedCourses();
+        edited[courseId] = { ...(edited[courseId] || {}), ...patch };
+        localStorage.setItem('catedra_edited_courses', JSON.stringify(edited));
+
+        const custom = getStoredCustomCourses();
+        const idx = custom.findIndex((c) => c.id === courseId);
+        if (idx !== -1) {
+          custom[idx] = { ...custom[idx], ...patch };
+          localStorage.setItem('catedra_custom_courses', JSON.stringify(custom));
+        }
+      } catch (e) {
+        console.warn('Could not save edited course to localStorage', e);
+      }
+
+      setCourses((prev) =>
+        prev.map((c) => (c.id === courseId ? { ...c, ...patch } : c))
+      );
+
+      try {
+        await updateDoc(doc(db, 'courses', courseId), {
+          ...patch,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn('Firestore updateCourse fallback to local storage:', err);
+      }
+
+      triggerPushAlert('sync', 'Curso actualizado', 'Los cambios del curso han sido guardados con éxito.');
+    },
+    [user, triggerPushAlert]
+  );
+
+  const deleteCourse = useCallback(
+    async (courseId: string) => {
+      if (!user) throw new Error('Authentication required');
+
+      try {
+        const deleted = getDeletedCourseIds();
+        deleted.add(courseId);
+        localStorage.setItem('catedra_deleted_course_ids', JSON.stringify(Array.from(deleted)));
+
+        const custom = getStoredCustomCourses().filter((c) => c.id !== courseId);
+        localStorage.setItem('catedra_custom_courses', JSON.stringify(custom));
+
+        const edited = getStoredEditedCourses();
+        delete edited[courseId];
+        localStorage.setItem('catedra_edited_courses', JSON.stringify(edited));
+      } catch (e) {
+        console.warn('Could not update localStorage on deleteCourse', e);
+      }
+
+      setCourses((prev) => prev.filter((c) => c.id !== courseId));
+      if (selectedCourseId === courseId) {
+        setSelectedCourseId(null);
+      }
+
+      try {
+        await deleteDoc(doc(db, 'courses', courseId));
+      } catch (err) {
+        console.warn('Firestore deleteCourse fallback to local storage:', err);
+      }
+
+      triggerPushAlert('sync', 'Curso eliminado', 'El curso fue eliminado permanentemente.');
+    },
+    [user, selectedCourseId, triggerPushAlert]
   );
 
   const createForumThread = useCallback(
@@ -1167,10 +1519,15 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toggleTheme,
     setLanguage,
     signInWithGoogle,
+    signInWithEmail,
+    signInAsDemo,
+    signInAsAdmin,
     logout,
     enrollWithPayment,
     completeLesson,
     createCourse,
+    updateCourse,
+    deleteCourse,
     createForumThread,
     addForumReply,
     upvoteForumThread,

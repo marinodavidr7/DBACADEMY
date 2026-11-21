@@ -1,12 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
+  ExternalLink,
   FileDown,
   FileSpreadsheet,
   Image as ImageIcon,
   Loader2,
+  Pencil,
   Plus,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
@@ -44,6 +48,8 @@ export const InstructorDashboard: React.FC = () => {
     instructorEnrollments,
     instructorPayments,
     createCourse,
+    updateCourse,
+    deleteCourse,
     setActiveView,
     setSelectedCourseId,
     t,
@@ -51,6 +57,9 @@ export const InstructorDashboard: React.FC = () => {
 
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
@@ -124,6 +133,32 @@ export const InstructorDashboard: React.FC = () => {
     }
   };
 
+  const handleStartEdit = (course: Course) => {
+    setEditingCourse(course);
+    setTitle(course.title);
+    setSubtitle(course.subtitle || '');
+    setDescription(course.description || '');
+    setCategory(course.category || 'Ingeniería');
+    setLevel(course.level || 'intermediate');
+    setPriceUsd((course.priceCents / 100).toString());
+    setCurrency(course.currency || 'USD');
+    setCoverImage(course.coverImage || '');
+    setModuleTitle(course.modules[0]?.title || '01. Módulo');
+    setLessonTitle(course.modules[0]?.lessons[0]?.title || '01. Lección');
+    setShowBuilder(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelBuilder = () => {
+    setShowBuilder(false);
+    setEditingCourse(null);
+    setTitle('');
+    setSubtitle('');
+    setDescription('');
+    setCoverImage('');
+    setCoverError('');
+  };
+
   const handlePublishCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
@@ -135,55 +170,109 @@ export const InstructorDashboard: React.FC = () => {
           ? description.trim()
           : `${subtitle.trim()} — Programa de formación técnica en tiempo real.`;
 
-      await createCourse({
-        title: title.trim(),
-        subtitle: subtitle.trim(),
-        description: cleanDescription,
-        category,
-        level,
-        priceCents,
-        currency,
-        coverImage: resolvedCover,
-        published: true,
-        modulesCount: 1,
-        totalLessons: 2,
-        modules: [
-          {
-            id: `mod_${Date.now().toString(36)}`,
-            title: moduleTitle,
-            durationMinutes: 45,
-            quizQuestion: `¿Cuál es el objetivo central de ${title.trim()}?`,
-            quizOptions: [
-              'Dominar la implementación práctica en producción',
-              'Memorizar definiciones teóricas sin aplicación',
-              'Omitir las pruebas de validación',
-            ],
-            quizCorrectIndex: 0,
-            lessons: [
-              {
-                id: `les_${Date.now().toString(36)}_1`,
-                title: lessonTitle,
-                durationMinutes: 20,
-                summary: subtitle.trim(),
-                content: cleanDescription,
-              },
-              {
-                id: `les_${Date.now().toString(36)}_2`,
-                title: 'Laboratorio aplicado y evaluación final',
-                durationMinutes: 25,
-                summary: 'Consolidación práctica del módulo.',
-                content: 'Aplica los conceptos del módulo mediante un ejercicio verificable paso a paso.',
-              },
-            ],
-          },
-        ],
-      });
-      setShowBuilder(false);
-      setTitle('');
-      setSubtitle('');
-      setDescription('');
-      setCoverImage('');
-      setCoverError('');
+      if (editingCourse) {
+        const updatedModules =
+          editingCourse.modules && editingCourse.modules.length > 0
+            ? [
+                {
+                  ...editingCourse.modules[0],
+                  title: moduleTitle,
+                  lessons:
+                    editingCourse.modules[0].lessons && editingCourse.modules[0].lessons.length > 0
+                      ? [
+                          { ...editingCourse.modules[0].lessons[0], title: lessonTitle },
+                          ...editingCourse.modules[0].lessons.slice(1),
+                        ]
+                      : [
+                          {
+                            id: `les_${Date.now()}`,
+                            title: lessonTitle,
+                            durationMinutes: 20,
+                            summary: subtitle.trim(),
+                            content: cleanDescription,
+                          },
+                        ],
+                },
+                ...editingCourse.modules.slice(1),
+              ]
+            : [
+                {
+                  id: `mod_${Date.now()}`,
+                  title: moduleTitle,
+                  durationMinutes: 45,
+                  quizQuestion: `¿Cuál es el objetivo de ${title.trim()}?`,
+                  quizOptions: ['Dominar la implementación práctica', 'Opción secundaria', 'Opción alternativa'],
+                  quizCorrectIndex: 0,
+                  lessons: [
+                    {
+                      id: `les_${Date.now()}`,
+                      title: lessonTitle,
+                      durationMinutes: 20,
+                      summary: subtitle.trim(),
+                      content: cleanDescription,
+                    },
+                  ],
+                },
+              ];
+
+        await updateCourse(editingCourse.id, {
+          title: title.trim(),
+          subtitle: subtitle.trim(),
+          description: cleanDescription,
+          category,
+          level,
+          priceCents,
+          currency,
+          coverImage: resolvedCover,
+          modules: updatedModules,
+        });
+      } else {
+        await createCourse({
+          title: title.trim(),
+          subtitle: subtitle.trim(),
+          description: cleanDescription,
+          category,
+          level,
+          priceCents,
+          currency,
+          coverImage: resolvedCover,
+          published: true,
+          modulesCount: 1,
+          totalLessons: 2,
+          modules: [
+            {
+              id: `mod_${Date.now().toString(36)}`,
+              title: moduleTitle,
+              durationMinutes: 45,
+              quizQuestion: `¿Cuál es el objetivo central de ${title.trim()}?`,
+              quizOptions: [
+                'Dominar la implementación práctica en producción',
+                'Memorizar definiciones teóricas sin aplicación',
+                'Omitir las pruebas de validación',
+              ],
+              quizCorrectIndex: 0,
+              lessons: [
+                {
+                  id: `les_${Date.now().toString(36)}_1`,
+                  title: lessonTitle,
+                  durationMinutes: 20,
+                  summary: subtitle.trim(),
+                  content: cleanDescription,
+                },
+                {
+                  id: `les_${Date.now().toString(36)}_2`,
+                  title: 'Laboratorio aplicado y evaluación final',
+                  durationMinutes: 25,
+                  summary: 'Consolidación práctica del módulo.',
+                  content: 'Aplica los conceptos del módulo mediante un ejercicio verificable paso a paso.',
+                },
+              ],
+            },
+          ],
+        });
+      }
+
+      handleCancelBuilder();
     } finally {
       setCreating(false);
     }
@@ -248,7 +337,14 @@ export const InstructorDashboard: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setShowBuilder((v) => !v)}
+          onClick={() => {
+            if (showBuilder && !editingCourse) {
+              setShowBuilder(false);
+            } else {
+              handleCancelBuilder();
+              setShowBuilder(true);
+            }
+          }}
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap min-h-[42px]"
         >
           <Plus className="w-4 h-4" />
@@ -291,12 +387,19 @@ export const InstructorDashboard: React.FC = () => {
           className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 space-y-5"
         >
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t('courseBuilderTitle')}
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              {editingCourse ? (
+                <>
+                  <Pencil className="w-4 h-4 text-amber-500" />
+                  <span>Editar curso: {editingCourse.title}</span>
+                </>
+              ) : (
+                <span>{t('courseBuilderTitle')}</span>
+              )}
             </h2>
             <button
               type="button"
-              onClick={() => setShowBuilder(false)}
+              onClick={handleCancelBuilder}
               className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <X className="w-4 h-4" />
@@ -463,14 +566,21 @@ export const InstructorDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleCancelBuilder}
+              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Cancelar
+            </button>
             <button
               type="submit"
               disabled={creating || generatingCover}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60 transition-colors min-h-[42px]"
             >
               {(creating || generatingCover) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>{t('publishCourse')}</span>
+              <span>{editingCourse ? 'Guardar cambios' : t('publishCourse')}</span>
             </button>
           </div>
         </form>
@@ -479,25 +589,31 @@ export const InstructorDashboard: React.FC = () => {
       {/* Active Courses Strip */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Cursos publicados en {t('brand')}
-          </h2>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Gestión de Cursos ({t('brand')})
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Crea nuevos programas, edita contenidos o elimina cursos según lo requieras.
+            </p>
+          </div>
           <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
             {courses.length} programas
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {courses.map((course) => (
-            <button
+            <div
               key={course.id}
-              type="button"
-              onClick={() => {
-                setSelectedCourseId(course.id);
-                setActiveView('catalog');
-              }}
-              className="group text-left rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden hover:border-blue-500 dark:hover:border-blue-500 transition-colors bg-slate-50/50 dark:bg-slate-900/40"
+              className="group flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-[#0F1624] hover:shadow-md transition-shadow"
             >
-              <div className="aspect-video w-full bg-slate-900 overflow-hidden">
+              <div
+                className="aspect-video w-full bg-slate-900 overflow-hidden relative cursor-pointer"
+                onClick={() => {
+                  setSelectedCourseId(course.id);
+                  setActiveView('catalog');
+                }}
+              >
                 {course.coverImage ? (
                   <img
                     src={course.coverImage}
@@ -510,16 +626,63 @@ export const InstructorDashboard: React.FC = () => {
                     <ImageIcon className="w-6 h-6" />
                   </div>
                 )}
+                <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[10px] font-mono font-semibold text-white">
+                  ${(course.priceCents / 100).toFixed(2)} {course.currency}
+                </div>
               </div>
-              <div className="p-3.5">
-                <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-                  {course.category} · {course.totalLessons} {t('lessonsLabel')}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
-                  {course.title}
-                </p>
+
+              <div className="p-3.5 flex-1 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                    <span>{course.category}</span>
+                    <span className="text-slate-400 dark:text-slate-500">{course.totalLessons} {t('lessonsLabel')}</span>
+                  </div>
+                  <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
+                    {course.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                    {course.subtitle || course.description}
+                  </p>
+                </div>
               </div>
-            </button>
+
+              <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800/80 px-3 py-2 bg-slate-50/70 dark:bg-slate-900/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCourseId(course.id);
+                    setActiveView('catalog');
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  title="Ver curso en el catálogo"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Ver</span>
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(course)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-md transition-colors"
+                    title="Editar curso"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCourseToDelete(course)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                    title="Eliminar curso"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -666,6 +829,64 @@ export const InstructorDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Delete Course Confirmation Modal */}
+      {courseToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  ¿Eliminar este curso?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Esta acción eliminará permanentemente el programa de la plataforma.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3.5 text-xs">
+              <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                {courseToDelete.title}
+              </p>
+              <p className="text-slate-500 dark:text-slate-400 mt-1">
+                {courseToDelete.category} · {courseToDelete.totalLessons} lecciones
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setCourseToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await deleteCourse(courseToDelete.id);
+                    setCourseToDelete(null);
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors min-h-[38px]"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Sí, eliminar curso</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

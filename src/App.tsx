@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
+  ShieldCheck,
   Sun,
   X,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ import type { AppView, Language } from './types';
 const AppShell: React.FC = () => {
   const {
     user,
+    isAdmin,
     theme,
     language,
     activeView,
@@ -50,6 +52,8 @@ const AppShell: React.FC = () => {
     toggleTheme,
     setLanguage,
     signInWithGoogle,
+    signInAsDemo,
+    signInAsAdmin,
     logout,
     t,
   } = usePlatform();
@@ -221,12 +225,12 @@ const AppShell: React.FC = () => {
               ) : (
                 <button
                   type="button"
-                  onClick={() => void signInWithGoogle()}
-                  title={t('signInGoogle')}
-                  aria-label={t('signInGoogle')}
-                  className="w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  onClick={() => void signInAsAdmin()}
+                  title="Entrar como Administrador"
+                  aria-label="Entrar como Administrador"
+                  className="w-10 h-10 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center"
                 >
-                  <LogIn className="w-4 h-4" />
+                  <ShieldCheck className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -257,23 +261,48 @@ const AppShell: React.FC = () => {
               </div>
 
               {user ? (
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>{t('signOut')}</span>
-                </button>
+                <div className="space-y-2">
+                  {isAdmin && (
+                    <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Administrador</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void logout()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{t('signOut')}</span>
+                  </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => void signInWithGoogle()}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>{t('signInGoogle')}</span>
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void signInAsAdmin()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors min-h-[40px]"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Admin (David)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void signInWithGoogle()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>{t('signInGoogle')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void signInAsDemo()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+                  >
+                    <span>Modo Demo</span>
+                  </button>
+                </div>
               )}
             </>
           )}
@@ -298,18 +327,6 @@ const AppShell: React.FC = () => {
               className="lg:hidden p-2 -ml-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <Menu className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
-              className="hidden lg:inline-flex p-2 -ml-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4" />
-              )}
             </button>
             <span className="lg:hidden text-base font-bold text-slate-900 dark:text-slate-50 whitespace-nowrap shrink-0">
               {t('brand')}
@@ -367,16 +384,53 @@ const AppShell: React.FC = () => {
               )}
             </button>
 
-            {!user && (
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t('signInGoogle')}</span>
-                <span className="sm:hidden">Google</span>
-              </button>
+            {user ? (
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Administrador</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  title={t('signOut')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[40px]"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t('signOut')}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void signInAsAdmin()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                  title="Acceso directo como Administrador de la plataforma"
+                >
+                  <ShieldCheck className="w-4 h-4 text-emerald-200" />
+                  <span className="hidden sm:inline">Admin (David)</span>
+                  <span className="sm:hidden">Admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void signInWithGoogle()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t('signInGoogle')}</span>
+                  <span className="sm:hidden">Google</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void signInAsDemo()}
+                  className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                >
+                  <span>Modo Demo</span>
+                </button>
+              </div>
             )}
           </div>
           </header>
