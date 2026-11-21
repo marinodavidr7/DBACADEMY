@@ -27,6 +27,8 @@ export interface CourseMaterial {
   uploadedAt: string;  // ISO 8601
 }
 
+export type CourseLessonType = 'text' | 'video' | 'excel' | 'quiz';
+
 export interface CourseLesson {
   id: string;
   title: string;
@@ -34,6 +36,26 @@ export interface CourseLesson {
   summary: string;
   content: string;
   materials?: CourseMaterial[]; // ← archivos adjuntos a la lección
+  type?: CourseLessonType; // ← opcional para compatibilidad con cursos existentes
+  videoUrl?: string;
+  allowSeeking?: boolean;
+  requiredWatchPercent?: number;
+  allowSpeedChange?: boolean;
+  status?: 'draft' | 'published';
+}
+
+export interface CourseQuizOption {
+  id: string;
+  text: string;
+}
+
+export interface CourseQuizQuestion {
+  id: string;
+  prompt: string;
+  explanation: string;
+  multiple: boolean;
+  options: CourseQuizOption[];
+  correctIndexes: number[];
 }
 
 export interface CourseModule {
@@ -44,6 +66,10 @@ export interface CourseModule {
   quizQuestion: string;
   quizOptions: string[];
   quizCorrectIndex: number;
+  // ← Evaluación ampliada (opcional). Si existe, el editor la usa; si no,
+  // se migra desde quizQuestion/quizOptions/quizCorrectIndex.
+  questions?: CourseQuizQuestion[];
+  quizEnabled?: boolean;
 }
 
 export interface Course {

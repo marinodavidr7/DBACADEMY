@@ -1,0 +1,1097 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  Image as ImageIcon,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Save,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import type { Course, CourseLesson, CourseModule } from '../../types';
+import { usePlatform } from '../../context/PlatformContext';
+import { isAuthorizedAdminEmail } from '../../firebase';
+import {
+  cloneModules,
+  collectPublishIssues,
+  createEmptyLesson,
+  createEmptyModule,
+  newId,
+  reorderLessons,
+  reorderModules,
+  stripManualPrefix,
+} from '../../utils/courseEditor';
+import { ConfirmDialog } from './ConfirmDialog';
+import { CourseIndex } from './CourseIndex';
+import { LessonEditor } from './LessonEditor';
+import { QuizBuilder } from './QuizBuilder';
+import { ToastStack, type ToastItem } from './Toast';
+import { StudentPreviewModal } from './StudentPreviewModal';
+
+const COVER_PRESETS = [
+  { label: 'Excel / Productividad', url: '/src/assets/images/course_excel_basico_1795186770853.jpg' },
+  { label: 'Ingeniería', url: '/src/assets/images/course_system_architecture_1795146988857.jpg' },
+  { label: 'Datos', url: '/src/assets/images/course_data_science_1795146987818.jpg' },
+  { label: 'Diseño', url: '/src/assets/images/course_ux_engineering_1795146988343.jpg' },
+  { label: 'Seguridad', url: '/src/assets/images/course_cybersecurity_e2ee_1795146988090.jpg' },
+];
+
+type SaveStatus = 'idle' | 'saved' | 'saving' | 'unsaved' | 'error';
+
+interface CourseEditorProps {
+  course: Course | null;
+  onCancel: () => void;
+  onCreate: (input: CourseInput) => Promise<void>;
+  onUpdate: (courseId: string, patch: CourseInput) => Promise<void>;
+  labels?: CourseEditorLabels;
+  t?: (key: any) => string;
+}
+
+export type CourseEditorInput = CourseInput;
+
+export interface CourseInput {
+  title: string;
+  subtitle: string;
+  description: string;
+  category: string;
+  level: Course['level'];
+  priceCents: number;
+  currency: Course['currency'];
+  coverImage: string;
+  published: boolean;
+  modulesCount: number;
+  totalLessons: number;
+  modules: CourseModule[];
+}
+
+export interface CourseEditorLabels {
+  index: {
+    title: string;
+    subtitle: string;
+    addModule: string;
+    addLesson: string;
+    module: string;
+    lesson: string;
+    draft: string;
+    published: string;
+    incomplete: string;
+    emptyModule: string;
+    emptyModuleAction: string;
+    moduleCount: string;
+    lessonCount: string;
+    materialCount: string;
+    moveModuleUp: string;
+    moveModuleDown: string;
+    moveLessonUp: string;
+    moveLessonDown: string;
+    deleteModule: string;
+    deleteLesson: string;
+    dragHandle: string;
+  };
+  lesson: {
+    title: string;
+    titlePlaceholder: string;
+    type: string;
+    typeText: string;
+    typeVideo: string;
+    typeExcel: string;
+    typeQuiz: string;
+    duration: string;
+    status: string;
+    statusDraft: string;
+    statusPublished: string;
+    summary: string;
+    summaryPlaceholder: string;
+    content: string;
+    contentPlaceholder: string;
+    editTab: string;
+    previewTab: string;
+    markdownTitle: string;
+    previewEmpty: string;
+    bold: string;
+    italic: string;
+    list: string;
+    code: string;
+    formula: string;
+    link: string;
+    videoUrl: string;
+    videoUrlPlaceholder: string;
+    videoInvalid: string;
+    videoPreview: string;
+    videoAllowSeeking: string;
+    videoRequiredWatchPercent: string;
+    videoAllowSpeedChange: string;
+    videoTodo: string;
+    excelTodo: string;
+    quizTodo: string;
+    materials: {
+      title: string;
+      empty: string;
+      emptyHint: string;
+      dropCompact: string;
+      tooLarge: string;
+      unsupported: string;
+      uploading: string;
+      rename: string;
+      download: string;
+      delete: string;
+      renameTitle: string;
+      renameAction: string;
+      renameCancel: string;
+    };
+  };
+  quiz: {
+    title: string;
+    enabled: string;
+    addQuestion: string;
+    question: string;
+    prompt: string;
+    explanation: string;
+    explanationPlaceholder: string;
+    multiple: string;
+    addOption: string;
+    removeOption: string;
+    correct: string;
+    moveUp: string;
+    moveDown: string;
+    removeQuestion: string;
+    optionLabel: string;
+    minOptions: string;
+    oneCorrect: string;
+    multipleCorrect: string;
+    emptyPrompt: string;
+    emptyOption: string;
+  };
+  actions: {
+    save: string;
+    saved: string;
+    savedAgo: string;
+    saving: string;
+    unsaved: string;
+    saveError: string;
+    retry: string;
+    previewStudent: string;
+    publish: string;
+    unpublish: string;
+    publishCheckTitle: string;
+    publishCheckHint: string;
+    issueLessonEmpty: string;
+    issueModuleNoQuiz: string;
+    issueQuizInvalid: string;
+    deleteModule: string;
+    deleteLesson: string;
+    deleteMaterial: string;
+    confirmDeleteModuleTitle: string;
+    confirmDeleteModuleBody: string;
+    confirmDeleteLessonTitle: string;
+    confirmDeleteLessonBody: string;
+    confirmDeleteMaterialTitle: string;
+    confirmDeleteMaterialBody: string;
+    confirmAccept: string;
+    confirmCancel: string;
+    undo: string;
+    deletedModule: string;
+    deletedLesson: string;
+    deletedMaterial: string;
+    selectPrompt: string;
+    selectModulePrompt: string;
+    autosaveHint: string;
+    unsavedWarning: string;
+    courseHeader: string;
+    courseDetails: string;
+    coverSelector: string;
+    coverSelected: string;
+    generate: string;
+    generating: string;
+    previewClose: string;
+    previewModules: string;
+    previewLessons: string;
+    previewQuiz: string;
+    previewEmpty: string;
+  };
+}
+
+export const DEFAULT_COURSE_EDITOR_LABELS: CourseEditorLabels = {
+  index: {
+    title: 'Estructura del Curso',
+    subtitle: 'Organiza módulos y lecciones',
+    addModule: 'Añadir módulo',
+    addLesson: 'Añadir lección',
+    module: 'Módulo',
+    lesson: 'Lección',
+    draft: 'Borrador',
+    published: 'Publicado',
+    incomplete: 'Incompleto',
+    emptyModule: 'Módulo sin lecciones',
+    emptyModuleAction: 'Añadir primera lección',
+    moduleCount: 'módulos',
+    lessonCount: 'lecciones',
+    materialCount: 'archivos',
+    moveModuleUp: 'Subir módulo',
+    moveModuleDown: 'Bajar módulo',
+    moveLessonUp: 'Subir lección',
+    moveLessonDown: 'Bajar lección',
+    deleteModule: 'Eliminar módulo',
+    deleteLesson: 'Eliminar lección',
+    dragHandle: 'Reordenar',
+  },
+  lesson: {
+    title: 'Título de la lección',
+    titlePlaceholder: 'Ej. Introducción a funciones',
+    type: 'Tipo de lección',
+    typeText: 'Texto y código',
+    typeVideo: 'Video interactivo',
+    typeExcel: 'Práctica Excel',
+    typeQuiz: 'Cuestionario',
+    duration: 'Duración (min)',
+    status: 'Estado',
+    statusDraft: 'Borrador',
+    statusPublished: 'Publicada',
+    summary: 'Resumen pedagógico',
+    summaryPlaceholder: 'Breve descripción de los objetivos...',
+    content: 'Contenido completo',
+    contentPlaceholder: 'Escribe el contenido en formato Markdown...',
+    editTab: 'Editar',
+    previewTab: 'Vista previa',
+    markdownTitle: 'Formato Markdown',
+    previewEmpty: 'No hay contenido para previsualizar',
+    bold: 'Negrita',
+    italic: 'Cursiva',
+    list: 'Lista',
+    code: 'Código',
+    formula: 'Fórmula',
+    link: 'Enlace',
+    videoUrl: 'URL de video (YouTube / Vimeo)',
+    videoUrlPlaceholder: 'https://www.youtube.com/watch?v=...',
+    videoInvalid: 'URL de video no válida',
+    videoPreview: 'Previsualización del video',
+    videoAllowSeeking: 'Permitir adelantar',
+    videoRequiredWatchPercent: '% mínimo para aprobar',
+    videoAllowSpeedChange: 'Permitir cambio de velocidad',
+    videoTodo: 'Configuración de video',
+    excelTodo: 'Configuración de simulador',
+    quizTodo: 'Configuración de evaluación',
+    materials: {
+      title: 'Materiales adjuntos',
+      empty: 'No hay materiales subidos',
+      emptyHint: 'Arrastra archivos o haz clic para subir',
+      dropCompact: 'Subir material',
+      tooLarge: 'El archivo excede el límite de 100MB',
+      unsupported: 'Formato de archivo no soportado',
+      uploading: 'Subiendo archivo...',
+      rename: 'Renombrar',
+      download: 'Descargar',
+      delete: 'Eliminar',
+      renameTitle: 'Renombrar archivo',
+      renameAction: 'Guardar',
+      renameCancel: 'Cancelar',
+    },
+  },
+  quiz: {
+    title: 'Evaluación del módulo',
+    enabled: 'Evaluación activada',
+    addQuestion: 'Añadir pregunta',
+    question: 'Pregunta',
+    prompt: 'Enunciado de la pregunta',
+    explanation: 'Explicación didáctica',
+    explanationPlaceholder: 'Explica por qué esta es la respuesta correcta...',
+    multiple: 'Permitir selección múltiple',
+    addOption: 'Añadir opción',
+    removeOption: 'Eliminar opción',
+    correct: 'Marcar como correcta',
+    moveUp: 'Subir',
+    moveDown: 'Bajar',
+    removeQuestion: 'Eliminar pregunta',
+    optionLabel: 'Opción',
+    minOptions: 'Se requieren al menos 2 opciones',
+    oneCorrect: 'Selecciona al menos una respuesta correcta',
+    multipleCorrect: 'Opciones correctas',
+    emptyPrompt: 'El enunciado no puede estar vacío',
+    emptyOption: 'La opción no puede estar vacía',
+  },
+  actions: {
+    save: 'Guardar cambios',
+    saved: 'Cambios guardados',
+    savedAgo: 'Guardado hace',
+    saving: 'Guardando...',
+    unsaved: 'Cambios sin guardar',
+    saveError: 'Error al guardar',
+    retry: 'Reintentar',
+    previewStudent: 'Vista de estudiante',
+    publish: 'Publicar curso',
+    unpublish: 'Despublicar curso',
+    publishCheckTitle: 'Verificación de publicación',
+    publishCheckHint: 'Revisa estos puntos antes de publicar',
+    issueLessonEmpty: 'Lección sin contenido',
+    issueModuleNoQuiz: 'Módulo sin evaluación',
+    issueQuizInvalid: 'Evaluación incompleta',
+    deleteModule: 'Eliminar módulo',
+    deleteLesson: 'Eliminar lección',
+    deleteMaterial: 'Eliminar material',
+    confirmDeleteModuleTitle: '¿Eliminar este módulo?',
+    confirmDeleteModuleBody: 'Se eliminarán todas las lecciones y materiales asociados.',
+    confirmDeleteLessonTitle: '¿Eliminar esta lección?',
+    confirmDeleteLessonBody: 'Esta acción no se puede deshacer.',
+    confirmDeleteMaterialTitle: '¿Eliminar este material?',
+    confirmDeleteMaterialBody: 'El archivo se borrará permanentemente.',
+    confirmAccept: 'Eliminar',
+    confirmCancel: 'Cancelar',
+    undo: 'Deshacer',
+    deletedModule: 'Módulo eliminado',
+    deletedLesson: 'Lección eliminada',
+    deletedMaterial: 'Material eliminado',
+    selectPrompt: 'Selecciona una lección para editarla',
+    selectModulePrompt: 'Selecciona un módulo para ver su contenido',
+    autosaveHint: 'Los cambios se guardan automáticamente',
+    unsavedWarning: 'Tienes cambios sin guardar. ¿Deseas salir?',
+    courseHeader: 'Detalles principales',
+    courseDetails: 'Configuración general del curso',
+    coverSelector: 'Imagen de portada',
+    coverSelected: 'Portada seleccionada',
+    generate: 'Generar con IA',
+    generating: 'Generando...',
+    previewClose: 'Cerrar vista previa',
+    previewModules: 'Módulos',
+    previewLessons: 'Lecciones',
+    previewQuiz: 'Evaluación',
+    previewEmpty: 'Sin datos disponibles',
+  },
+};
+
+function courseToInput(course: Course): CourseInput {
+  return {
+    title: course.title,
+    subtitle: course.subtitle ?? '',
+    description: course.description ?? '',
+    category: course.category ?? 'Productividad',
+    level: course.level ?? 'beginner',
+    priceCents: course.priceCents ?? 0,
+    currency: course.currency ?? 'USD',
+    coverImage: course.coverImage ?? '',
+    published: course.published ?? false,
+    modulesCount: course.modulesCount ?? course.modules.length,
+    totalLessons: course.totalLessons ?? course.modules.reduce((acc, m) => acc + m.lessons.length, 0),
+    modules: cloneModules(course.modules),
+  };
+}
+
+function buildCourseFromInput(input: CourseInput, base: Course | null): Course {
+  const modules = input.modules.map((module) => ({
+    ...module,
+    durationMinutes: module.lessons.reduce((acc, lesson) => acc + (Number(lesson.durationMinutes) || 0), 0),
+  }));
+  const totalLessons = modules.reduce((acc, module) => acc + module.lessons.length, 0);
+  return {
+    id: base?.id ?? `crs_${newId('').replace('_', '')}`,
+    title: input.title.trim(),
+    subtitle: input.subtitle.trim(),
+    description: input.description.trim(),
+    category: input.category.trim() || 'Productividad',
+    level: input.level,
+    priceCents: input.priceCents,
+    currency: input.currency,
+    coverImage: input.coverImage,
+    instructorId: base?.instructorId ?? 'platform-faculty',
+    instructorName: base?.instructorName ?? 'Equipo DB Academy',
+    published: input.published,
+    modulesCount: modules.length,
+    totalLessons,
+    modules,
+    createdAt: base?.createdAt,
+    updatedAt: base?.updatedAt,
+  };
+}
+
+export const CourseEditor: React.FC<CourseEditorProps> = ({
+  course,
+  onCancel,
+  onCreate,
+  onUpdate,
+  labels = DEFAULT_COURSE_EDITOR_LABELS,
+  t = (k: any) => k,
+}) => {
+  const { user, isAdmin } = usePlatform();
+  const canEdit = Boolean(user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email));
+
+  const [input, setInput] = useState<CourseInput>(() =>
+    course ? courseToInput(course) : emptyInput()
+  );
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(
+    () => input.modules[0]?.id ?? null
+  );
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
+    () => input.modules[0]?.lessons[0]?.id ?? null
+  );
+  const [indexOpen, setIndexOpen] = useState(false);
+  const [status, setStatus] = useState<SaveStatus>('saved');
+  const [savedAt, setSavedAt] = useState<number>(Date.now());
+  const [error, setError] = useState('');
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [confirm, setConfirm] = useState<
+    | { kind: 'module'; moduleId: string; label: string }
+    | { kind: 'lesson'; moduleId: string; lessonId: string; label: string }
+    | { kind: 'material'; materialId: string; label: string }
+    | null
+  >(null);
+  const [publishIssues, setPublishIssues] = useState<boolean>(false);
+  const [generatingCover, setGeneratingCover] = useState(false);
+  const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
+
+  const originalRef = useRef<string>(JSON.stringify(input));
+  const debounceRef = useRef<number | null>(null);
+  const lastSnapshotRef = useRef<CourseModule[]>(input.modules);
+  const lastLessonSnapshotRef = useRef<CourseLesson | null>(null);
+
+  const dirty = useMemo(() => JSON.stringify(input) !== originalRef.current, [input]);
+  const selectedModule = input.modules.find((module) => module.id === selectedModuleId) ?? null;
+  const selectedLesson = selectedModule?.lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
+  const issues = useMemo(() => collectPublishIssues(input.modules), [input.modules]);
+
+  const pushToast = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
+    const id = newId('toast');
+    setToasts((prev) => [...prev, { id, message, actionLabel, onAction }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 8000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const applyModules = useCallback((updater: (modules: CourseModule[]) => CourseModule[]) => {
+    setInput((prev) => ({ ...prev, modules: updater(prev.modules) }));
+    setStatus('unsaved');
+  }, []);
+
+  const updateLesson = useCallback(
+    (moduleId: string, lessonId: string, patch: Partial<CourseLesson>) => {
+      applyModules((modules) =>
+        modules.map((module) =>
+          module.id === moduleId
+            ? {
+                ...module,
+                lessons: module.lessons.map((lesson) =>
+                  lesson.id === lessonId ? { ...lesson, ...patch } : lesson
+                ),
+              }
+            : module
+        )
+      );
+    },
+    [applyModules]
+  );
+
+  const updateModule = useCallback(
+    (moduleId: string, patch: Partial<CourseModule>) => {
+      applyModules((modules) => modules.map((module) => (module.id === moduleId ? { ...module, ...patch } : module)));
+    },
+    [applyModules]
+  );
+
+  const addModule = () => {
+    if (!canEdit || input.modules.length >= 12) return;
+    const module = createEmptyModule(input.modules.length + 1);
+    applyModules((modules) => [...modules, module]);
+    setSelectedModuleId(module.id);
+    setSelectedLessonId(module.lessons[0]?.id ?? null);
+  };
+
+  const addLesson = (moduleId: string) => {
+    if (!canEdit) return;
+    const module = input.modules.find((m) => m.id === moduleId);
+    const lesson = createEmptyLesson((module?.lessons.length ?? 0) + 1);
+    applyModules((modules) =>
+      modules.map((m) => (m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m))
+    );
+    setSelectedModuleId(moduleId);
+    setSelectedLessonId(lesson.id);
+  };
+
+  const requestDeleteModule = (moduleId: string) => {
+    const module = input.modules.find((m) => m.id === moduleId);
+    if (!module) return;
+    setConfirm({
+      kind: 'module',
+      moduleId,
+      label: module.title,
+    });
+  };
+
+  const requestDeleteLesson = (moduleId: string, lessonId: string) => {
+    const lesson = input.modules.find((m) => m.id === moduleId)?.lessons.find((l) => l.id === lessonId);
+    if (!lesson) return;
+    setConfirm({ kind: 'lesson', moduleId, lessonId, label: lesson.title });
+  };
+
+  const confirmDelete = () => {
+    if (!confirm) return;
+    if (confirm.kind === 'module') {
+      const snapshot = input.modules;
+      const module = input.modules.find((m) => m.id === confirm.moduleId);
+      const lessonCount = module?.lessons.length ?? 0;
+      const materialCount = module?.lessons.reduce((acc, l) => acc + (l.materials?.length ?? 0), 0) ?? 0;
+      lastSnapshotRef.current = snapshot;
+      applyModules((modules) => modules.filter((m) => m.id !== confirm.moduleId));
+      if (selectedModuleId === confirm.moduleId) {
+        setSelectedModuleId(input.modules[0]?.id ?? null);
+        setSelectedLessonId(input.modules[0]?.lessons[0]?.id ?? null);
+      }
+      pushToast(
+        `${labels.actions.deletedModule} · ${lessonCount} ${labels.index.lessonCount} · ${materialCount} ${labels.index.materialCount}`,
+        labels.actions.undo,
+        () => {
+          applyModules(() => lastSnapshotRef.current);
+        }
+      );
+    } else if (confirm.kind === 'lesson') {
+      const snapshot = input.modules;
+      lastSnapshotRef.current = snapshot;
+      applyModules((modules) =>
+        modules.map((module) =>
+          module.id === confirm.moduleId
+            ? { ...module, lessons: module.lessons.filter((l) => l.id !== confirm.lessonId) }
+            : module
+        )
+      );
+      if (selectedLessonId === confirm.lessonId) setSelectedLessonId(null);
+      pushToast(labels.actions.deletedLesson, labels.actions.undo, () => {
+        applyModules(() => lastSnapshotRef.current);
+      });
+    } else {
+      const snapshot = lastLessonSnapshotRef.current;
+      if (selectedModule && selectedLesson) {
+        const material = selectedLesson.materials?.find((m) => m.id === confirm.materialId);
+        lastLessonSnapshotRef.current = selectedLesson;
+        updateLesson(selectedModule.id, selectedLesson.id, {
+          materials: (selectedLesson.materials ?? []).filter((m) => m.id !== confirm.materialId),
+        });
+        pushToast(labels.actions.deletedMaterial, labels.actions.undo, () => {
+          if (snapshot) updateLesson(selectedModule.id, selectedLesson.id, { materials: snapshot.materials ?? [] });
+        });
+        void material;
+      }
+    }
+    setConfirm(null);
+  };
+
+  const save = useCallback(async () => {
+    if (!canEdit) return;
+    setStatus('saving');
+    setError('');
+    try {
+      const payload: CourseInput = {
+        ...input,
+        title: input.title.trim(),
+        subtitle: input.subtitle.trim(),
+        description:
+          input.description.trim().length >= 10
+            ? input.description.trim()
+            : `${input.subtitle.trim()} — Programa de formación técnica en tiempo real.`,
+        modules: input.modules.map((module) => ({
+          ...module,
+          durationMinutes: module.lessons.reduce((acc, lesson) => acc + (Number(lesson.durationMinutes) || 0), 0),
+        })),
+      };
+      const normalizedModules = payload.modules;
+      payload.modulesCount = normalizedModules.length;
+      payload.totalLessons = normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0);
+
+      if (course) {
+        await onUpdate(course.id, payload);
+      } else {
+        await onCreate(payload);
+      }
+      originalRef.current = JSON.stringify(payload);
+      setInput(payload);
+      setStatus('saved');
+      setSavedAt(Date.now());
+      pushToast(labels.actions.saved);
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : labels.actions.saveError);
+    }
+  }, [canEdit, input, course, onCreate, onUpdate, labels.actions.saved, labels.actions.saveError]);
+
+  // Autoguardado con debounce.
+  useEffect(() => {
+    if (!dirty || !canEdit) return;
+    setStatus('unsaved');
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      void save();
+    }, 1500);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [dirty, input, canEdit, save]);
+
+  // Aviso al salir con cambios pendientes.
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = labels.actions.unsavedWarning;
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty, labels.actions.unsavedWarning]);
+
+  const moveModule = (from: number, to: number) => {
+    applyModules((modules) => reorderModules(modules, from, to));
+  };
+
+  const moveLesson = (moduleId: string, from: number, to: number) => {
+    applyModules((modules) => reorderLessons(modules, moduleId, from, to));
+  };
+
+  const moveLessonBetween = (sourceModuleId: string, sourceIndex: number, targetModuleId: string, targetIndex: number) => {
+    applyModules((modules) => {
+      const source = modules.find((m) => m.id === sourceModuleId);
+      const lesson = source?.lessons[sourceIndex];
+      if (!source || !lesson) return modules;
+      const without = modules.map((m) =>
+        m.id === sourceModuleId ? { ...m, lessons: m.lessons.filter((_, i) => i !== sourceIndex) } : m
+      );
+      const target = without.find((m) => m.id === targetModuleId);
+      if (!target) return modules;
+      const lessons = [...target.lessons];
+      lessons.splice(Math.max(0, Math.min(targetIndex, lessons.length)), 0, lesson);
+      return without.map((m) => (m.id === targetModuleId ? { ...m, lessons } : m));
+    });
+  };
+
+  const togglePublished = () => {
+    if (!input.published && issues.length > 0) {
+      setPublishIssues(true);
+      return;
+    }
+    setInput((prev) => ({ ...prev, published: !prev.published }));
+    setStatus('unsaved');
+  };
+
+  const generateCover = async () => {
+    setGeneratingCover(true);
+    try {
+      const idToken = await user?.getIdToken();
+      if (!idToken) throw new Error('No session');
+      const res = await fetch('/api/v1/courses/generate-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ title: input.title || 'Curso DB Academy', category: input.category, level: input.level }),
+      });
+      const data = (await res.json()) as { coverImage?: string };
+      if (data.coverImage) {
+        setInput((prev) => ({ ...prev, coverImage: data.coverImage ?? '' }));
+        setStatus('unsaved');
+      }
+    } catch {
+      setInput((prev) => ({ ...prev, coverImage: COVER_PRESETS[0].url }));
+      setError(labels.actions.generating);
+    } finally {
+      setGeneratingCover(false);
+    }
+  };
+
+  const statusLabel = (() => {
+    if (status === 'saving') return labels.actions.saving;
+    if (status === 'unsaved') return labels.actions.unsaved;
+    if (status === 'error') return labels.actions.saveError;
+    const seconds = Math.max(0, Math.round((Date.now() - savedAt) / 1000));
+    return `${labels.actions.savedAgo} ${seconds} s`;
+  })();
+
+  const index = (
+    <CourseIndex
+      modules={input.modules}
+      selectedModuleId={selectedModuleId}
+      selectedLessonId={selectedLessonId}
+      onSelectModule={(id) => {
+        setSelectedModuleId(id);
+        const module = input.modules.find((m) => m.id === id);
+        setSelectedLessonId(module?.lessons[0]?.id ?? null);
+        setIndexOpen(false);
+      }}
+      onSelectLesson={(moduleId, lessonId) => {
+        setSelectedModuleId(moduleId);
+        setSelectedLessonId(lessonId);
+        setIndexOpen(false);
+      }}
+      onAddModule={addModule}
+      onAddLesson={addLesson}
+      onDeleteModule={requestDeleteModule}
+      onDeleteLesson={requestDeleteLesson}
+      onMoveModule={moveModule}
+      onMoveLesson={moveLesson}
+      onMoveLessonBetween={moveLessonBetween}
+      canEdit={canEdit}
+      labels={labels.index}
+    />
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label={labels.index.title}
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              {labels.actions.courseHeader}
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {input.modules.length} {labels.index.moduleCount} · {input.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {labels.index.lessonCount}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIndexOpen((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 lg:hidden"
+        >
+          {indexOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          {labels.index.title}
+        </button>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100vh-7rem)]">{index}</div>
+
+        <AnimatePresence>
+          {indexOpen && (
+            <motion.div
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              className="fixed inset-0 z-50 bg-slate-950/50 lg:hidden"
+              onClick={() => setIndexOpen(false)}
+            >
+              <div
+                className="h-full w-[85vw] max-w-[340px] bg-white dark:bg-[#111827]"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {index}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="min-w-0 space-y-4">
+          <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{labels.actions.courseDetails}</h3>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block md:col-span-2">
+                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Título del curso</span>
+                <input
+                  value={input.title}
+                  onChange={(event) => {
+                    setInput((prev) => ({ ...prev, title: event.target.value }));
+                    setStatus('unsaved');
+                  }}
+                  maxLength={140}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Subtítulo</span>
+                <input
+                  value={input.subtitle}
+                  onChange={(event) => {
+                    setInput((prev) => ({ ...prev, subtitle: event.target.value }));
+                    setStatus('unsaved');
+                  }}
+                  maxLength={240}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Nivel</span>
+                  <select
+                    value={input.level}
+                    onChange={(event) => {
+                      setInput((prev) => ({ ...prev, level: event.target.value as Course['level'] }));
+                      setStatus('unsaved');
+                    }}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
+                  >
+                    <option value="beginner">{t('beginner')}</option>
+                    <option value="intermediate">{t('intermediate')}</option>
+                    <option value="advanced">{t('advanced')}</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Precio</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={(input.priceCents / 100).toString()}
+                    onChange={(event) => {
+                      setInput((prev) => ({
+                        ...prev,
+                        priceCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)),
+                      }));
+                      setStatus('unsaved');
+                    }}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm tabular-nums"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Moneda</span>
+                  <select
+                    value={input.currency}
+                    onChange={(event) => {
+                      setInput((prev) => ({ ...prev, currency: event.target.value as Course['currency'] }));
+                      setStatus('unsaved');
+                    }}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="MXN">MXN</option>
+                  </select>
+                </label>
+              </div>
+              <label className="block md:col-span-2">
+                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Descripción</span>
+                <textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={input.description}
+                  onChange={(event) => {
+                    setInput((prev) => ({ ...prev, description: event.target.value }));
+                    setStatus('unsaved');
+                  }}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+              <div className="space-y-3">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{labels.actions.coverSelector}</span>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {COVER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.url}
+                      type="button"
+                      onClick={() => {
+                        setInput((prev) => ({ ...prev, coverImage: preset.url }));
+                        setStatus('unsaved');
+                      }}
+                      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                        input.coverImage === preset.url
+                          ? 'border-blue-600 ring-2 ring-blue-600/30'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      <img src={preset.url} alt={preset.label} className="aspect-video w-full object-cover" />
+                      {input.coverImage === preset.url && (
+                        <span className="absolute right-1 top-1 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {labels.actions.coverSelected}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void generateCover()}
+                  disabled={generatingCover}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+                >
+                  {generatingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {generatingCover ? labels.actions.generating : labels.actions.generate}
+                </button>
+              </div>
+              <div className="aspect-video overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-900">
+                {input.coverImage ? (
+                  <img src={input.coverImage} alt={input.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-400">
+                    <ImageIcon className="h-7 w-7" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {selectedModule && selectedLesson ? (
+            <LessonEditor
+              lesson={selectedLesson}
+              moduleTitle={selectedModule.title}
+              lessonLabel={`${input.modules.indexOf(selectedModule) + 1}.${selectedModule.lessons.indexOf(selectedLesson) + 1}`}
+              onChange={(patch) => updateLesson(selectedModule.id, selectedLesson.id, patch)}
+              onDelete={() => requestDeleteLesson(selectedModule.id, selectedLesson.id)}
+              onPreview={() => setPreviewCourse(buildCourseFromInput(input, course))}
+              courseId={course?.id ?? `tmp_${newId('crs')}`}
+              canEdit={canEdit}
+              labels={labels.lesson}
+            />
+          ) : selectedModule ? (
+            <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111827] p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              {labels.actions.selectPrompt}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111827] p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              {labels.actions.selectModulePrompt}
+            </div>
+          )}
+
+          {selectedModule && (
+            <QuizBuilder
+              questions={selectedModule.questions ?? []}
+              enabled={selectedModule.quizEnabled ?? true}
+              onChange={(questions) => updateModule(selectedModule.id, { questions })}
+              onEnabledChange={(enabled) => updateModule(selectedModule.id, { quizEnabled: enabled })}
+              labels={labels.quiz}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 dark:border-slate-700 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 dark:bg-[#0F1624]/95">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            {status === 'saving' ? (
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+            ) : status === 'error' ? (
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+            ) : status === 'unsaved' ? (
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span className="text-slate-700 dark:text-slate-200">{statusLabel}</span>
+            {status === 'error' && (
+              <button type="button" onClick={() => void save()} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+                {labels.actions.retry}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPreviewCourse(buildCourseFromInput(input, course))}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <Eye className="h-4 w-4" />
+              {labels.actions.previewStudent}
+            </button>
+            <button
+              type="button"
+              onClick={togglePublished}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white ${
+                input.published ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
+            >
+              {input.published ? labels.actions.unpublish : labels.actions.publish}
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!canEdit || status === 'saving'}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {labels.actions.save}
+            </button>
+          </div>
+        </div>
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {publishIssues && (
+          <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <p className="font-semibold">{labels.actions.publishCheckTitle}</p>
+            <p className="mt-0.5 text-xs">{labels.actions.publishCheckHint}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+              {issues.map((issue, index) => (
+                <li key={`${issue.moduleId}-${issue.lessonId ?? 'quiz'}-${index}`}>
+                  {issue.lessonLabel ? `${issue.lessonLabel} · ` : `${issue.moduleLabel} · `}
+                  {issue.reason === 'lesson-empty'
+                    ? labels.actions.issueLessonEmpty
+                    : issue.reason === 'module-no-quiz'
+                      ? labels.actions.issueModuleNoQuiz
+                      : labels.actions.issueQuizInvalid}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setPublishIssues(false)}
+              className="mt-2 text-xs font-medium text-amber-800 underline dark:text-amber-300"
+            >
+              {labels.actions.confirmCancel}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <StudentPreviewModal
+        course={previewCourse}
+        onClose={() => setPreviewCourse(null)}
+        labels={{
+          close: labels.actions.previewClose,
+          modules: labels.actions.previewModules,
+          lessons: labels.actions.previewLessons,
+          quiz: labels.actions.previewQuiz,
+          empty: labels.actions.previewEmpty,
+        }}
+      />
+      <ConfirmDialog
+        open={confirm !== null}
+        title={
+          confirm?.kind === 'module'
+            ? labels.actions.confirmDeleteModuleTitle
+            : confirm?.kind === 'lesson'
+              ? labels.actions.confirmDeleteLessonTitle
+              : labels.actions.confirmDeleteMaterialTitle
+        }
+        body={
+          confirm?.kind === 'module'
+            ? `${labels.actions.confirmDeleteModuleBody} (${confirm.label})`
+            : confirm?.kind === 'lesson'
+              ? `${labels.actions.confirmDeleteLessonBody} (${confirm.label})`
+              : `${labels.actions.confirmDeleteMaterialBody} (${confirm?.kind === 'material' ? confirm.label : ''})`
+        }
+        confirmLabel={labels.actions.confirmAccept}
+        cancelLabel={labels.actions.confirmCancel}
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirm(null)}
+      />
+      <ToastStack items={toasts} onDismiss={dismissToast} />
+    </div>
+  );
+};
+
+function emptyInput(): CourseInput {
+  const module = createEmptyModule(1);
+  return {
+    title: '',
+    subtitle: '',
+    description: '',
+    category: 'Productividad',
+    level: 'beginner',
+    priceCents: 4900,
+    currency: 'USD',
+    coverImage: '',
+    published: true,
+    modulesCount: 1,
+    totalLessons: 1,
+    modules: [module],
+  };
+}

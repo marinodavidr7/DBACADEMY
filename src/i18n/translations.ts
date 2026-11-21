@@ -165,6 +165,275 @@ export const translations = {
     zenMode: 'Modo Zen',
     exitZenMode: 'Salir de Modo Zen',
     zenActiveHint: 'Enfoque sin distracciones · Pulsa Esc para salir',
+
+    editorIndexTitle: 'Índice del curso',
+
+    editorIndexSubtitle: 'Módulos y lecciones',
+
+    editorAddModule: 'Agregar módulo',
+
+    editorAddLesson: 'Agregar lección',
+
+    editorModule: 'Módulo',
+
+    editorLesson: 'Lección',
+
+    editorDraft: 'Borrador',
+
+    editorPublished: 'Publicada',
+
+    editorIncomplete: 'Incompleta',
+
+    editorEmptyModule: 'Este módulo aún no tiene lecciones.',
+
+    editorEmptyModuleAction: 'Agregar la primera lección',
+
+    editorEmptyLessonContent: 'Esta lección aún no tiene contenido.',
+
+    editorEmptyLessonAction: 'Escribir el contenido',
+
+    editorOpenIndex: 'Abrir índice',
+
+    editorCloseIndex: 'Cerrar índice',
+
+    editorModuleCount: 'módulos',
+
+    editorLessonCount: 'lecciones',
+
+    editorMaterialCount: 'materiales',
+
+    editorSelectPrompt: 'Selecciona una lección en el índice para editarla.',
+
+    editorSelectModulePrompt: 'Selecciona un módulo en el índice.',
+
+    editorLessonTitle: 'Título de la lección',
+
+    editorLessonTitlePlaceholder: 'Título claro y orientado a la acción',
+
+    editorLessonType: 'Tipo de lección',
+
+    editorTypeText: 'Texto',
+
+    editorTypeVideo: 'Video de YouTube',
+
+    editorTypeExcel: 'Simulador / Laboratorio de Excel',
+
+    editorTypeQuiz: 'Quiz',
+
+    editorDuration: 'Duración (min)',
+
+    editorStatus: 'Estado',
+
+    editorStatusDraft: 'Borrador',
+
+    editorStatusPublished: 'Publicada',
+
+    editorSummary: 'Resumen / objetivo',
+
+    editorSummaryPlaceholder: '¿Qué logrará el estudiante en esta lección?',
+
+    editorContent: 'Contenido',
+
+    editorContentPlaceholder: 'Escribe el contenido en Markdown…',
+
+    editorEditTab: 'Editar',
+
+    editorPreviewTab: 'Vista previa',
+
+    editorMarkdownTitle: 'Editor Markdown',
+
+    editorBold: 'Negrita',
+
+    editorItalic: 'Cursiva',
+
+    editorList: 'Lista',
+
+    editorCode: 'Código',
+
+    editorFormula: 'Fórmula en bloque',
+
+    editorLink: 'Enlace',
+
+    editorImage: 'Imagen',
+
+    editorPreviewEmpty: 'La vista previa aparecerá aquí.',
+
+    editorVideoUrl: 'URL de YouTube',
+
+    editorVideoUrlPlaceholder: 'https://www.youtube.com/watch?v=…',
+
+    editorVideoInvalid: 'Introduce una URL válida de YouTube.',
+
+    editorVideoPreview: 'Vista previa del video',
+
+    editorVideoAllowSeeking: 'Permitir adelantar/retroceder',
+
+    editorVideoRequiredWatchPercent: 'Porcentaje de visualización requerido (%)',
+
+    editorVideoAllowSpeedChange: 'Permitir cambiar la velocidad',
+
+    editorVideoTodo: 'El reproductor aplicará estas opciones en una próxima integración.',
+
+    editorMaterials: 'Materiales',
+
+    editorMaterialsEmpty: 'Arrastra archivos aquí o haz clic para seleccionarlos.',
+
+    editorMaterialsEmptyHint: 'PDF, video, Word, Excel, imagen o ZIP · máx. 100 MB',
+
+    editorMaterialsDropCompact: 'Agregar más archivos',
+
+    editorMaterialsTooLarge: 'El archivo supera el límite de 100 MB.',
+
+    editorMaterialsUnsupported: 'Tipo de archivo no admitido.',
+
+    editorMaterialsUploading: 'Subiendo…',
+
+    editorMaterialsRename: 'Renombrar',
+
+    editorMaterialsDownload: 'Descargar',
+
+    editorMaterialsDelete: 'Eliminar',
+
+    editorMaterialsRenameTitle: 'Renombrar material',
+
+    editorMaterialsRenameAction: 'Guardar nombre',
+
+    editorMaterialsRenameCancel: 'Cancelar',
+
+    editorQuizTitle: 'Evaluación del módulo',
+
+    editorQuizEnabled: 'Activar evaluación',
+
+    editorQuizAddQuestion: 'Agregar pregunta',
+
+    editorQuizQuestion: 'Pregunta',
+
+    editorQuizPrompt: 'Enunciado de la pregunta',
+
+    editorQuizExplanation: 'Explicación para el estudiante',
+
+    editorQuizExplanationPlaceholder: 'Se mostrará después de responder.',
+
+    editorQuizMultiple: 'Selección múltiple',
+
+    editorQuizAddOption: 'Agregar opción',
+
+    editorQuizRemoveOption: 'Quitar opción',
+
+    editorQuizCorrect: 'Respuesta correcta',
+
+    editorQuizMoveUp: 'Subir',
+
+    editorQuizMoveDown: 'Bajar',
+
+    editorQuizRemoveQuestion: 'Eliminar pregunta',
+
+    editorQuizOptionLabel: 'Opción',
+
+    editorQuizMinOptions: 'Se requieren al menos 2 opciones.',
+
+    editorQuizOneCorrect: 'Marca exactamente 1 respuesta correcta.',
+
+    editorQuizMultipleCorrect: 'Marca una o más respuestas correctas.',
+
+    editorQuizEmptyPrompt: 'La pregunta no puede estar vacía.',
+
+    editorQuizEmptyOption: 'La opción no puede estar vacía.',
+
+    editorSave: 'Guardar',
+
+    editorSaved: 'Guardado',
+
+    editorSavedAgo: 'Guardado hace',
+
+    editorSaving: 'Guardando…',
+
+    editorUnsaved: 'Cambios sin guardar',
+
+    editorSaveError: 'Error al guardar',
+
+    editorRetry: 'Reintentar',
+
+    editorPreviewStudent: 'Vista previa como estudiante',
+
+    editorPublish: 'Publicar',
+
+    editorUnpublish: 'Despublicar',
+
+    editorPublishCheckTitle: 'Pendientes para publicar',
+
+    editorPublishCheckHint: 'Resuelve estos puntos antes de publicar.',
+
+    editorIssueLessonEmpty: 'Lección sin contenido',
+
+    editorIssueModuleNoQuiz: 'Módulo sin evaluación',
+
+    editorIssueQuizInvalid: 'Evaluación incompleta o inválida',
+
+    editorDeleteModule: 'Eliminar módulo',
+
+    editorDeleteLesson: 'Eliminar lección',
+
+    editorDeleteMaterial: 'Eliminar material',
+
+    editorConfirmDeleteModuleTitle: 'Eliminar módulo',
+
+    editorConfirmDeleteModuleBody: 'Se eliminará el módulo y todo su contenido.',
+
+    editorConfirmDeleteLessonTitle: 'Eliminar lección',
+
+    editorConfirmDeleteLessonBody: 'Se eliminará la lección y sus materiales.',
+
+    editorConfirmDeleteMaterialTitle: 'Eliminar material',
+
+    editorConfirmDeleteMaterialBody: 'Se eliminará el material adjunto.',
+
+    editorConfirmAccept: 'Sí, eliminar',
+
+    editorConfirmCancel: 'Cancelar',
+
+    editorUndo: 'Deshacer',
+
+    editorDeletedModule: 'Módulo eliminado',
+
+    editorDeletedLesson: 'Lección eliminada',
+
+    editorDeletedMaterial: 'Material eliminado',
+
+    editorMoveModuleUp: 'Subir módulo',
+
+    editorMoveModuleDown: 'Bajar módulo',
+
+    editorMoveLessonUp: 'Subir lección',
+
+    editorMoveLessonDown: 'Bajar lección',
+
+    editorDragHandle: 'Arrastrar para reordenar',
+
+    editorCoverSelector: 'Portada del curso',
+
+    editorCoverSelected: 'Seleccionada',
+
+    editorCourseHeader: 'Editor del curso',
+
+    editorCourseDetails: 'Detalles del curso',
+
+    editorAutosaveHint: 'Los cambios se guardan automáticamente.',
+
+    editorUnsavedWarning: 'Tienes cambios sin guardar. ¿Salir igualmente?',
+
+    editorStatusPublishedModule: 'Módulo publicado',
+
+    previewClose: 'Cerrar vista previa',
+    previewModules: 'módulos',
+    previewLessons: 'lecciones',
+    previewQuiz: 'Evaluación',
+    previewEmpty: 'Este curso aún no tiene módulos.',
+    generate: 'Generar portada',
+    generating: 'Generando portada…',
+    excelTodo: 'Lección de laboratorio preparada para el simulador de Excel (integración del reproductor pendiente).',
+    quizTodo: 'Lección de quiz preparada; usa la evaluación del módulo para las preguntas.',
+    editorStatusDraftModule: 'Módulo en borrador',
   },
   en: {
     brand: 'DB Academy',
@@ -323,6 +592,275 @@ export const translations = {
     zenMode: 'Zen Mode',
     exitZenMode: 'Exit Zen Mode',
     zenActiveHint: 'Distraction-free focus · Press Esc to exit',
+
+    editorIndexTitle: 'Course index',
+
+    editorIndexSubtitle: 'Modules and lessons',
+
+    editorAddModule: 'Add module',
+
+    editorAddLesson: 'Add lesson',
+
+    editorModule: 'Module',
+
+    editorLesson: 'Lesson',
+
+    editorDraft: 'Draft',
+
+    editorPublished: 'Published',
+
+    editorIncomplete: 'Incomplete',
+
+    editorEmptyModule: 'This module has no lessons yet.',
+
+    editorEmptyModuleAction: 'Add the first lesson',
+
+    editorEmptyLessonContent: 'This lesson has no content yet.',
+
+    editorEmptyLessonAction: 'Write content',
+
+    editorOpenIndex: 'Open index',
+
+    editorCloseIndex: 'Close index',
+
+    editorModuleCount: 'modules',
+
+    editorLessonCount: 'lessons',
+
+    editorMaterialCount: 'materials',
+
+    editorSelectPrompt: 'Select a lesson in the index to edit it.',
+
+    editorSelectModulePrompt: 'Select a module in the index.',
+
+    editorLessonTitle: 'Lesson title',
+
+    editorLessonTitlePlaceholder: 'Clear, action-oriented title',
+
+    editorLessonType: 'Lesson type',
+
+    editorTypeText: 'Text',
+
+    editorTypeVideo: 'YouTube video',
+
+    editorTypeExcel: 'Excel simulator / lab',
+
+    editorTypeQuiz: 'Quiz',
+
+    editorDuration: 'Duration (min)',
+
+    editorStatus: 'Status',
+
+    editorStatusDraft: 'Draft',
+
+    editorStatusPublished: 'Published',
+
+    editorSummary: 'Summary / objective',
+
+    editorSummaryPlaceholder: 'What will the student achieve in this lesson?',
+
+    editorContent: 'Content',
+
+    editorContentPlaceholder: 'Write the content in Markdown…',
+
+    editorEditTab: 'Edit',
+
+    editorPreviewTab: 'Preview',
+
+    editorMarkdownTitle: 'Markdown editor',
+
+    editorBold: 'Bold',
+
+    editorItalic: 'Italic',
+
+    editorList: 'List',
+
+    editorCode: 'Code',
+
+    editorFormula: 'Block formula',
+
+    editorLink: 'Link',
+
+    editorImage: 'Image',
+
+    editorPreviewEmpty: 'The preview will appear here.',
+
+    editorVideoUrl: 'YouTube URL',
+
+    editorVideoUrlPlaceholder: 'https://www.youtube.com/watch?v=…',
+
+    editorVideoInvalid: 'Enter a valid YouTube URL.',
+
+    editorVideoPreview: 'Video preview',
+
+    editorVideoAllowSeeking: 'Allow seeking',
+
+    editorVideoRequiredWatchPercent: 'Required watch percentage (%)',
+
+    editorVideoAllowSpeedChange: 'Allow speed change',
+
+    editorVideoTodo: 'The player will apply these options in a future integration.',
+
+    editorMaterials: 'Materials',
+
+    editorMaterialsEmpty: 'Drop files here or click to select them.',
+
+    editorMaterialsEmptyHint: 'PDF, video, Word, Excel, image or ZIP · max 100 MB',
+
+    editorMaterialsDropCompact: 'Add more files',
+
+    editorMaterialsTooLarge: 'The file exceeds the 100 MB limit.',
+
+    editorMaterialsUnsupported: 'Unsupported file type.',
+
+    editorMaterialsUploading: 'Uploading…',
+
+    editorMaterialsRename: 'Rename',
+
+    editorMaterialsDownload: 'Download',
+
+    editorMaterialsDelete: 'Delete',
+
+    editorMaterialsRenameTitle: 'Rename material',
+
+    editorMaterialsRenameAction: 'Save name',
+
+    editorMaterialsRenameCancel: 'Cancel',
+
+    editorQuizTitle: 'Module assessment',
+
+    editorQuizEnabled: 'Enable assessment',
+
+    editorQuizAddQuestion: 'Add question',
+
+    editorQuizQuestion: 'Question',
+
+    editorQuizPrompt: 'Question prompt',
+
+    editorQuizExplanation: 'Explanation for the student',
+
+    editorQuizExplanationPlaceholder: 'Shown after answering.',
+
+    editorQuizMultiple: 'Multiple choice',
+
+    editorQuizAddOption: 'Add option',
+
+    editorQuizRemoveOption: 'Remove option',
+
+    editorQuizCorrect: 'Correct answer',
+
+    editorQuizMoveUp: 'Move up',
+
+    editorQuizMoveDown: 'Move down',
+
+    editorQuizRemoveQuestion: 'Delete question',
+
+    editorQuizOptionLabel: 'Option',
+
+    editorQuizMinOptions: 'At least 2 options are required.',
+
+    editorQuizOneCorrect: 'Mark exactly 1 correct answer.',
+
+    editorQuizMultipleCorrect: 'Mark one or more correct answers.',
+
+    editorQuizEmptyPrompt: 'The question cannot be empty.',
+
+    editorQuizEmptyOption: 'The option cannot be empty.',
+
+    editorSave: 'Save',
+
+    editorSaved: 'Saved',
+
+    editorSavedAgo: 'Saved',
+
+    editorSaving: 'Saving…',
+
+    editorUnsaved: 'Unsaved changes',
+
+    editorSaveError: 'Save error',
+
+    editorRetry: 'Retry',
+
+    editorPreviewStudent: 'Preview as student',
+
+    editorPublish: 'Publish',
+
+    editorUnpublish: 'Unpublish',
+
+    editorPublishCheckTitle: 'Pending before publishing',
+
+    editorPublishCheckHint: 'Resolve these items before publishing.',
+
+    editorIssueLessonEmpty: 'Lesson without content',
+
+    editorIssueModuleNoQuiz: 'Module without assessment',
+
+    editorIssueQuizInvalid: 'Incomplete or invalid assessment',
+
+    editorDeleteModule: 'Delete module',
+
+    editorDeleteLesson: 'Delete lesson',
+
+    editorDeleteMaterial: 'Delete material',
+
+    editorConfirmDeleteModuleTitle: 'Delete module',
+
+    editorConfirmDeleteModuleBody: 'The module and all its content will be deleted.',
+
+    editorConfirmDeleteLessonTitle: 'Delete lesson',
+
+    editorConfirmDeleteLessonBody: 'The lesson and its materials will be deleted.',
+
+    editorConfirmDeleteMaterialTitle: 'Delete material',
+
+    editorConfirmDeleteMaterialBody: 'The attached material will be deleted.',
+
+    editorConfirmAccept: 'Yes, delete',
+
+    editorConfirmCancel: 'Cancel',
+
+    editorUndo: 'Undo',
+
+    editorDeletedModule: 'Module deleted',
+
+    editorDeletedLesson: 'Lesson deleted',
+
+    editorDeletedMaterial: 'Material deleted',
+
+    editorMoveModuleUp: 'Move module up',
+
+    editorMoveModuleDown: 'Move module down',
+
+    editorMoveLessonUp: 'Move lesson up',
+
+    editorMoveLessonDown: 'Move lesson down',
+
+    editorDragHandle: 'Drag to reorder',
+
+    editorCoverSelector: 'Course cover',
+
+    editorCoverSelected: 'Selected',
+
+    editorCourseHeader: 'Course editor',
+
+    editorCourseDetails: 'Course details',
+
+    editorAutosaveHint: 'Changes are saved automatically.',
+
+    editorUnsavedWarning: 'You have unsaved changes. Leave anyway?',
+
+    editorStatusPublishedModule: 'Module published',
+
+    previewClose: 'Close preview',
+    previewModules: 'modules',
+    previewLessons: 'lessons',
+    previewQuiz: 'Assessment',
+    previewEmpty: 'This course has no modules yet.',
+    generate: 'Generate cover',
+    generating: 'Generating cover…',
+    excelTodo: 'Lab lesson ready for the Excel simulator (player integration pending).',
+    quizTodo: 'Quiz lesson ready; use the module assessment for questions.',
+    editorStatusDraftModule: 'Module draft',
   },
   fr: {
     brand: 'DB Academy',
@@ -481,6 +1019,275 @@ export const translations = {
     zenMode: 'Mode Zen',
     exitZenMode: 'Quitter le Mode Zen',
     zenActiveHint: 'Concentration maximale · Appuyez sur Échap pour quitter',
+
+    editorIndexTitle: 'Index du cours',
+
+    editorIndexSubtitle: 'Modules et leçons',
+
+    editorAddModule: 'Ajouter un module',
+
+    editorAddLesson: 'Ajouter une leçon',
+
+    editorModule: 'Module',
+
+    editorLesson: 'Leçon',
+
+    editorDraft: 'Brouillon',
+
+    editorPublished: 'Publiée',
+
+    editorIncomplete: 'Incomplète',
+
+    editorEmptyModule: "Ce module n'a pas encore de leçon.",
+
+    editorEmptyModuleAction: 'Ajouter la première leçon',
+
+    editorEmptyLessonContent: "Cette leçon n'a pas encore de contenu.",
+
+    editorEmptyLessonAction: 'Écrire le contenu',
+
+    editorOpenIndex: "Ouvrir l'index",
+
+    editorCloseIndex: "Fermer l'index",
+
+    editorModuleCount: 'modules',
+
+    editorLessonCount: 'leçons',
+
+    editorMaterialCount: 'fichiers',
+
+    editorSelectPrompt: 'Sélectionnez une leçon dans l’index pour la modifier.',
+
+    editorSelectModulePrompt: 'Sélectionnez un module dans l’index.',
+
+    editorLessonTitle: 'Titre de la leçon',
+
+    editorLessonTitlePlaceholder: 'Titre clair et orienté action',
+
+    editorLessonType: 'Type de leçon',
+
+    editorTypeText: 'Texte',
+
+    editorTypeVideo: 'Vidéo YouTube',
+
+    editorTypeExcel: 'Simulateur / labo Excel',
+
+    editorTypeQuiz: 'Quiz',
+
+    editorDuration: 'Durée (min)',
+
+    editorStatus: 'Statut',
+
+    editorStatusDraft: 'Brouillon',
+
+    editorStatusPublished: 'Publiée',
+
+    editorSummary: 'Résumé / objectif',
+
+    editorSummaryPlaceholder: 'Que réussira l’étudiant dans cette leçon ?',
+
+    editorContent: 'Contenu',
+
+    editorContentPlaceholder: 'Écrivez le contenu en Markdown…',
+
+    editorEditTab: 'Modifier',
+
+    editorPreviewTab: 'Aperçu',
+
+    editorMarkdownTitle: 'Éditeur Markdown',
+
+    editorBold: 'Gras',
+
+    editorItalic: 'Italique',
+
+    editorList: 'Liste',
+
+    editorCode: 'Code',
+
+    editorFormula: 'Formule en bloc',
+
+    editorLink: 'Lien',
+
+    editorImage: 'Image',
+
+    editorPreviewEmpty: "L'aperçu apparaîtra ici.",
+
+    editorVideoUrl: 'URL YouTube',
+
+    editorVideoUrlPlaceholder: 'https://www.youtube.com/watch?v=…',
+
+    editorVideoInvalid: 'Entrez une URL YouTube valide.',
+
+    editorVideoPreview: 'Aperçu de la vidéo',
+
+    editorVideoAllowSeeking: 'Autoriser l’avance/retour',
+
+    editorVideoRequiredWatchPercent: 'Pourcentage de visionnage requis (%)',
+
+    editorVideoAllowSpeedChange: 'Autoriser la vitesse',
+
+    editorVideoTodo: 'Le lecteur appliquera ces options lors d’une prochaine intégration.',
+
+    editorMaterials: 'Fichiers',
+
+    editorMaterialsEmpty: 'Déposez des fichiers ici ou cliquez pour les sélectionner.',
+
+    editorMaterialsEmptyHint: 'PDF, vidéo, Word, Excel, image ou ZIP · 100 Mo max',
+
+    editorMaterialsDropCompact: 'Ajouter d’autres fichiers',
+
+    editorMaterialsTooLarge: 'Le fichier dépasse la limite de 100 Mo.',
+
+    editorMaterialsUnsupported: 'Type de fichier non pris en charge.',
+
+    editorMaterialsUploading: 'Téléversement…',
+
+    editorMaterialsRename: 'Renommer',
+
+    editorMaterialsDownload: 'Télécharger',
+
+    editorMaterialsDelete: 'Supprimer',
+
+    editorMaterialsRenameTitle: 'Renommer le fichier',
+
+    editorMaterialsRenameAction: 'Enregistrer le nom',
+
+    editorMaterialsRenameCancel: 'Annuler',
+
+    editorQuizTitle: 'Évaluation du module',
+
+    editorQuizEnabled: 'Activer l’évaluation',
+
+    editorQuizAddQuestion: 'Ajouter une question',
+
+    editorQuizQuestion: 'Question',
+
+    editorQuizPrompt: 'Énoncé de la question',
+
+    editorQuizExplanation: 'Explication pour l’étudiant',
+
+    editorQuizExplanationPlaceholder: 'Affichée après la réponse.',
+
+    editorQuizMultiple: 'Choix multiple',
+
+    editorQuizAddOption: 'Ajouter une option',
+
+    editorQuizRemoveOption: 'Retirer l’option',
+
+    editorQuizCorrect: 'Bonne réponse',
+
+    editorQuizMoveUp: 'Monter',
+
+    editorQuizMoveDown: 'Descendre',
+
+    editorQuizRemoveQuestion: 'Supprimer la question',
+
+    editorQuizOptionLabel: 'Option',
+
+    editorQuizMinOptions: 'Au moins 2 options sont requises.',
+
+    editorQuizOneCorrect: 'Cochez exactement 1 bonne réponse.',
+
+    editorQuizMultipleCorrect: 'Cochez une ou plusieurs bonnes réponses.',
+
+    editorQuizEmptyPrompt: 'La question ne peut pas être vide.',
+
+    editorQuizEmptyOption: 'L’option ne peut pas être vide.',
+
+    editorSave: 'Enregistrer',
+
+    editorSaved: 'Enregistré',
+
+    editorSavedAgo: 'Enregistré il y a',
+
+    editorSaving: 'Enregistrement…',
+
+    editorUnsaved: 'Modifications non enregistrées',
+
+    editorSaveError: 'Erreur d’enregistrement',
+
+    editorRetry: 'Réessayer',
+
+    editorPreviewStudent: 'Aperçu comme étudiant',
+
+    editorPublish: 'Publier',
+
+    editorUnpublish: 'Dépublier',
+
+    editorPublishCheckTitle: 'Points en attente avant publication',
+
+    editorPublishCheckHint: 'Résolvez ces points avant de publier.',
+
+    editorIssueLessonEmpty: 'Leçon sans contenu',
+
+    editorIssueModuleNoQuiz: 'Module sans évaluation',
+
+    editorIssueQuizInvalid: 'Évaluation incomplète ou invalide',
+
+    editorDeleteModule: 'Supprimer le module',
+
+    editorDeleteLesson: 'Supprimer la leçon',
+
+    editorDeleteMaterial: 'Supprimer le fichier',
+
+    editorConfirmDeleteModuleTitle: 'Supprimer le module',
+
+    editorConfirmDeleteModuleBody: 'Le module et tout son contenu seront supprimés.',
+
+    editorConfirmDeleteLessonTitle: 'Supprimer la leçon',
+
+    editorConfirmDeleteLessonBody: 'La leçon et ses fichiers seront supprimés.',
+
+    editorConfirmDeleteMaterialTitle: 'Supprimer le fichier',
+
+    editorConfirmDeleteMaterialBody: 'Le fichier joint sera supprimé.',
+
+    editorConfirmAccept: 'Oui, supprimer',
+
+    editorConfirmCancel: 'Annuler',
+
+    editorUndo: 'Annuler',
+
+    editorDeletedModule: 'Module supprimé',
+
+    editorDeletedLesson: 'Leçon supprimée',
+
+    editorDeletedMaterial: 'Fichier supprimé',
+
+    editorMoveModuleUp: 'Monter le module',
+
+    editorMoveModuleDown: 'Descendre le module',
+
+    editorMoveLessonUp: 'Monter la leçon',
+
+    editorMoveLessonDown: 'Descendre la leçon',
+
+    editorDragHandle: 'Glisser pour réordonner',
+
+    editorCoverSelector: 'Image de couverture',
+
+    editorCoverSelected: 'Sélectionnée',
+
+    editorCourseHeader: 'Éditeur de cours',
+
+    editorCourseDetails: 'Détails du cours',
+
+    editorAutosaveHint: 'Les modifications sont enregistrées automatiquement.',
+
+    editorUnsavedWarning: 'Vous avez des modifications non enregistrées. Quitter quand même ?',
+
+    editorStatusPublishedModule: 'Module publié',
+
+    previewClose: 'Fermer l’aperçu',
+    previewModules: 'modules',
+    previewLessons: 'leçons',
+    previewQuiz: 'Évaluation',
+    previewEmpty: 'Ce cours n’a pas encore de module.',
+    generate: 'Générer la couverture',
+    generating: 'Génération de la couverture…',
+    excelTodo: 'Leçon de laboratoire prête pour le simulateur Excel (intégration du lecteur en attente).',
+    quizTodo: 'Leçon de quiz prête ; utilisez l’évaluation du module pour les questions.',
+    editorStatusDraftModule: 'Module en brouillon',
   },
   pt: {
     brand: 'DB Academy',
@@ -639,6 +1446,275 @@ export const translations = {
     zenMode: 'Modo Zen',
     exitZenMode: 'Sair do Modo Zen',
     zenActiveHint: 'Foco sem distrações · Pressione Esc para sair',
+
+    editorIndexTitle: 'Índice do curso',
+
+    editorIndexSubtitle: 'Módulos e aulas',
+
+    editorAddModule: 'Adicionar módulo',
+
+    editorAddLesson: 'Adicionar aula',
+
+    editorModule: 'Módulo',
+
+    editorLesson: 'Aula',
+
+    editorDraft: 'Rascunho',
+
+    editorPublished: 'Publicada',
+
+    editorIncomplete: 'Incompleta',
+
+    editorEmptyModule: 'Este módulo ainda não tem aulas.',
+
+    editorEmptyModuleAction: 'Adicionar a primeira aula',
+
+    editorEmptyLessonContent: 'Esta aula ainda não tem conteúdo.',
+
+    editorEmptyLessonAction: 'Escrever o conteúdo',
+
+    editorOpenIndex: 'Abrir índice',
+
+    editorCloseIndex: 'Fechar índice',
+
+    editorModuleCount: 'módulos',
+
+    editorLessonCount: 'aulas',
+
+    editorMaterialCount: 'materiais',
+
+    editorSelectPrompt: 'Selecione uma aula no índice para editá-la.',
+
+    editorSelectModulePrompt: 'Selecione um módulo no índice.',
+
+    editorLessonTitle: 'Título da aula',
+
+    editorLessonTitlePlaceholder: 'Título claro e orientado à ação',
+
+    editorLessonType: 'Tipo de aula',
+
+    editorTypeText: 'Texto',
+
+    editorTypeVideo: 'Vídeo do YouTube',
+
+    editorTypeExcel: 'Simulador / laboratório de Excel',
+
+    editorTypeQuiz: 'Quiz',
+
+    editorDuration: 'Duração (min)',
+
+    editorStatus: 'Status',
+
+    editorStatusDraft: 'Rascunho',
+
+    editorStatusPublished: 'Publicada',
+
+    editorSummary: 'Resumo / objetivo',
+
+    editorSummaryPlaceholder: 'O que o aluno alcançará nesta aula?',
+
+    editorContent: 'Conteúdo',
+
+    editorContentPlaceholder: 'Escreva o conteúdo em Markdown…',
+
+    editorEditTab: 'Editar',
+
+    editorPreviewTab: 'Pré-visualizar',
+
+    editorMarkdownTitle: 'Editor Markdown',
+
+    editorBold: 'Negrito',
+
+    editorItalic: 'Itálico',
+
+    editorList: 'Lista',
+
+    editorCode: 'Código',
+
+    editorFormula: 'Fórmula em bloco',
+
+    editorLink: 'Link',
+
+    editorImage: 'Imagem',
+
+    editorPreviewEmpty: 'A pré-visualização aparecerá aqui.',
+
+    editorVideoUrl: 'URL do YouTube',
+
+    editorVideoUrlPlaceholder: 'https://www.youtube.com/watch?v=…',
+
+    editorVideoInvalid: 'Insira uma URL válida do YouTube.',
+
+    editorVideoPreview: 'Pré-visualização do vídeo',
+
+    editorVideoAllowSeeking: 'Permitir avançar/retroceder',
+
+    editorVideoRequiredWatchPercent: 'Percentual de exibição obrigatório (%)',
+
+    editorVideoAllowSpeedChange: 'Permitir alterar a velocidade',
+
+    editorVideoTodo: 'O player aplicará essas opções em uma próxima integração.',
+
+    editorMaterials: 'Materiais',
+
+    editorMaterialsEmpty: 'Arraste arquivos aqui ou clique para selecioná-los.',
+
+    editorMaterialsEmptyHint: 'PDF, vídeo, Word, Excel, imagem ou ZIP · máx. 100 MB',
+
+    editorMaterialsDropCompact: 'Adicionar mais arquivos',
+
+    editorMaterialsTooLarge: 'O arquivo excede o limite de 100 MB.',
+
+    editorMaterialsUnsupported: 'Tipo de arquivo não suportado.',
+
+    editorMaterialsUploading: 'Enviando…',
+
+    editorMaterialsRename: 'Renomear',
+
+    editorMaterialsDownload: 'Baixar',
+
+    editorMaterialsDelete: 'Excluir',
+
+    editorMaterialsRenameTitle: 'Renomear material',
+
+    editorMaterialsRenameAction: 'Salvar nome',
+
+    editorMaterialsRenameCancel: 'Cancelar',
+
+    editorQuizTitle: 'Avaliação do módulo',
+
+    editorQuizEnabled: 'Ativar avaliação',
+
+    editorQuizAddQuestion: 'Adicionar pergunta',
+
+    editorQuizQuestion: 'Pergunta',
+
+    editorQuizPrompt: 'Enunciado da pergunta',
+
+    editorQuizExplanation: 'Explicação para o aluno',
+
+    editorQuizExplanationPlaceholder: 'Exibida após responder.',
+
+    editorQuizMultiple: 'Múltipla escolha',
+
+    editorQuizAddOption: 'Adicionar opção',
+
+    editorQuizRemoveOption: 'Remover opção',
+
+    editorQuizCorrect: 'Resposta correta',
+
+    editorQuizMoveUp: 'Subir',
+
+    editorQuizMoveDown: 'Descer',
+
+    editorQuizRemoveQuestion: 'Excluir pergunta',
+
+    editorQuizOptionLabel: 'Opção',
+
+    editorQuizMinOptions: 'São necessárias pelo menos 2 opções.',
+
+    editorQuizOneCorrect: 'Marque exatamente 1 resposta correta.',
+
+    editorQuizMultipleCorrect: 'Marque uma ou mais respostas corretas.',
+
+    editorQuizEmptyPrompt: 'A pergunta não pode estar vazia.',
+
+    editorQuizEmptyOption: 'A opção não pode estar vazia.',
+
+    editorSave: 'Salvar',
+
+    editorSaved: 'Salvo',
+
+    editorSavedAgo: 'Salvo há',
+
+    editorSaving: 'Salvando…',
+
+    editorUnsaved: 'Alterações não salvas',
+
+    editorSaveError: 'Erro ao salvar',
+
+    editorRetry: 'Tentar novamente',
+
+    editorPreviewStudent: 'Pré-visualizar como aluno',
+
+    editorPublish: 'Publicar',
+
+    editorUnpublish: 'Despublicar',
+
+    editorPublishCheckTitle: 'Pendências antes de publicar',
+
+    editorPublishCheckHint: 'Resolva estes itens antes de publicar.',
+
+    editorIssueLessonEmpty: 'Aula sem conteúdo',
+
+    editorIssueModuleNoQuiz: 'Módulo sem avaliação',
+
+    editorIssueQuizInvalid: 'Avaliação incompleta ou inválida',
+
+    editorDeleteModule: 'Excluir módulo',
+
+    editorDeleteLesson: 'Excluir aula',
+
+    editorDeleteMaterial: 'Excluir material',
+
+    editorConfirmDeleteModuleTitle: 'Excluir módulo',
+
+    editorConfirmDeleteModuleBody: 'O módulo e todo o seu conteúdo serão excluídos.',
+
+    editorConfirmDeleteLessonTitle: 'Excluir aula',
+
+    editorConfirmDeleteLessonBody: 'A aula e seus materiais serão excluídos.',
+
+    editorConfirmDeleteMaterialTitle: 'Excluir material',
+
+    editorConfirmDeleteMaterialBody: 'O material anexo será excluído.',
+
+    editorConfirmAccept: 'Sim, excluir',
+
+    editorConfirmCancel: 'Cancelar',
+
+    editorUndo: 'Desfazer',
+
+    editorDeletedModule: 'Módulo excluído',
+
+    editorDeletedLesson: 'Aula excluída',
+
+    editorDeletedMaterial: 'Material excluído',
+
+    editorMoveModuleUp: 'Subir módulo',
+
+    editorMoveModuleDown: 'Descer módulo',
+
+    editorMoveLessonUp: 'Subir aula',
+
+    editorMoveLessonDown: 'Descer aula',
+
+    editorDragHandle: 'Arrastar para reordenar',
+
+    editorCoverSelector: 'Capa do curso',
+
+    editorCoverSelected: 'Selecionada',
+
+    editorCourseHeader: 'Editor do curso',
+
+    editorCourseDetails: 'Detalhes do curso',
+
+    editorAutosaveHint: 'As alterações são salvas automaticamente.',
+
+    editorUnsavedWarning: 'Você tem alterações não salvas. Sair mesmo assim?',
+
+    editorStatusPublishedModule: 'Módulo publicado',
+
+    previewClose: 'Fechar pré-visualização',
+    previewModules: 'módulos',
+    previewLessons: 'aulas',
+    previewQuiz: 'Avaliação',
+    previewEmpty: 'Este curso ainda não tem módulos.',
+    generate: 'Gerar capa',
+    generating: 'Gerando capa…',
+    excelTodo: 'Aula de laboratório pronta para o simulador de Excel (integração do player pendente).',
+    quizTodo: 'Aula de quiz pronta; use a avaliação do módulo para as perguntas.',
+    editorStatusDraftModule: 'Módulo em rascunho',
   },
 } as const;
 

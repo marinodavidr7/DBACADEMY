@@ -24,6 +24,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { EXCEL_BASICO_COURSE, REMOVED_SEED_COURSE_IDS, SEED_COURSES } from '../data/seedCourses';
+import { SEED_FORUM_THREADS } from '../data/seedForum';
 import {
   assertPlatformAdminWrite,
   auth,
@@ -265,7 +266,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [instructorPayments, setInstructorPayments] = useState<PaymentRecord[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [forumThreads, setForumThreads] = useState<ForumThread[]>([]);
+  const [forumThreads, setForumThreads] = useState<ForumThread[]>(SEED_FORUM_THREADS);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [encryptedNotes, setEncryptedNotes] = useState<EncryptedNote[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiIntegrationKey[]>([]);
@@ -811,8 +812,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     unsubs.push(
       onSnapshot(
         query(collection(db, 'forumThreads'), where('pinned', 'in', [true, false])),
-        (snap) => setForumThreads(snap.docs.map((d) => d.data() as ForumThread)),
-        (err) => handleFirestoreError(err, OperationType.LIST, 'forumThreads')
+        (snap) => {
+          const loaded = snap.docs.map((d) => d.data() as ForumThread);
+          const loadedIds = new Set(loaded.map((t) => t.id));
+          const missing = SEED_FORUM_THREADS.filter((s) => !loadedIds.has(s.id));
+          setForumThreads([...loaded, ...missing]);
+        },
+        (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'forumThreads');
+          setForumThreads(SEED_FORUM_THREADS);
+        }
       )
     );
 
@@ -1499,10 +1508,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isInstructorAnswer,
         createdAt: serverTimestamp(),
       });
-      batch.update(doc(db, 'forumThreads', thread.id), {
+      batch.set(doc(db, 'forumThreads', thread.id), {
+        id: thread.id,
+        courseId: thread.courseId,
+        authorId: thread.authorId,
+        authorName: thread.authorName,
+        title: thread.title,
+        body: thread.body,
+        pinned: thread.pinned ?? false,
+        resolved: thread.resolved ?? false,
+        upvotesCount: thread.upvotesCount ?? 0,
         repliesCount: (thread.repliesCount || 0) + 1,
         updatedAt: serverTimestamp(),
-      });
+      }, { merge: true });
       try {
         await batch.commit();
         sendWs({ type: 'FORUM_POSTED', courseId: thread.courseId, title: thread.title });
@@ -1517,10 +1535,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (thread: ForumThread) => {
       if (!user) throw new Error('Authentication required');
       try {
-        await updateDoc(doc(db, 'forumThreads', thread.id), {
+        await setDoc(doc(db, 'forumThreads', thread.id), {
+          id: thread.id,
+          courseId: thread.courseId,
+          authorId: thread.authorId,
+          authorName: thread.authorName,
+          title: thread.title,
+          body: thread.body,
+          pinned: thread.pinned ?? false,
+          resolved: thread.resolved ?? false,
           upvotesCount: (thread.upvotesCount || 0) + 1,
           updatedAt: serverTimestamp(),
-        });
+        }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `forumThreads/${thread.id}`);
       }

@@ -1,10 +1,96 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { CheckCircle2, MessageSquare, Pin, Send, ThumbsUp } from 'lucide-react';
+import {
+  CheckCircle2,
+  Info,
+  Lightbulb,
+  ListChecks,
+  MessageSquare,
+  Pin,
+  Send,
+  Sparkles,
+  ThumbsUp,
+} from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import { SEED_FORUM_REPLIES } from '../data/seedForum';
 import type { ForumReply, ForumThread } from '../types';
 import { AuthGateNotice } from './AuthGateNotice';
+
+const WelcomeThreadContent: React.FC = () => {
+  return (
+    <div className="space-y-6">
+      {/* 1. Sobre este foro */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
+          <Info className="w-4 h-4 shrink-0" />
+          <span>Sobre este foro</span>
+        </div>
+        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+          ¡Te damos la bienvenida al <strong className="font-semibold text-slate-900 dark:text-slate-100">Curso de Excel de DB Academy</strong>! Este foro es el primer punto de encuentro con la comunidad del curso. Aquí podrás presentarte, compartir tu experiencia utilizando hojas de cálculo y contar qué te motivó a fortalecer tus conocimientos en Excel.
+        </p>
+        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+          No importa si utilizas Excel con frecuencia o si estás dando tus primeros pasos. Lo importante es reconocer desde qué nivel comienzas, qué tareas realizas actualmente y qué esperas lograr al aprender a organizar, calcular, analizar y presentar información de manera más eficiente.
+        </p>
+      </div>
+
+      {/* 2. ¿Qué incluir en tu presentación? */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <ListChecks className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>¿Qué incluir en tu presentación?</span>
+        </div>
+        <ul className="space-y-2.5 text-sm text-slate-700 dark:text-slate-300">
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>Tu nombre y desde qué país o ciudad participas.</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>A qué te dedicas actualmente o qué estás estudiando.</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>Qué experiencia tienes utilizando Excel u otras herramientas de hojas de cálculo.</span>
+          </li>
+        </ul>
+      </div>
+
+      {/* 3. Reflexiona y comparte */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>Reflexiona y comparte</span>
+        </div>
+        <ul className="space-y-2.5 text-sm text-slate-700 dark:text-slate-300">
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>¿Qué te motivó a inscribirte en este Curso de Excel?</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>¿Qué tarea te gustaría realizar de forma más rápida, organizada o precisa utilizando Excel?</span>
+          </li>
+          <li className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <span>¿En qué contexto académico, laboral o personal esperas aplicar lo aprendido?</span>
+          </li>
+        </ul>
+      </div>
+
+      {/* 4. Un ejemplo para inspirarte */}
+      <div className="space-y-2.5 pt-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span>Un ejemplo para inspirarte</span>
+        </div>
+        <blockquote className="rounded-r-lg border-l-4 border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/20 p-4 text-sm italic text-slate-700 dark:text-slate-300 leading-relaxed">
+          &ldquo;¡Hola! Soy Daniel y trabajo en el área administrativa de una empresa. Actualmente utilizo Excel para registrar información y hacer cálculos sencillos, pero quiero aprender a organizar mejor los datos y aprovechar las fórmulas, funciones, tablas y gráficos. Mi objetivo es elaborar reportes con mayor rapidez y reducir errores en las tareas que realizo cada semana.&rdquo;
+        </blockquote>
+      </div>
+    </div>
+  );
+};
 
 export const ForumView: React.FC = () => {
   const {
@@ -53,22 +139,34 @@ export const ForumView: React.FC = () => {
       setReplies([]);
       return;
     }
+    const currentThreadId = activeThread.id;
     const q = query(
-      collection(db, 'forumThreads', activeThread.id, 'replies'),
-      where('threadId', '==', activeThread.id)
+      collection(db, 'forumThreads', currentThreadId, 'replies'),
+      where('threadId', '==', currentThreadId)
     );
     const unsub = onSnapshot(
       q,
       (snap) => {
         const items = snap.docs.map((d) => d.data() as ForumReply);
-        items.sort((a, b) => {
-          const ta = (a.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
-          const tb = (b.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
-          return ta - tb;
-        });
-        setReplies(items);
+        if (items.length > 0) {
+          items.sort((a, b) => {
+            const ta = (a.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+            const tb = (b.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+            return ta - tb;
+          });
+          setReplies(items);
+        } else if (SEED_FORUM_REPLIES[currentThreadId]) {
+          setReplies(SEED_FORUM_REPLIES[currentThreadId]);
+        } else {
+          setReplies([]);
+        }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, `forumThreads/${activeThread.id}/replies`)
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, `forumThreads/${currentThreadId}/replies`);
+        if (SEED_FORUM_REPLIES[currentThreadId]) {
+          setReplies(SEED_FORUM_REPLIES[currentThreadId]);
+        }
+      }
     );
     return () => unsub();
   }, [user, activeThread]);
@@ -301,9 +399,13 @@ export const ForumView: React.FC = () => {
                 </div>
               </div>
 
-              <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
-                {activeThread.body}
-              </p>
+              {activeThread.id === 'thr_bienvenida_excel' || activeThread.title.toLowerCase().includes('bienvenida') ? (
+                <WelcomeThreadContent />
+              ) : (
+                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                  {activeThread.body}
+                </p>
+              )}
 
               <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 {replies.map((rep) => (

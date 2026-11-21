@@ -129,11 +129,11 @@ const AppShell: React.FC = () => {
   const isZenActive = zenMode && activeView === 'learning';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
       {/* Desktop Sidebar (Collapsible Rail, hidden in Zen Mode) */}
       {!isZenActive && (
         <aside
-          className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 ${
+          className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 ${
             sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
           }`}
         >
@@ -290,12 +290,6 @@ const AppShell: React.FC = () => {
 
               {user ? (
                 <div className="space-y-2">
-                  {isAdmin && (
-                    <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Administrador</span>
-                    </div>
-                  )}
                   <button
                     type="button"
                     onClick={() => void logout()}
@@ -333,9 +327,7 @@ const AppShell: React.FC = () => {
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-out ${
-          isZenActive ? 'lg:pl-0' : sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64'
-        }`}
+        className="flex-1 flex flex-col min-w-0 lg:h-screen lg:overflow-y-auto"
       >
         {/* Clean 3-Zone Top Bar (hidden in Zen Mode for maximum viewport) */}
         {!isZenActive && (
