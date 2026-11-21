@@ -146,6 +146,117 @@ const DECISION_PRESETS: DecisionPreset[] = [
   },
 ];
 
+/* =====================================================================
+   Sistema de desafíos / retroalimentación para el simulador 3D
+   ===================================================================== */
+export interface ChallengeCrate {
+  value: number;
+  secondaryVal?: number;
+  isVip?: boolean;
+  expected: 'true' | 'mid' | 'false';
+}
+
+export interface Challenge {
+  id: string;
+  label: string;
+  hint: string;
+  config: FormulaConfig;
+  crates: ChallengeCrate[];
+}
+
+export const CHALLENGES: Challenge[] = [
+  {
+    id: 'chal-si-aprobado',
+    label: 'Nota mínima — =SI()',
+    hint: 'Configura >= 60 para aprobar. Prueba con 85, 42 y 60.',
+    config: {
+      mode: 'SI',
+      operator: '>=',
+      threshold: 60,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Aprobado',
+      midLabel: 'Regular',
+      falseLabel: 'Reprobado',
+    },
+    crates: [
+      { value: 85, expected: 'true' },
+      { value: 42, expected: 'false' },
+      { value: 60, expected: 'true' },
+      { value: 30, expected: 'false' },
+      { value: 77, expected: 'true' },
+    ],
+  },
+  {
+    id: 'chal-si-anidado',
+    label: '3 Niveles — =SI() anidado',
+    hint: '>=80 Excelente, 50-79 Regular, <50 Refuerzo.',
+    config: {
+      mode: 'SI.ANIDADO',
+      operator: '>=',
+      threshold: 80,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Excelente',
+      midLabel: 'Regular',
+      falseLabel: 'Refuerzo',
+    },
+    crates: [
+      { value: 92, expected: 'true' },
+      { value: 64, expected: 'mid' },
+      { value: 31, expected: 'false' },
+      { value: 80, expected: 'true' },
+      { value: 50, expected: 'mid' },
+    ],
+  },
+  {
+    id: 'chal-si-y',
+    label: 'Doble filtro — =SI(Y())',
+    hint: 'Caja >= 50 Y Peso <= 60 para despachar.',
+    config: {
+      mode: 'Y',
+      operator: '>=',
+      threshold: 50,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Despachar',
+      midLabel: 'Revisión',
+      falseLabel: 'Retener',
+    },
+    crates: [
+      { value: 78, secondaryVal: 45, expected: 'true' },
+      { value: 82, secondaryVal: 85, expected: 'false' },
+      { value: 35, secondaryVal: 30, expected: 'false' },
+      { value: 50, secondaryVal: 60, expected: 'true' },
+    ],
+  },
+  {
+    id: 'chal-si-o',
+    label: 'Prioridad VIP — =SI(O())',
+    hint: 'Caja >= 80 O es VIP para Express.',
+    config: {
+      mode: 'O',
+      operator: '>=',
+      threshold: 80,
+      midThreshold: 50,
+      secondOperator: '<=',
+      secondThreshold: 60,
+      trueLabel: 'Express',
+      midLabel: 'Medio',
+      falseLabel: 'Normal',
+    },
+    crates: [
+      { value: 30, isVip: true, expected: 'true' },
+      { value: 88, isVip: false, expected: 'true' },
+      { value: 45, isVip: false, expected: 'false' },
+      { value: 90, isVip: true, expected: 'true' },
+    ],
+  },
+];
+
 interface SimLogEntry {
   id: string;
   kind: 'true' | 'mid' | 'false' | 'info';
@@ -228,6 +339,35 @@ function evaluateCondition(value: number, op: ComparisonOp, threshold: number): 
     case '<>':
       return value !== threshold;
   }
+}
+
+/**
+ * Evalúa una caja contra una fórmula de decisión activa.
+ * Reutiliza la misma lógica del escáner 3D para decidir el destino (true / mid / false).
+ */
+function evaluateCrateOutcome(
+  value: number,
+  secondaryVal: number,
+  isVip: boolean,
+  cfg: FormulaConfig
+): 'true' | 'mid' | 'false' {
+  if (cfg.mode === 'SI.ANIDADO') {
+    const cond1 = evaluateCondition(value, cfg.operator, cfg.threshold);
+    const midOp: ComparisonOp =
+      cfg.operator === '<' || cfg.operator === '<=' ? '<=' : '>=';
+    const cond2 = evaluateCondition(value, midOp, cfg.midThreshold);
+    return cond1 ? 'true' : cond2 ? 'mid' : 'false';
+  }
+  if (cfg.mode === 'Y') {
+    const cond1 = evaluateCondition(value, cfg.operator, cfg.threshold);
+    const cond2 = evaluateCondition(secondaryVal, cfg.secondOperator, cfg.secondThreshold);
+    return cond1 && cond2 ? 'true' : 'false';
+  }
+  if (cfg.mode === 'O') {
+    return evaluateCondition(value, cfg.operator, cfg.threshold) || isVip ? 'true' : 'false';
+  }
+  const passed = evaluateCondition(value, cfg.operator, cfg.threshold);
+  return passed ? 'true' : 'false';
 }
 
 function createBeltTexture(baseHex: string, stripeHex: string, maxAniso: number): THREE.CanvasTexture {
@@ -440,6 +580,14 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
     },
   ]);
 
+  /* --- Retroalimentación de desafíos --- */
+  const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: 'correct' | 'retry';
+    message: string;
+    detail: string;
+  } | null>(null);
+
   const mountRef = useRef<HTMLDivElement | null>(null);
   const spawnQueueRef = useRef<QueuedCrateSpec[]>([
     { value: 85, secondaryVal: 40, isVip: false },
@@ -559,6 +707,94 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
       text: `Fórmula aplicada: ${formulaPreview}`,
     });
   };
+
+  const handleSelectChallenge = useCallback(
+    (challenge: Challenge) => {
+      setFeedback(null);
+      setActiveChallenge(challenge);
+      setDraftMode(challenge.config.mode);
+      setDraftOperator(challenge.config.operator);
+      setDraftThreshold(challenge.config.threshold);
+      setDraftMidThreshold(challenge.config.midThreshold);
+      setDraftSecondOp(challenge.config.secondOperator);
+      setDraftSecondThreshold(challenge.config.secondThreshold);
+      setDraftTrueLabel(challenge.config.trueLabel);
+      setDraftMidLabel(challenge.config.midLabel);
+      setDraftFalseLabel(challenge.config.falseLabel);
+      setActiveFormula({ ...challenge.config });
+      setTrueCount(0);
+      setMidCount(0);
+      setFalseCount(0);
+      setTrueSum(0);
+      appendLog({
+        kind: 'info',
+        badge: 'RETO',
+        text: `Desafío cargado: ${challenge.label}. ${challenge.hint}`,
+      });
+    },
+    [appendLog]
+  );
+
+  const handleVerifyChallenge = useCallback(() => {
+    if (!activeChallenge) return;
+    const cfg = activeFormulaRef.current;
+    const expectedCfg = activeChallenge.config;
+
+    // 1. Comprobar que la fórmula activa coincida con la esperada del desafío
+    const formulaMatches =
+      cfg.mode === expectedCfg.mode &&
+      cfg.operator === expectedCfg.operator &&
+      cfg.threshold === expectedCfg.threshold &&
+      cfg.midThreshold === expectedCfg.midThreshold &&
+      cfg.secondOperator === expectedCfg.secondOperator &&
+      cfg.secondThreshold === expectedCfg.secondThreshold;
+
+    // 2. Evaluar cada caja de prueba y comparar con el resultado esperado
+    let allCratesCorrect = true;
+    const failedCrates: number[] = [];
+    for (const crate of activeChallenge.crates) {
+      const outcome = evaluateCrateOutcome(
+        crate.value,
+        crate.secondaryVal ?? 0,
+        crate.isVip ?? false,
+        cfg
+      );
+      if (outcome !== crate.expected) {
+        allCratesCorrect = false;
+        failedCrates.push(crate.value);
+      }
+    }
+
+    const ok = formulaMatches && allCratesCorrect;
+
+    if (ok) {
+      setFeedback({
+        type: 'correct',
+        message: '¡Correcto!',
+        detail: 'La fórmula clasifica todas las cajas de prueba correctamente.',
+      });
+      appendLog({
+        kind: 'true',
+        badge: 'RETO',
+        text: 'Desafío superado: fórmula correcta.',
+      });
+    } else {
+      const motivo =
+        !formulaMatches
+          ? 'La configuración de la fórmula no coincide con el reto.'
+          : `Cajas fallidas: ${failedCrates.join(', ')}.`;
+      setFeedback({
+        type: 'retry',
+        message: 'Reintentar',
+        detail: motivo,
+      });
+      appendLog({
+        kind: 'false',
+        badge: 'RETO',
+        text: `Reintentar: ${motivo}`,
+      });
+    }
+  }, [activeChallenge, appendLog]);
 
   const handleSpawnCrate = (explicitValue?: number) => {
     onInteract?.();
@@ -1341,6 +1577,57 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
               ))}
             </div>
 
+            {/* Selector de desafíos con retroalimentación */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-500 dark:text-slate-400 mr-1">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                Retroalimentación:
+              </span>
+              <select
+                value={activeChallenge?.id ?? 'none'}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id === 'none') {
+                    setActiveChallenge(null);
+                    setFeedback(null);
+                    return;
+                  }
+                  const chal = CHALLENGES.find((c) => c.id === id);
+                  if (chal) handleSelectChallenge(chal);
+                }}
+                className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 min-h-[32px]"
+              >
+                <option value="none">Seleccionar reto</option>
+                {CHALLENGES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              {activeChallenge && (
+                <button
+                  type="button"
+                  onClick={handleVerifyChallenge}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors min-h-[32px] ${
+                    feedback?.type === 'correct'
+                      ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-xs'
+                      : feedback?.type === 'retry'
+                        ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-emerald-500 hover:text-emerald-700'
+                  }"
+                >
+                  {feedback?.type === 'correct' ? (
+                    <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                  ) : feedback?.type === 'retry' ? (
+                    <RotateCcw className="w-3 h-3 text-amber-700" />
+                  ) : (
+                    <Sparkles className="w-3 h-3" />
+                  )}
+                  <span>{feedback?.message ?? 'Verificar reto'}</span>
+                </button>
+              )}
+            </div>
+
             {/* Interactive Excel Formula Bar */}
             <form onSubmit={handleApplyFormula} className="flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/90 px-3 py-2 font-mono text-xs">
@@ -1602,6 +1889,33 @@ export const ExcelSimulator3D: React.FC<ExcelSimulator3DProps> = ({
               {activeFormula.mode}
             </span>
           </div>
+
+          {/* Panel de retroalimentación del reto (animado) */}
+          <AnimatePresence>
+            {feedback && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+                className={`px-4 py-3 rounded-xl border flex items-center gap-3 text-xs ${
+                  feedback.type === 'correct'
+                    ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300'
+                    : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300'
+                }`}
+              >
+                {feedback.type === 'correct' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <RotateCcw className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                )}
+                <div className="flex flex-col leading-snug">
+                  <span className="font-bold">{feedback.message}</span>
+                  <span className="opacity-90">{feedback.detail}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Live Metric Strip */}
           <div

@@ -30,6 +30,7 @@ import {
   Search,
   Sparkles,
   Terminal,
+  User,
   Video,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -140,12 +141,15 @@ export const CoursePlayerView: React.FC = () => {
     t,
   } = usePlatform();
 
+  const [viewAsStudent, setViewAsStudent] = useState(false);
+
   const enrolledCourses = useMemo(() => {
-    if (isAdmin) return courses;
+    // Modo estudiante: ignora el bypass de administrador y filtra como alumno normal
+    if (isAdmin && !viewAsStudent) return courses;
     return courses.filter(
       (c) => enrollments.some((e) => e.courseId === c.id) || c.instructorId === user?.uid
     );
-  }, [courses, enrollments, isAdmin, user?.uid]);
+  }, [courses, enrollments, isAdmin, user?.uid, viewAsStudent]);
 
   const activeCourse = useMemo(() => {
     if (selectedCourseId) {
@@ -159,7 +163,8 @@ export const CoursePlayerView: React.FC = () => {
     if (!activeCourse) return null;
     const real = enrollments.find((e) => e.courseId === activeCourse.id);
     if (real) return real;
-    if (isAdmin || activeCourse.instructorId === user?.uid) {
+    // En modo estudiante no se crea un preview sintético: sin inscripción real no hay acceso
+    if ((isAdmin || activeCourse.instructorId === user?.uid) && !viewAsStudent) {
       return {
         id: `preview_${activeCourse.id}`,
         courseId: activeCourse.id,
@@ -175,7 +180,7 @@ export const CoursePlayerView: React.FC = () => {
       };
     }
     return null;
-  }, [enrollments, activeCourse, isAdmin, user]);
+  }, [enrollments, activeCourse, isAdmin, user, viewAsStudent]);
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
@@ -394,6 +399,24 @@ export const CoursePlayerView: React.FC = () => {
               >
                 <Pencil className="w-3.5 h-3.5" />
                 <span>Editar curso</span>
+              </button>
+            )}
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setViewAsStudent((v) => !v)}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[42px] ${
+                  viewAsStudent
+                    ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+                title={viewAsStudent ? 'Desactivar modo estudiante' : 'Ver como estudiante'}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>
+                  {viewAsStudent ? 'Modo estudiante: ON' : 'Modo estudiante: OFF'}
+                </span>
               </button>
             )}
 

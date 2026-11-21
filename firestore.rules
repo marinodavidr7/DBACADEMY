@@ -394,7 +394,8 @@ service cloud.firestore {
     match /enrollments/{enrollmentId} {
       allow get: if isValidCompositeId(enrollmentId) && isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
-      allow create: if isValidCompositeId(enrollmentId) && isVerified()
+      allow create: if isSignedIn()
+        && isValidCompositeId(enrollmentId)
         && isValidEnrollment(incoming())
         && incoming().id == enrollmentId
         && incoming().studentId == request.auth.uid
@@ -428,7 +429,8 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow get: if isValidId(paymentId) && isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().studentId == request.auth.uid || existing().instructorId == request.auth.uid || isAdmin());
-      allow create: if isValidId(paymentId) && isVerified()
+      allow create: if isSignedIn()
+        && isValidId(paymentId)
         && isValidPayment(incoming())
         && incoming().id == paymentId
         && incoming().studentId == request.auth.uid
