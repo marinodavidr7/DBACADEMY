@@ -14,12 +14,24 @@ export type AppView =
   | 'security'
   | 'integrations';
 
+export type CourseMaterialType = 'pdf' | 'video' | 'doc' | 'spreadsheet' | 'image' | 'zip' | 'other';
+
+export interface CourseMaterial {
+  id: string;
+  name: string;        // nombre de archivo original
+  url: string;         // URL de descarga (Firebase Storage o enlace externo)
+  type: CourseMaterialType;
+  sizeByte: number;    // tamaño en bytes, 0 si es enlace externo
+  uploadedAt: string;  // ISO 8601
+}
+
 export interface CourseLesson {
   id: string;
   title: string;
   durationMinutes: number;
   summary: string;
   content: string;
+  materials?: CourseMaterial[]; // ← archivos adjuntos a la lección
 }
 
 export interface CourseModule {

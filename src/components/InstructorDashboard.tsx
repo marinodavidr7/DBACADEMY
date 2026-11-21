@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   Image as ImageIcon,
   Loader2,
+  Paperclip,
   Pencil,
   Plus,
   Search,
@@ -14,9 +15,10 @@ import {
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
-import type { Course } from '../types';
+import type { Course, CourseMaterial } from '../types';
 import { exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import { MaterialUploader } from './MaterialUploader';
 
 const STUDIO_COVER_PRESETS = [
   {
@@ -70,6 +72,7 @@ export const InstructorDashboard: React.FC = () => {
   const [currency, setCurrency] = useState<Course['currency']>('USD');
   const [moduleTitle, setModuleTitle] = useState('01. Fundamentos y Arquitectura');
   const [lessonTitle, setLessonTitle] = useState('Introducción práctica y objetivos');
+  const [lessonMaterials, setLessonMaterials] = useState<CourseMaterial[]>([]);
   const [coverImage, setCoverImage] = useState('');
   const [generatingCover, setGeneratingCover] = useState(false);
   const [coverError, setCoverError] = useState('');
@@ -145,6 +148,7 @@ export const InstructorDashboard: React.FC = () => {
     setCoverImage(course.coverImage || '');
     setModuleTitle(course.modules[0]?.title || '01. Módulo');
     setLessonTitle(course.modules[0]?.lessons[0]?.title || '01. Lección');
+    setLessonMaterials(course.modules[0]?.lessons[0]?.materials ?? []);
     setShowBuilder(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -157,6 +161,7 @@ export const InstructorDashboard: React.FC = () => {
     setDescription('');
     setCoverImage('');
     setCoverError('');
+    setLessonMaterials([]);
   };
 
   const handlePublishCourse = async (e: React.FormEvent) => {
@@ -180,7 +185,7 @@ export const InstructorDashboard: React.FC = () => {
                   lessons:
                     editingCourse.modules[0].lessons && editingCourse.modules[0].lessons.length > 0
                       ? [
-                          { ...editingCourse.modules[0].lessons[0], title: lessonTitle },
+                          { ...editingCourse.modules[0].lessons[0], title: lessonTitle, materials: lessonMaterials },
                           ...editingCourse.modules[0].lessons.slice(1),
                         ]
                       : [
@@ -190,6 +195,7 @@ export const InstructorDashboard: React.FC = () => {
                             durationMinutes: 20,
                             summary: subtitle.trim(),
                             content: cleanDescription,
+                            materials: lessonMaterials,
                           },
                         ],
                 },
@@ -258,6 +264,7 @@ export const InstructorDashboard: React.FC = () => {
                   durationMinutes: 20,
                   summary: subtitle.trim(),
                   content: cleanDescription,
+                  materials: lessonMaterials,
                 },
                 {
                   id: `les_${Date.now().toString(36)}_2`,
@@ -265,6 +272,7 @@ export const InstructorDashboard: React.FC = () => {
                   durationMinutes: 25,
                   summary: 'Consolidación práctica del módulo.',
                   content: 'Aplica los conceptos del módulo mediante un ejercicio verificable paso a paso.',
+                  materials: [],
                 },
               ],
             },
@@ -487,6 +495,18 @@ export const InstructorDashboard: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descripción académica del programa (mínimo 10 caracteres)"
                 className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100"
+              />
+
+              {/* Material Uploader — lección inicial */}
+              <MaterialUploader
+                courseId={editingCourse?.id ?? `tmp_${Date.now().toString(36)}`}
+                lessonId={
+                  editingCourse?.modules[0]?.lessons[0]?.id ??
+                  `les_new_${Date.now().toString(36)}`
+                }
+                lessonTitle={lessonTitle || 'Lección inicial'}
+                materials={lessonMaterials}
+                onChange={setLessonMaterials}
               />
             </div>
 

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Archive,
   Award,
   BookOpen,
   Box,
@@ -13,21 +14,27 @@ import {
   Code,
   Compass,
   Copy,
+  Download,
   Eye,
+  FileSpreadsheet,
   FileText,
   HelpCircle,
+  Image as ImageIcon,
   Keyboard,
   Lightbulb,
   Maximize2,
   Minimize2,
+  Paperclip,
   PlayCircle,
   Search,
   Sparkles,
   Terminal,
+  Video,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
-import type { Certificate } from '../types';
+import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
+import { formatFileSize } from '../services/storageService';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 
@@ -36,6 +43,83 @@ const ExcelSimulator3D = lazy(() =>
 );
 
 const VIEW_COMPLETION_MS = 5000;
+
+/* ------------------------------------------------------------------ */
+/*  MaterialsTab — pestaña de descarga de materiales                   */
+/* ------------------------------------------------------------------ */
+function getMaterialIcon(type: CourseMaterialType): React.ReactNode {
+  const cls = 'w-4 h-4 shrink-0';
+  const map: Record<CourseMaterialType, React.ReactNode> = {
+    pdf: <FileText className={cls} />,
+    video: <Video className={cls} />,
+    doc: <FileText className={cls} />,
+    spreadsheet: <FileSpreadsheet className={cls} />,
+    image: <ImageIcon className={cls} />,
+    zip: <Archive className={cls} />,
+    other: <Paperclip className={cls} />,
+  };
+  return map[type] ?? <Paperclip className={cls} />;
+}
+
+const typeLabel: Record<CourseMaterialType, string> = {
+  pdf: 'PDF',
+  video: 'Video',
+  doc: 'Documento',
+  spreadsheet: 'Hoja de cálculo',
+  image: 'Imagen',
+  zip: 'Archivo comprimido',
+  other: 'Archivo',
+};
+
+function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
+  if (materials.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-400">
+        <Paperclip className="w-8 h-8 opacity-50" />
+        <p className="text-sm">Esta lección no tiene materiales adjuntos.</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          El instructor puede agregar archivos desde el panel de administración.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 font-medium">
+        <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+        <span>{materials.length} material{materials.length !== 1 ? 'es' : ''} disponible{materials.length !== 1 ? 's' : ''} para esta lección</span>
+      </div>
+      <div className="space-y-2">
+        {materials.map((mat) => (
+          <a
+            key={mat.id}
+            href={mat.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-4 py-3 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all"
+            download={mat.sizeByte > 0 ? mat.name : undefined}
+          >
+            <span className="text-blue-600 dark:text-blue-400">
+              {getMaterialIcon(mat.type)}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">
+                {mat.name}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {typeLabel[mat.type] ?? 'Archivo'}
+                {mat.sizeByte > 0 && ` · ${formatFileSize(mat.sizeByte)}`}
+                {mat.sizeByte === 0 && ' · Enlace externo'}
+              </p>
+            </div>
+            <Download className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const CoursePlayerView: React.FC = () => {
   const {
@@ -80,7 +164,7 @@ export const CoursePlayerView: React.FC = () => {
   const [viewProgressPct, setViewProgressPct] = useState(0);
   const [autoCompletedLessonTitle, setAutoCompletedLessonTitle] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(true);
-  const [activeTab, setActiveTab] = useState<'reader' | 'syntax' | 'lab'>('reader');
+  const [activeTab, setActiveTab] = useState<'reader' | 'syntax' | 'lab' | 'materials'>('reader');
   const [searchTopic, setSearchTopic] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [quickNotes, setQuickNotes] = useState<string>(() => {
@@ -139,6 +223,7 @@ export const CoursePlayerView: React.FC = () => {
   // Automatic viewing progress tracker: marks sub-module complete after viewing content
   useEffect(() => {
     setAutoCompletedLessonTitle(null);
+    setActiveTab('reader'); // Reset to reader tab on lesson change
     if (!currentLesson || !activeCourse || !activeEnrollment) {
       setViewProgressPct(0);
       return;
@@ -543,7 +628,7 @@ export const CoursePlayerView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveTab('lab')}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors ${
+                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
                   activeTab === 'lab'
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -551,6 +636,23 @@ export const CoursePlayerView: React.FC = () => {
               >
                 <Code className="w-4 h-4" />
                 <span>3. Notas de Campo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('materials')}
+                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap relative ${
+                  activeTab === 'materials'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Paperclip className="w-4 h-4" />
+                <span>4. Materiales</span>
+                {(currentLesson.materials?.length ?? 0) > 0 && (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold">
+                    {currentLesson.materials!.length}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -683,6 +785,11 @@ export const CoursePlayerView: React.FC = () => {
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-3.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
                   />
                 </div>
+              )}
+
+              {/* Tab 4: Materiales descargables */}
+              {activeTab === 'materials' && (
+                <MaterialsTab materials={currentLesson.materials ?? []} />
               )}
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
