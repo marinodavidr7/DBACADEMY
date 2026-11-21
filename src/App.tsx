@@ -57,7 +57,6 @@ const AppShell: React.FC = () => {
     toggleTheme,
     setLanguage,
     signInWithGoogle,
-    signInAsDemo,
     signInAsAdmin,
     logout,
     authError,
@@ -323,13 +322,6 @@ const AppShell: React.FC = () => {
                     <LogIn className="w-3.5 h-3.5" />
                     <span>{t('signInGoogle')}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void signInAsDemo()}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
-                  >
-                    <span>Modo Demo</span>
-                  </button>
                 </div>
               )}
             </>
@@ -450,13 +442,6 @@ const AppShell: React.FC = () => {
                   <LogIn className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{t('signInGoogle')}</span>
                   <span className="sm:hidden">Google</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void signInAsDemo()}
-                  className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-                >
-                  <span>Modo Demo</span>
                 </button>
               </div>
             )}

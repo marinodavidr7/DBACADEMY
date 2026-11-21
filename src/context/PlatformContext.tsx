@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import {
   getRedirectResult,
   onAuthStateChanged,
-  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -198,7 +197,6 @@ interface PlatformContextValue {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   signInAsAdmin: () => Promise<void>;
-  signInAsDemo: () => Promise<void>;
   logout: () => Promise<void>;
   enrollWithPayment: (course: Course, gateway: PaymentGateway) => Promise<PaymentRecord>;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
@@ -406,7 +404,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!firebaseUser.emailVerified) {
           setProfile({
             uid: firebaseUser.uid,
-            displayName: (firebaseUser.displayName || firebaseUser.email || 'Usuario Demo').slice(0, 100),
+            displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
             photoURL: (firebaseUser.photoURL || '').slice(0, 500),
             role: 'student',
             preferredLanguage: language,
@@ -955,15 +953,6 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setAuthError(formatGoogleAuthError(err));
     }
   }, []);
-
-  const signInAsDemo = useCallback(async () => {
-    setAuthError(null);
-    try {
-      await signInAnonymously(auth);
-    } catch {
-      await signInWithGoogle();
-    }
-  }, [signInWithGoogle]);
 
   const logout = useCallback(async () => {
     setAuthError(null);
@@ -1714,7 +1703,6 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     signInWithGoogle,
     signInWithEmail,
     signInAsAdmin,
-    signInAsDemo,
     logout,
     enrollWithPayment,
     completeLesson,
