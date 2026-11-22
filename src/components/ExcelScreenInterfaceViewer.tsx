@@ -290,6 +290,74 @@ export const ExcelScreenInterfaceViewer: React.FC = () => {
         </div>
       </div>
 
+      {/* PANEL EXPLICATIVO (ARRIBA DE LAS PÍLDORAS) */}
+      <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row items-start gap-4">
+          {/* Badge o icono */}
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black text-white shrink-0 shadow-md ${
+              activeToolInfo ? 'bg-amber-500' : 'bg-[#107C41]'
+            }`}
+          >
+            {activeToolInfo ? '🛠' : currentComponent.id}
+          </div>
+
+          {/* Información explicativa */}
+          <div className="flex-1 space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                  activeToolInfo
+                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                    : 'bg-emerald-100 dark:bg-emerald-950/60 text-[#107C41] dark:text-emerald-300'
+                }`}
+              >
+                {activeToolInfo ? 'Herramienta de la Cinta' : currentComponent.category}
+              </span>
+              {activeToolInfo?.shortcut && (
+                <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  Atajo: {activeToolInfo.shortcut}
+                </span>
+              )}
+            </div>
+
+            <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+              {activeToolInfo ? activeToolInfo.name : currentComponent.title}
+            </h4>
+
+            <p
+              className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
+              dangerouslySetInnerHTML={{
+                __html: activeToolInfo ? activeToolInfo.desc : currentComponent.desc,
+              }}
+            />
+          </div>
+
+          {/* Botones de acción rápida */}
+          <div className="flex md:flex-col gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleNextZone}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors"
+            >
+              <span>Siguiente pieza</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                selectZone(7);
+                handleCellClick('C', 4);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-emerald-500 transition-colors"
+            >
+              <MousePointerClick className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Seleccionar celda C4</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* BARRA DE NAVEGACIÓN RÁPIDA (PÍLDORAS 1 A 9) */}
       <div className="bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 overflow-x-auto">
         <div className="flex items-center gap-1.5 min-w-max">
@@ -1308,74 +1376,6 @@ export const ExcelScreenInterfaceViewer: React.FC = () => {
                 <span className="font-mono font-bold text-xs">100%</span>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* PANEL EXPLICATIVO INFERIOR */}
-      <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col md:flex-row items-start gap-4">
-          {/* Badge o icono */}
-          <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black text-white shrink-0 shadow-md ${
-              activeToolInfo ? 'bg-amber-500' : 'bg-[#107C41]'
-            }`}
-          >
-            {activeToolInfo ? '🛠' : currentComponent.id}
-          </div>
-
-          {/* Información explicativa */}
-          <div className="flex-1 space-y-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                  activeToolInfo
-                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
-                    : 'bg-emerald-100 dark:bg-emerald-950/60 text-[#107C41] dark:text-emerald-300'
-                }`}
-              >
-                {activeToolInfo ? 'Herramienta de la Cinta' : currentComponent.category}
-              </span>
-              {activeToolInfo?.shortcut && (
-                <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                  Atajo: {activeToolInfo.shortcut}
-                </span>
-              )}
-            </div>
-
-            <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
-              {activeToolInfo ? activeToolInfo.name : currentComponent.title}
-            </h4>
-
-            <p
-              className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
-              dangerouslySetInnerHTML={{
-                __html: activeToolInfo ? activeToolInfo.desc : currentComponent.desc,
-              }}
-            />
-          </div>
-
-          {/* Botones de acción rápida */}
-          <div className="flex md:flex-col gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleNextZone}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors"
-            >
-              <span>Siguiente pieza</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                selectZone(7);
-                handleCellClick('C', 4);
-              }}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-emerald-500 transition-colors"
-            >
-              <MousePointerClick className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Seleccionar celda C4</span>
-            </button>
           </div>
         </div>
       </div>
