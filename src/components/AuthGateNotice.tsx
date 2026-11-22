@@ -174,25 +174,14 @@ export const AuthGateNotice: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void signInWithGoogle()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors min-h-[42px]"
-          >
-            <LogIn className="w-3.5 h-3.5 text-[#0052CC] dark:text-cyan-400" />
-            <span>Google</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void signInAsAdmin()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 px-3 py-2 text-xs font-semibold text-white transition-colors min-h-[42px]"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Admin Directo</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void signInWithGoogle()}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors min-h-[42px]"
+        >
+          <LogIn className="w-4 h-4 text-[#0052CC] dark:text-cyan-400" />
+          <span>Continuar con Google</span>
+        </button>
       </div>
     </div>
   );

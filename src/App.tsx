@@ -253,12 +253,12 @@ const AppShell: React.FC = () => {
               ) : (
                 <button
                   type="button"
-                  onClick={() => void signInAsAdmin()}
-                  title="Entrar como Administrador"
-                  aria-label="Entrar como Administrador"
-                  className="w-10 h-10 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center"
+                  onClick={() => void signInWithGoogle()}
+                  title={t('signInGoogle')}
+                  aria-label={t('signInGoogle')}
+                  className="w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
                 >
-                  <ShieldCheck className="w-4 h-4" />
+                  <LogIn className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -300,24 +300,14 @@ const AppShell: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void signInAsAdmin()}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors min-h-[40px]"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>Admin (David)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void signInWithGoogle()}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>{t('signInGoogle')}</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void signInWithGoogle()}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{t('signInGoogle')}</span>
+                </button>
               )}
             </>
           )}
@@ -418,27 +408,15 @@ const AppShell: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void signInAsAdmin()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-                  title="Acceso directo como Administrador de la plataforma"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-200" />
-                  <span className="hidden sm:inline">Admin (David)</span>
-                  <span className="sm:hidden">Admin</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void signInWithGoogle()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{t('signInGoogle')}</span>
-                  <span className="sm:hidden">Google</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void signInWithGoogle()}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t('signInGoogle')}</span>
+                <span className="sm:hidden">Google</span>
+              </button>
             )}
           </div>
           </header>
