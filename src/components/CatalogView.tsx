@@ -225,7 +225,7 @@ export const CatalogView: React.FC = () => {
             <div className="absolute bottom-3.5 left-4 right-4 text-white">
               <p className="text-[11px] font-mono text-cyan-300">Programa destacado</p>
               <p className="text-xs sm:text-sm font-semibold text-white mt-0.5">
-                Excel Básico · Módulos 0 y 1 · Simulador 3D Interactivo
+                Cursos Excel · Simulador 3D Interactivo
               </p>
             </div>
           </div>

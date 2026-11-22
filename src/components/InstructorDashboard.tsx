@@ -274,8 +274,8 @@ export const InstructorDashboard: React.FC = () => {
     () => ({
       id: 'cert_admin_preview',
       verificationCode: 'DB-EXCEL-PREVIEW01',
-      courseId: sampleCourse?.id || 'excel-basico-05',
-      courseTitle: sampleCourse?.title || 'Excel Básico: Fundamentos, Fórmulas y Simulador 3D',
+      courseId: sampleCourse?.id || '',
+      courseTitle: sampleCourse?.title || 'Nuestro curso de Excel',
       studentId: user?.uid || 'admin',
       studentName: sampleStudentName.trim() || user?.displayName || 'Estudiante DB Academy',
       instructorId: sampleCourse?.instructorId || 'admin',

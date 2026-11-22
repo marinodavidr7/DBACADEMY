@@ -742,7 +742,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ];
         // Cursos de Excel gratis por ahora: forzar priceCents = 0 sin importar Firestore
         const cursosGratis = merged.map((c) =>
-          ['excel-basico-05', 'excel-intermedio-01', 'excel-avanzado-01'].includes(c.id)
+          ['excel-intermedio-01', 'excel-avanzado-01'].includes(c.id)
             ? { ...c, priceCents: 0 }
             : c
         );

@@ -223,7 +223,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-slate-200">
                     <BookOpen className="w-3.5 h-3.5 text-cyan-300" />
-                    <span>Curso de Excel Básico gratuito</span>
+                    <span>Curso gratuito de Excel</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-slate-200">
                     <ShieldCheck className="w-3.5 h-3.5 text-cyan-300" />
@@ -241,7 +241,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       Ruta destacada · Gratis
                     </p>
                     <p className="mt-0.5 font-display text-base sm:text-lg font-bold text-white">
-                      Excel Básico: Fundamentos, SI y Simulador 3D
+                      {excelCourse?.title || publishedCourses[0]?.title || 'Nuestro curso de Excel'}
                     </p>
                   </div>
                   {excelCourse && (
@@ -582,8 +582,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   a: 'No. Puedes revisar todo el catálogo, las rutas de aprendizaje y el temario completo de cada programa sin iniciar sesión.',
                 },
                 {
-                  q: '¿Cómo funciona el curso gratuito de Excel Básico?',
-                  a: 'Puedes inscribirte sin costo y practicar directamente en el Laboratorio Interactivo de Excel y el Simulador 3D de decisiones lógicas.',
+                  q: '¿Cómo funciona el curso gratuito de Excel?',
+                  a: 'Puedes inscribirte sin costo y practicar las lecciones con práctica paso a paso.',
                 },
                 {
                   q: '¿Cómo se verifican los certificados emitidos?',

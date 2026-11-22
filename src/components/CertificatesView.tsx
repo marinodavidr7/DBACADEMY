@@ -54,8 +54,8 @@ export const CertificatesView: React.FC = () => {
     () => ({
       id: 'cert_preview_admin',
       verificationCode: 'DB-EXCEL-PREVIEW01',
-      courseId: selectedSampleCourse?.id || 'excel-basico-05',
-      courseTitle: selectedSampleCourse?.title || 'Excel Básico: Fundamentos, Fórmulas y Simulador 3D',
+      courseId: selectedSampleCourse?.id || '',
+      courseTitle: selectedSampleCourse?.title || 'Nuestro curso de Excel',
       studentId: user?.uid || 'admin_preview',
       studentName: sampleStudentName.trim() || user?.displayName || 'Estudiante DB Academy',
       instructorId: selectedSampleCourse?.instructorId || 'admin',
