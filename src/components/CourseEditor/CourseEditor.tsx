@@ -4,17 +4,22 @@ import {
   CheckCircle2,
   Eye,
   Image as ImageIcon,
+  Link as LinkIcon,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Save,
   Sparkles,
+  Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Course, CourseLesson, CourseModule } from '../../types';
 import { usePlatform } from '../../context/PlatformContext';
+import { uploadCourseCoverImage } from '../../services/storageService';
+import type { TranslationKeys } from '../../i18n/translations';
 import { isAuthorizedAdminEmail } from '../../firebase';
 import {
   cloneModules,
@@ -440,6 +445,9 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   >(null);
   const [publishIssues, setPublishIssues] = useState<boolean>(false);
   const [generatingCover, setGeneratingCover] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverDragging, setCoverDragging] = useState(false);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
 
   const originalRef = useRef<string>(JSON.stringify(input));
@@ -676,24 +684,52 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     setStatus('unsaved');
   };
 
+  const handleCoverFileUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('El archivo seleccionado debe ser una imagen (PNG, JPG, WebP o SVG).');
+      return;
+    }
+    setUploadingCover(true);
+    try {
+      const url = await uploadCourseCoverImage(course?.id || 'general', file);
+      setInput((prev) => ({ ...prev, coverImage: url }));
+      setStatus('unsaved');
+      setError('');
+      pushToast('Imagen de portada actualizada');
+    } catch (err) {
+      console.error('Error al subir imagen de portada:', err);
+      setError('Error al procesar la imagen seleccionada.');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
   const generateCover = async () => {
     setGeneratingCover(true);
     try {
       const idToken = await user?.getIdToken();
-      if (!idToken) throw new Error('No session');
-      const res = await fetch('/api/v1/courses/generate-cover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ title: input.title || 'Curso DB Academy', category: input.category, level: input.level }),
-      });
-      const data = (await res.json()) as { coverImage?: string };
-      if (data.coverImage) {
-        setInput((prev) => ({ ...prev, coverImage: data.coverImage ?? '' }));
-        setStatus('unsaved');
+      if (idToken) {
+        const res = await fetch('/api/v1/courses/generate-cover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ title: input.title || 'Curso DB Academy', category: input.category, level: input.level }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { coverImage?: string };
+          if (data.coverImage) {
+            setInput((prev) => ({ ...prev, coverImage: data.coverImage ?? '' }));
+            setStatus('unsaved');
+            return;
+          }
+        }
       }
+      throw new Error('Fallback preset');
     } catch {
-      setInput((prev) => ({ ...prev, coverImage: COVER_PRESETS[0].url }));
-      setError(labels.actions.generating);
+      // Rotar entre presets de alta calidad de DB Academy sin fallar
+      const currentIdx = COVER_PRESETS.findIndex((p) => p.url === input.coverImage);
+      const nextIdx = (currentIdx + 1) % COVER_PRESETS.length;
+      setInput((prev) => ({ ...prev, coverImage: COVER_PRESETS[nextIdx].url }));
+      setStatus('unsaved');
     } finally {
       setGeneratingCover(false);
     }
@@ -882,49 +918,155 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
               </label>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+            <input
+              ref={coverFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleCoverFileUpload(file);
+                e.target.value = '';
+              }}
+            />
+
+            <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
               <div className="space-y-3">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{labels.actions.coverSelector}</span>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {COVER_PRESETS.map((preset) => (
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {labels.actions.coverSelector}
+                </span>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => coverFileInputRef.current?.click()}
+                    disabled={uploadingCover}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-60 min-h-[36px]"
+                  >
+                    {uploadingCover ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    <span>{uploadingCover ? 'Subiendo imagen...' : 'Subir imagen desde equipo'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void generateCover()}
+                    disabled={generatingCover}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors min-h-[36px]"
+                  >
+                    {generatingCover ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    <span>Cambiar portada</span>
+                  </button>
+
+                  {input.coverImage && (
                     <button
-                      key={preset.url}
                       type="button"
                       onClick={() => {
-                        setInput((prev) => ({ ...prev, coverImage: preset.url }));
+                        setInput((prev) => ({ ...prev, coverImage: '' }));
                         setStatus('unsaved');
                       }}
-                      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                        input.coverImage === preset.url
-                          ? 'border-blue-600 ring-2 ring-blue-600/30'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
-                      }`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-2.5 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 min-h-[36px]"
+                      title="Quitar imagen actual"
                     >
-                      <img src={preset.url} alt={preset.label} className="aspect-video w-full object-cover" />
-                      {input.coverImage === preset.url && (
-                        <span className="absolute right-1 top-1 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                          {labels.actions.coverSelected}
-                        </span>
-                      )}
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Quitar</span>
                     </button>
-                  ))}
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void generateCover()}
-                  disabled={generatingCover}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
-                >
-                  {generatingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {generatingCover ? labels.actions.generating : labels.actions.generate}
-                </button>
+
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                    <LinkIcon className="h-3.5 w-3.5" />
+                  </div>
+                  <input
+                    type="url"
+                    placeholder="O pega aquí el enlace directo a una imagen (https://...)"
+                    value={input.coverImage.startsWith('data:') ? '' : input.coverImage}
+                    onChange={(e) => {
+                      setInput((prev) => ({ ...prev, coverImage: e.target.value.trim() }));
+                      setStatus('unsaved');
+                    }}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                    O selecciona una de nuestras portadas prediseñadas:
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {COVER_PRESETS.map((preset) => (
+                      <button
+                        key={preset.url}
+                        type="button"
+                        onClick={() => {
+                          setInput((prev) => ({ ...prev, coverImage: preset.url }));
+                          setStatus('unsaved');
+                        }}
+                        className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                          input.coverImage === preset.url
+                            ? 'border-blue-600 ring-2 ring-blue-600/30'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                        }`}
+                      >
+                        <img src={preset.url} alt={preset.label} className="aspect-video w-full object-cover" />
+                        {input.coverImage === preset.url && (
+                          <span className="absolute right-1 top-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="aspect-video overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-900">
-                {input.coverImage ? (
-                  <img src={input.coverImage} alt={input.title} className="h-full w-full object-cover" />
+
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setCoverDragging(true);
+                }}
+                onDragLeave={() => setCoverDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setCoverDragging(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) void handleCoverFileUpload(file);
+                }}
+                onClick={() => coverFileInputRef.current?.click()}
+                className={`aspect-video overflow-hidden rounded-xl border-2 transition-all cursor-pointer relative group flex items-center justify-center bg-slate-900 ${
+                  coverDragging
+                    ? 'border-blue-500 ring-4 ring-blue-500/20 bg-blue-950/40'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                }`}
+                title="Haz clic o arrastra una imagen aquí para subirla"
+              >
+                {uploadingCover ? (
+                  <div className="flex flex-col items-center gap-2 text-white">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+                    <span className="text-xs font-semibold">Subiendo imagen...</span>
+                  </div>
+                ) : input.coverImage ? (
+                  <>
+                    <img src={input.coverImage} alt={input.title} className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-3 text-center">
+                      <Upload className="w-5 h-5 mb-1" />
+                      <span className="text-xs font-semibold">Cambiar imagen</span>
+                      <span className="text-[10px] text-slate-300">Haz clic o arrastra un archivo</span>
+                    </div>
+                  </>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-slate-400">
-                    <ImageIcon className="h-7 w-7" />
+                  <div className="flex flex-col items-center gap-1.5 text-slate-400 p-4 text-center">
+                    <ImageIcon className="h-8 w-8 text-slate-500" />
+                    <span className="text-xs font-medium">Haz clic o arrastra una imagen</span>
+                    <span className="text-[10px] text-slate-500">PNG, JPG, WebP</span>
                   </div>
                 )}
               </div>

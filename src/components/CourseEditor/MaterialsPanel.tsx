@@ -124,7 +124,7 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
       const task = initial[index];
       try {
         const material = await uploadCourseMaterial(
-          courseId.startsWith('crs_') || courseId.startsWith('tmp_') ? courseId : `tmp_${Date.now().toString(36)}`,
+          courseId || 'general',
           lessonId,
           file,
           (pct) => {

@@ -1330,7 +1330,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         allowedPatch.currency = patch.currency;
       }
       if (typeof patch.coverImage === 'string') {
-        allowedPatch.coverImage = patch.coverImage.slice(0, 500);
+        allowedPatch.coverImage = patch.coverImage.slice(0, 300000);
       }
       if (typeof patch.instructorName === 'string') {
         allowedPatch.instructorName = patch.instructorName.trim().slice(0, 100);

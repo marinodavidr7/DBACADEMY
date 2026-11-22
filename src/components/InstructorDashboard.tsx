@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import type { TranslationKeys } from '../i18n/translations';
 import { isAuthorizedAdminEmail } from '../firebase';
 import type { Course } from '../types';
 import { exportTableToPdf, exportToCsv } from '../utils/export';
@@ -27,7 +28,7 @@ import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
 
-const COURSE_EDITOR_LABELS = (t: (key: string) => string) => ({
+const COURSE_EDITOR_LABELS = (t: (key: TranslationKeys) => string) => ({
   index: {
     title: t('editorIndexTitle'),
     subtitle: t('editorIndexSubtitle'),
@@ -74,7 +75,7 @@ const COURSE_EDITOR_LABELS = (t: (key: string) => string) => ({
     bold: t('editorBold'),
     italic: t('editorItalic'),
     list: t('editorList'),
-    code: t('editorCode'),
+    code: t('editorCodeLabel'),
     formula: t('editorFormula'),
     link: t('editorLink'),
     videoUrl: t('editorVideoUrl'),
@@ -222,7 +223,8 @@ export const InstructorDashboard: React.FC = () => {
   const [deleteError, setDeleteError] = useState('');
 
   const [saveSuccess, setSaveSuccess] = useState('');
-  const [draftCourseId] = useState(() => `crs_${Date.now().toString(36)}`);
+
+  const courseEditorLabels = useMemo(() => COURSE_EDITOR_LABELS(t), [t]);
 
   const canAdminMutate = Boolean(
     user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email)

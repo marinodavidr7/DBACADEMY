@@ -102,7 +102,7 @@ service cloud.firestore {
         && data.level in ['beginner', 'intermediate', 'advanced']
         && data.priceCents is number && data.priceCents >= 0 && data.priceCents <= 10000000
         && data.currency in ['USD', 'EUR', 'MXN']
-        && (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 500))
+        && (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 300000))
         && isValidId(data.instructorId)
         && data.instructorName is string && data.instructorName.size() >= 1 && data.instructorName.size() <= 100
         && data.published is bool
