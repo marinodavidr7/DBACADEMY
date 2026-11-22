@@ -357,7 +357,7 @@ export const EXCEL_INTERMEDIO_COURSE: Course = {
 
 export const EXCEL_AVANZADO_COURSE: Course = {
   id: 'excel-avanzado-01',
-  title: 'Excel Avanzado: Automatización con Macros, Power Query y Dashboards',
+  title: 'Excel Experto: Automatización con Macros, Power Query y Dashboards',
   subtitle: 'Automatiza flujos de trabajo repetitivos con Power Query, modelado de datos DAX, Macros VBA y visualización ejecutiva.',
   description:
     'Lleva tus habilidades al nivel experto. Conecta y transforma fuentes heterogéneas con Power Query, crea modelos relacionales con Power Pivot, automatiza tareas complejas con Macros y construye dashboards interactivos de alto impacto para toma de decisiones.',

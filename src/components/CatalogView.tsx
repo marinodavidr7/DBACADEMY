@@ -304,7 +304,23 @@ export const CatalogView: React.FC = () => {
                           <span>Ver programa</span>
                         </button>
 
-                        {isEnrolled || isAdmin ? (
+                        {hasPrereqs && !prereqsCompleted && !isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (prereqCourses[0]) {
+                                setSelectedCourseId(prereqCourses[0].id);
+                                setActiveView('course-detail');
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-200 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>
+                              Completar {prereqCourses[0]?.title.split(':')[0] || 'prerrequisito'}
+                            </span>
+                          </button>
+                        ) : isEnrolled || isAdmin ? (
                           <button
                             type="button"
                             onClick={() => {

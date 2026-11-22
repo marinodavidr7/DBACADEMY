@@ -100,6 +100,12 @@ export const CourseDetailView: React.FC = () => {
   };
 
   const handlePrimaryAction = async () => {
+    if (prereqCourses.length > 0 && !prereqsMet && !isAdmin) {
+      if (prereqCourses[0]) {
+        setSelectedCourseId(prereqCourses[0].id);
+      }
+      return;
+    }
     if (isEnrolled || hasInstructorAccess) {
       setSelectedCourseId(course.id);
       setActiveView('learning');
@@ -183,15 +189,17 @@ export const CourseDetailView: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="rounded-xl border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
-                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
+                    <Lock className="w-5 h-5" />
+                  </div>
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-amber-950 dark:text-amber-200">
-                      Prerrequisito recomendado antes de comenzar
+                      Prerrequisito obligatorio: Acceso bloqueado
                     </p>
-                    <p className="text-xs text-amber-900/85 dark:text-amber-300/80 leading-relaxed max-w-xl">
-                      Para garantizar el máximo aprovechamiento sin lagunas de concepto, te sugerimos completar previamente:{' '}
+                    <p className="text-xs text-amber-900/90 dark:text-amber-300/90 leading-relaxed max-w-xl">
+                      Para cursar este programa debes haber completado y aprobado primero el 100% de:{' '}
                       <strong>{prereqCourses.map((p) => p.title).join(', ')}</strong>.
                     </p>
                   </div>
@@ -203,9 +211,9 @@ export const CourseDetailView: React.FC = () => {
                       setSelectedCourseId(prereqCourses[0].id);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-900/40 px-3.5 py-2 text-xs font-semibold text-amber-900 dark:text-amber-100 hover:bg-amber-100/70 dark:hover:bg-amber-800/50 transition-colors whitespace-nowrap self-start sm:self-auto min-h-[38px]"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap self-start sm:self-auto min-h-[38px]"
                 >
-                  <span>Ver curso previo</span>
+                  <span>Ir a {prereqCourses[0]?.title.split(':')[0] || 'curso previo'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -348,9 +356,20 @@ export const CourseDetailView: React.FC = () => {
               type="button"
               disabled={enrolling}
               onClick={() => void handlePrimaryAction()}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px]"
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-colors min-h-[44px] ${
+                prereqCourses.length > 0 && !prereqsMet && !isAdmin
+                  ? 'border border-amber-300 dark:border-amber-700 bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-[#0052CC] hover:bg-[#0747A6] disabled:opacity-60 text-white'
+              }`}
             >
-              {isEnrolled || hasInstructorAccess ? (
+              {prereqCourses.length > 0 && !prereqsMet && !isAdmin ? (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>
+                    Completar {prereqCourses[0]?.title.split(':')[0] || 'prerrequisito'} primero
+                  </span>
+                </>
+              ) : isEnrolled || hasInstructorAccess ? (
                 <>
                   <Play className="w-4 h-4" />
                   <span>{isEnrolled ? t('continueCourse') : 'Abrir curso'}</span>

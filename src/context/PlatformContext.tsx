@@ -1017,6 +1017,21 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     ): Promise<PaymentRecord> => {
       if (!user) throw new Error('Authentication required');
 
+      // Validar prerrequisitos estrictos
+      if (course.prerequisites && course.prerequisites.length > 0 && !isAdmin) {
+        const unmet = course.prerequisites.filter((prereqId) => {
+          const enr = enrollments.find((e) => e.courseId === prereqId);
+          const hasCert = certificates.some((c) => c.courseId === prereqId);
+          return !((enr && enr.progressPercent >= 100) || hasCert);
+        });
+        if (unmet.length > 0) {
+          const prereqCourse = courses.find((c) => c.id === unmet[0]);
+          throw new Error(
+            `Prerrequisito obligatorio no completado: Debes completar y aprobar primero "${prereqCourse?.title || unmet[0]}".`
+          );
+        }
+      }
+
       const couponCode = options?.couponCode?.trim().toUpperCase() || '';
       const referralWelcome = options?.referralWelcome === true;
       const testMode = options?.testMode === true;

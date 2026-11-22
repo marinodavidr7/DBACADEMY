@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useStat
 import {
   AlertCircle,
   Archive,
+  ArrowRight,
   Award,
   BookOpen,
   Box,
@@ -155,11 +156,11 @@ export const CoursePlayerView: React.FC = () => {
 
   const activeCourse = useMemo(() => {
     if (selectedCourseId) {
-      const found = enrolledCourses.find((c) => c.id === selectedCourseId);
+      const found = courses.find((c) => c.id === selectedCourseId);
       if (found) return found;
     }
-    return enrolledCourses[0] || null;
-  }, [enrolledCourses, selectedCourseId]);
+    return enrolledCourses[0] || courses[0] || null;
+  }, [courses, enrolledCourses, selectedCourseId]);
 
   const activeEnrollment = useMemo(() => {
     if (!activeCourse) return null;
@@ -485,6 +486,75 @@ export const CoursePlayerView: React.FC = () => {
   }, [setZenMode]);
 
   if (!user) return <AuthGateNotice />;
+
+  if (activeCourse && prereqCourses.length > 0 && !prereqsMet && (!isAdmin || viewAsStudent)) {
+    const unmetPrereq = prereqCourses[0];
+    const unmetEnrollment = enrollments.find((e) => e.courseId === unmetPrereq?.id);
+    const progress = unmetEnrollment?.progressPercent ?? 0;
+
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-4 sm:px-6">
+        <div className="rounded-2xl border border-amber-300 dark:border-amber-800/80 bg-white dark:bg-[#0F172A] p-8 sm:p-10 text-center shadow-lg">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 flex items-center justify-center mx-auto text-amber-700 dark:text-amber-400">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <h2 className="mt-5 font-display text-2xl font-bold text-slate-900 dark:text-slate-100">
+            Acceso bloqueado por prerrequisito
+          </h2>
+
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-lg mx-auto">
+            Para acceder a las lecciones de{' '}
+            <strong className="text-slate-900 dark:text-white">{activeCourse.title}</strong>, debes
+            completar y aprobar primero el 100% del nivel anterior:
+          </p>
+
+          {unmetPrereq && (
+            <div className="mt-6 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-left">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-semibold text-amber-700 dark:text-amber-400">
+                  Prerrequisito obligatorio
+                </span>
+                <span className="font-mono">{progress}% completado</span>
+              </div>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                {unmetPrereq.title}
+              </p>
+              <div className="mt-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-amber-500 h-2 rounded-full transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {unmetPrereq && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCourseId(unmetPrereq.id);
+                  setActiveView('learning');
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-2.5 text-sm font-semibold text-white transition-colors min-h-[44px]"
+              >
+                <span>Ir a {unmetPrereq.title.split(':')[0]}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setActiveView('catalog')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors min-h-[44px]"
+            >
+              <span>Volver al catálogo</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (enrolledCourses.length === 0 || !activeCourse || !activeEnrollment || !currentLesson) {
     return (
