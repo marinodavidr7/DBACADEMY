@@ -24,6 +24,7 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Keyboard,
+  Layers,
   Lightbulb,
   Lock,
   Maximize2,
@@ -46,6 +47,8 @@ import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
+import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
+import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { CourseProgressBar } from './ui/CourseProgressBar';
 
@@ -233,7 +236,8 @@ export const CoursePlayerView: React.FC = () => {
   const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [externalPreset, setExternalPreset] = useState<SimulatorExternalPreset | null>(null);
-  const [activeTab, setActiveTab] = useState<'reader' | 'practice' | 'syntax' | 'lab' | 'materials'>('reader');
+  const [activeTab, setActiveTab] = useState<'reader' | 'practice' | 'syntax' | 'lab' | 'materials' | 'screen'>('reader');
+  const [basicsViewMode, setBasicsViewMode] = useState<'screen' | 'grid'>('screen');
   const [requestedExampleId, setRequestedExampleId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const [searchTopic, setSearchTopic] = useState('');
@@ -438,6 +442,7 @@ export const CoursePlayerView: React.FC = () => {
   }, [prereqCourses, enrollments, certificates, isAdmin, viewAsStudent]);
   const isSiLesson = currentLesson?.id === 'les-excel-1-13';
   const isGridBasicsLesson = currentLesson?.id === 'les-excel-0-0';
+  const isF4Lesson = currentLesson?.id === 'les-excel-0-2';
   const lessonExerciseCount = useMemo(() => {
     if (!isExcelCourse || !currentLesson) return 0;
     const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
@@ -1030,7 +1035,12 @@ export const CoursePlayerView: React.FC = () => {
                     )}
                     {isGridBasicsLesson && (
                       <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold">
-                        Cuadrícula 2D Interactiva
+                        Cuadrícula 2D & Pantalla de Excel
+                      </span>
+                    )}
+                    {isF4Lesson && (
+                      <span className="px-2 py-0.5 rounded bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[11px] font-semibold">
+                        Simulador F4 Interactivo
                       </span>
                     )}
                   </div>
@@ -1070,25 +1080,45 @@ export const CoursePlayerView: React.FC = () => {
                 </button>
 
                 {isExcelCourse ? (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === 'practice'}
-                    onClick={() => setActiveTab('practice')}
-                    className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
-                      activeTab === 'practice'
-                        ? 'border-[#107C41] dark:border-emerald-400 text-[#107C41] dark:text-emerald-300 bg-white/70 dark:bg-[#111827]/70'
-                        : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                    <span>Práctica</span>
-                    {lessonExerciseCount > 0 && (
-                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-[#107C41] dark:text-emerald-300 font-mono text-[11px] font-bold">
-                        {lessonExerciseCount}
+                  <>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'practice'}
+                      onClick={() => setActiveTab('practice')}
+                      className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                        activeTab === 'practice'
+                          ? 'border-[#107C41] dark:border-emerald-400 text-[#107C41] dark:text-emerald-300 bg-white/70 dark:bg-[#111827]/70'
+                          : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                      <span>Práctica</span>
+                      {lessonExerciseCount > 0 && (
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-[#107C41] dark:text-emerald-300 font-mono text-[11px] font-bold">
+                          {lessonExerciseCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'screen'}
+                      onClick={() => setActiveTab('screen')}
+                      className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                        activeTab === 'screen'
+                          ? 'border-[#107C41] dark:border-emerald-400 text-[#107C41] dark:text-emerald-300 bg-white/70 dark:bg-[#111827]/70'
+                          : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Layers className="w-4 h-4 shrink-0" />
+                      <span>Pantalla Excel</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-[#107C41] dark:text-emerald-300 text-[10px] font-bold">
+                        9 Piezas
                       </span>
-                    )}
-                  </button>
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -1192,8 +1222,49 @@ export const CoursePlayerView: React.FC = () => {
               {activeTab === 'reader' && isExcelCourse && (
                 <div className="space-y-5 min-w-0">
                   {isGridBasicsLesson && (
+                    <div className="space-y-4">
+                      {/* Alternador de vista: Pantalla de Excel o Cuadrícula 2D */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setBasicsViewMode('screen')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              basicsViewMode === 'screen'
+                                ? 'bg-[#107C41] text-white shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                            }`}
+                          >
+                            🖥️ Pantalla de Excel (9 Piezas & Cinta)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBasicsViewMode('grid')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              basicsViewMode === 'grid'
+                                ? 'bg-[#107C41] text-white shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                            }`}
+                          >
+                            📐 Cuadrícula 2D (Columnas, Filas, Celdas)
+                          </button>
+                        </div>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
+                          Explora los componentes interactivos de la lección
+                        </span>
+                      </div>
+
+                      {basicsViewMode === 'screen' ? (
+                        <ExcelScreenInterfaceViewer />
+                      ) : (
+                        <ExcelGridBasicsViewer />
+                      )}
+                    </div>
+                  )}
+
+                  {isF4Lesson && (
                     <div className="space-y-3">
-                      <ExcelGridBasicsViewer />
+                      <ExcelF4ReferenceViewer />
                     </div>
                   )}
 
@@ -1420,9 +1491,16 @@ export const CoursePlayerView: React.FC = () => {
                 </div>
               )}
 
-              {/* Tab 4: Materiales descargables */}
+              {/* Tab: Materiales descargables */}
               {activeTab === 'materials' && (
                 <MaterialsTab materials={currentLesson.materials ?? []} />
+              )}
+
+              {/* Tab: Pantalla de Excel Interactiva */}
+              {activeTab === 'screen' && isExcelCourse && (
+                <div className="space-y-4">
+                  <ExcelScreenInterfaceViewer />
+                </div>
               )}
             </div>
 

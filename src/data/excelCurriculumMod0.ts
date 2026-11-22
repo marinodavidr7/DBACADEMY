@@ -5,12 +5,14 @@ export const EXCEL_CURRICULUM_MOD0: Record<string, ExcelLessonCurriculum> = {
   'les-excel-0-0': {
     lessonId: 'les-excel-0-0',
     introduction:
-      'La hoja de cálculo organiza toda la información en una cuadrícula bidimensional de columnas (verticales, identificadas con letras) y filas (horizontales, identificadas con números). La intersección entre una columna y una fila da origen a una celda única con su coordenada universal (por ejemplo: C3). Comprender cómo leer, navegar y referenciar esta cuadrícula es el pilar de todo cálculo en Excel.',
+      'La hoja de cálculo organiza toda la información en una cuadrícula bidimensional de columnas (verticales, identificadas con letras de la A a la XFD) y filas (horizontales, identificadas con números del 1 al 1.048.576). La intersección entre una columna y una fila da origen a una celda única con su coordenada universal (por ejemplo: C4). Esta cuadrícula vive dentro de la interfaz gráfica de Microsoft Excel, estructurada en 9 componentes esenciales: Barra de título y acceso rápido, Cinta de opciones por pestañas, Cuadro de nombres, Barra de fórmulas fx, Encabezados de columnas, Encabezados de filas, Celda activa con su controlador de relleno, Pestañas de hojas y Barra de estado con zoom.',
     keyTakeaways: [
-      'Las columnas son verticales y se identifican con letras (A, B, C... hasta XFD).',
-      'Las filas son horizontales y se identifican con números (1, 2, 3... hasta 1.048.576).',
-      'Una celda nace donde se cruzan una columna y una fila; se nombra siempre indicando primero la letra y luego el número (ej. C3).',
-      'El Cuadro de Nombres exhibe la coordenada activa y la Barra de Fórmulas muestra su contenido subyacente.',
+      'Las columnas son verticales y se identifican con letras (A, B, C... hasta XFD, 16.384 columnas).',
+      'Las filas son horizontales y se identifican con números (1, 2, 3... hasta 1.048.576 filas).',
+      'Una celda nace donde se cruzan una columna y una fila; se nombra siempre indicando primero la letra y luego el número (ej. C4).',
+      'El Cuadro de Nombres exhibe la coordenada activa y la Barra de Fórmulas muestra su contenido o fórmula subyacente.',
+      'La Cinta de Opciones organiza comandos en pestañas temáticas: Inicio, Insertar, Disposición, Fórmulas, Datos y Vista.',
+      'El controlador de relleno (pequeño cuadro verde en la esquina de la celda activa) permite arrastrar y autocompletar series y fórmulas.',
     ],
     functions: [
       {

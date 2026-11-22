@@ -32,12 +32,12 @@ export const EXCEL_BASICO_COURSE: Course = {
       lessons: [
         {
           id: 'les-excel-0-0',
-          title: '0.0 Conceptos Básicos: Columnas, Filas y Celdas',
-          durationMinutes: 15,
+          title: '0.0 Conceptos Básicos: Columnas, Filas, Celdas y la Pantalla de Excel',
+          durationMinutes: 20,
           summary:
-            'Aprende a orientarte en la hoja de cálculo: cómo se organizan las columnas (verticales con letras), las filas (horizontales con números) y la intersección que da vida a las celdas y su coordenada.',
+            'Aprende a orientarte en la hoja de cálculo: cómo se organizan las columnas (verticales con letras), las filas (horizontales con números), las celdas y la anatomía interactiva completa de la pantalla de Microsoft Excel (las 9 piezas clave, cinta de opciones y barra de fórmulas).',
           content:
-            'Toda hoja de cálculo en Excel está estructurada como una inmensa cuadrícula bidimensional. Las columnas son bandas verticales nombradas con letras de la A a la Z (y combinaciones como AA, AB... hasta XFD). Las filas son bandas horizontales numeradas del 1 al 1.048.576. El punto exacto donde se cruzan una columna y una fila es una celda, cuya dirección o coordenada universal se lee siempre mencionando primero la letra de la columna y luego el número de fila (por ejemplo: C3). En la parte superior, el Cuadro de Nombres te indica qué celda tienes seleccionada en todo momento, mientras que la Barra de Fórmulas (fx) exhibe el dato o valor numérico que reside en su interior.',
+            'Toda hoja de cálculo en Excel está estructurada como una inmensa cuadrícula bidimensional dentro de una potente interfaz de trabajo. Las columnas son bandas verticales nombradas con letras de la A a la Z (hasta XFD, 16.384 columnas). Las filas son bandas horizontales numeradas del 1 al 1.048.576. El punto exacto donde se cruzan una columna y una fila es una celda (ej. C4). La pantalla de Excel se compone de 9 piezas fundamentales: 1) Barra de título y acceso rápido, 2) Cinta de opciones con sus pestañas de herramientas (Inicio, Insertar, Disposición, Fórmulas, Datos, Vista), 3) Cuadro de nombres, 4) Barra de fórmulas fx, 5) Encabezados de columnas, 6) Encabezados de filas, 7) Celda activa con su controlador de relleno, 8) Pestañas de hojas y 9) Barra de estado con zoom. En esta lección dispones de un simulador interactivo para explorar la pantalla y la cuadrícula en vivo.',
         },
         {
           id: 'les-excel-0-1',
