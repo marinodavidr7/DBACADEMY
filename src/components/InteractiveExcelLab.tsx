@@ -14,10 +14,19 @@ import {
   RefreshCw,
   RotateCcw,
   Sparkles,
-  Table2,
   Terminal,
   Trash2,
 } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Grid state machine types
+// idle           → no cell selected (initial state)
+// selected       → a cell is active, arrow keys move focus, typing starts edit
+// editing        → inline <input> open in the active cell; F2 or any char triggers
+// formula-select → subset of editing where formula starts with '='; clicking
+//                  another cell inserts its address instead of selecting it
+// ---------------------------------------------------------------------------
+type GridMode = 'idle' | 'selected' | 'editing' | 'formula-select';
 import { usePlatform } from '../context/PlatformContext';
 import { isAuthorizedAdminEmail } from '../firebase';
 import {
@@ -76,6 +85,20 @@ function splitSyntaxLines(syntax: string): string[] {
     .split(/\n|\s*[·|]\s*/g)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+/**
+ * Cycles a cell reference through the four absolute/relative states Excel uses
+ * when pressing F4:  B3 → $B$3 → B$3 → $B3 → B3
+ */
+function cycleReference(ref: string): string {
+  const m = ref.match(/^(\$?)([A-L])(\$?)(\d+)$/i);
+  if (!m) return ref;
+  const [, colPin, col, rowPin, row] = m;
+  if (!colPin && !rowPin) return `$${col}$${row}`;      // relative → both absolute
+  if (colPin && rowPin) return `${col}$${row}`;          // both absolute → col relative
+  if (!colPin && rowPin) return `$${col}${row}`;         // row absolute → col absolute
+  return `${col}${row}`;                                  // col absolute → both relative
 }
 
 export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
@@ -198,6 +221,21 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   const [recalcTick, setRecalcTick] = useState(0);
   const [checkResult, setCheckResult] = useState<{ ok: boolean; feedback: string } | null>(null);
 
+  // ── Grid state machine ────────────────────────────────────────────────────
+  // gridMode drives how keyboard events and cell-clicks are interpreted.
+  const [gridMode, setGridMode] = useState<GridMode>('idle');
+  // inlineDraft: the string the user is typing inside the cell input.
+  // Kept in sync with formulaDraft (formula bar). formulaDraft is the
+  // shared source-of-truth; inlineDraft just shadows it for the inline <input>.
+  const [inlineDraft, setInlineDraft] = useState('');
+  // Value that was in the cell before entering edit mode (used for Escape/cancel).
+  const prevCellValue = useRef('');
+
+  // Refs for keyboard-focus management
+  const gridContainerRef = useRef<HTMLDivElement | null>(null);
+  const inlineCellInputRef = useRef<HTMLInputElement | null>(null);
+  const formulaBarInputRef = useRef<HTMLInputElement | null>(null);
+
   const gridRef = useRef<HTMLDivElement | null>(null);
 
   // Reset state cleanly when changing lesson
@@ -276,6 +314,8 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   const handleSelectCell = useCallback(
     (addr: string) => {
       setSelectedCell(addr);
+      setGridMode('selected');
+      setInlineDraft('');
       const source =
         activeSheetTab === 'secondary' && activeContext.secondarySheet
           ? activeContext.secondarySheet.cells
@@ -286,18 +326,266 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   );
 
   const commitFormula = useCallback(
-    (rawValue: string) => {
+    (rawValue: string, forCell?: string) => {
       if (activeSheetTab === 'secondary') return;
+      const cell = forCell ?? selectedCell;
       const trimmed = rawValue.trim();
       const parsed: CellPrimitive =
         trimmed !== '' && !trimmed.startsWith('=') && /^-?\d+(\.\d+)?$/.test(trimmed)
           ? Number(trimmed)
           : rawValue;
-      setSheet((prev) => ({ ...prev, [selectedCell]: parsed }));
+      setSheet((prev) => ({ ...prev, [cell]: parsed }));
       setCheckResult(null);
     },
     [activeSheetTab, selectedCell]
   );
+
+  // ── Grid state-machine helpers ────────────────────────────────────────────
+
+  /** Derive col/row from an address like "B3" */
+  const parseAddr = (addr: string): { col: string; row: number } | null => {
+    const m = addr.match(/^([A-L])(\d+)$/i);
+    if (!m) return null;
+    return { col: m[1].toUpperCase(), row: Number(m[2]) };
+  };
+
+  /** Move the active cell by one step in a direction */
+  const moveActiveCell = useCallback(
+    (dir: 'up' | 'down' | 'left' | 'right') => {
+      const p = parseAddr(selectedCell);
+      if (!p) return;
+      const colIdx = activeCols.indexOf(p.col);
+      let newCol = p.col;
+      let newRow = p.row;
+      if (dir === 'up') newRow = Math.max(activeCols.length ? activeRows[0] : 1, p.row - 1);
+      if (dir === 'down') newRow = Math.min(activeRows[activeRows.length - 1] ?? p.row, p.row + 1);
+      if (dir === 'left') newCol = activeCols[Math.max(0, colIdx - 1)];
+      if (dir === 'right') newCol = activeCols[Math.min(activeCols.length - 1, colIdx + 1)];
+      const next = `${newCol}${newRow}`;
+      if (next !== selectedCell) handleSelectCell(next);
+    },
+    [selectedCell, activeCols, activeRows, handleSelectCell]
+  );
+
+  /** Enter edit mode for the active cell, optionally with an initial character */
+  const enterEditMode = useCallback(
+    (initialChar?: string) => {
+      if (activeSheetTab === 'secondary') return;
+      const rawVal = String(sheet[selectedCell] ?? '');
+      prevCellValue.current = rawVal;
+      const draft = initialChar !== undefined ? initialChar : rawVal;
+      setInlineDraft(draft);
+      setFormulaDraft(draft);
+      const mode: GridMode = draft.startsWith('=') ? 'formula-select' : 'editing';
+      setGridMode(mode);
+      // Focus the inline input on next frame
+      requestAnimationFrame(() => inlineCellInputRef.current?.focus());
+    },
+    [activeSheetTab, selectedCell, sheet]
+  );
+
+  /** Commit current edit and optionally move focus */
+  const commitEdit = useCallback(
+    (moveDir?: 'up' | 'down' | 'left' | 'right') => {
+      commitFormula(inlineDraft, selectedCell);
+      setGridMode('selected');
+      setInlineDraft('');
+      if (moveDir) {
+        // Move after committing — do it on next tick so sheet state has settled
+        setTimeout(() => moveActiveCell(moveDir), 0);
+      } else {
+        requestAnimationFrame(() => gridContainerRef.current?.focus());
+      }
+    },
+    [commitFormula, inlineDraft, selectedCell, moveActiveCell]
+  );
+
+  /** Cancel edit, restoring the previous value */
+  const cancelEdit = useCallback(() => {
+    setFormulaDraft(prevCellValue.current);
+    setInlineDraft('');
+    setGridMode('selected');
+    requestAnimationFrame(() => gridContainerRef.current?.focus());
+  }, []);
+
+  /** Handle a click on a cell while in formula-select mode (point-and-click ref insertion) */
+  const insertCellRef = useCallback(
+    (addr: string) => {
+      const input = inlineCellInputRef.current ?? formulaBarInputRef.current;
+      const selStart = input?.selectionStart ?? inlineDraft.length;
+      const selEnd = input?.selectionEnd ?? inlineDraft.length;
+      // Replace any trailing partial cell reference with the clicked address
+      const before = inlineDraft.slice(0, selStart);
+      const after = inlineDraft.slice(selEnd);
+      // Strip trailing partial ref (e.g., "=SUMA(A" → replace trailing col letter)
+      const cleaned = before.replace(/([A-L]?\d*|\$?[A-L]\$?\d*)$/i, '');
+      const newDraft = cleaned + addr + after;
+      setInlineDraft(newDraft);
+      setFormulaDraft(newDraft);
+      const mode: GridMode = newDraft.startsWith('=') ? 'formula-select' : 'editing';
+      setGridMode(mode);
+      requestAnimationFrame(() => {
+        const pos = cleaned.length + addr.length;
+        inlineCellInputRef.current?.setSelectionRange(pos, pos);
+        inlineCellInputRef.current?.focus();
+      });
+    },
+    [inlineDraft]
+  );
+
+  /** Handle a cell click depending on current grid mode */
+  const handleCellClick = useCallback(
+    (addr: string) => {
+      if (gridMode === 'formula-select' && addr !== selectedCell) {
+        insertCellRef(addr);
+        return;
+      }
+      handleSelectCell(addr);
+    },
+    [gridMode, selectedCell, insertCellRef, handleSelectCell]
+  );
+
+  /** Handle inline draft change — keep formula bar in sync and update mode */
+  const handleInlineDraftChange = useCallback((val: string) => {
+    setInlineDraft(val);
+    setFormulaDraft(val);
+    setGridMode(val.startsWith('=') ? 'formula-select' : 'editing');
+  }, []);
+
+  /** Handle formula bar change while in selected/editing mode */
+  const handleFormulaBarChange = useCallback((val: string) => {
+    setFormulaDraft(val);
+    setInlineDraft(val);
+    if (gridMode === 'selected') {
+      // Automatically enter edit mode when user types in formula bar
+      prevCellValue.current = String(sheet[selectedCell] ?? '');
+      setGridMode(val.startsWith('=') ? 'formula-select' : 'editing');
+    } else {
+      setGridMode(val.startsWith('=') ? 'formula-select' : 'editing');
+    }
+  }, [gridMode, sheet, selectedCell]);
+
+  /** Keyboard handler for the grid container (when NOT in an input) */
+  const handleGridKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (gridMode === 'editing' || gridMode === 'formula-select') return; // let the inline input handle it
+
+      const dir =
+        e.key === 'ArrowUp' ? 'up'
+        : e.key === 'ArrowDown' ? 'down'
+        : e.key === 'ArrowLeft' ? 'left'
+        : e.key === 'ArrowRight' ? 'right'
+        : null;
+
+      if (dir) {
+        e.preventDefault();
+        moveActiveCell(dir);
+        return;
+      }
+
+      if (e.key === 'F2') {
+        e.preventDefault();
+        enterEditMode();
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (activeSheetTab === 'secondary') return;
+        setSheet((prev) => ({ ...prev, [selectedCell]: '' }));
+        setFormulaDraft('');
+        setCheckResult(null);
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        enterEditMode();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        moveActiveCell(e.shiftKey ? 'left' : 'right');
+        return;
+      }
+
+      // Printable character → enter edit mode with that character as initial value
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        enterEditMode(e.key);
+      }
+    },
+    [gridMode, moveActiveCell, enterEditMode, activeSheetTab, selectedCell]
+  );
+
+  /** Keyboard handler for the inline cell input */
+  const handleInlineInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEdit('down');
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        commitEdit(e.shiftKey ? 'left' : 'right');
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit();
+        return;
+      }
+      // Arrow keys exit edit mode (only when NOT in formula mode)
+      if (gridMode !== 'formula-select') {
+        if (e.key === 'ArrowUp') { e.preventDefault(); commitEdit('up'); return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); commitEdit('down'); return; }
+      }
+      // F4: cycle reference type (absolute/relative) on the token at cursor
+      if (e.key === 'F4') {
+        e.preventDefault();
+        const inp = e.currentTarget;
+        const pos = inp.selectionStart ?? inlineDraft.length;
+        const before = inlineDraft.slice(0, pos);
+        const after = inlineDraft.slice(pos);
+        const refMatch = before.match(/(\$?[A-L]\$?\d+)$/i);
+        if (refMatch) {
+          const ref = refMatch[1];
+          const cycled = cycleReference(ref);
+          const newVal = before.slice(0, before.length - ref.length) + cycled + after;
+          handleInlineDraftChange(newVal);
+          requestAnimationFrame(() => {
+            const newPos = pos - ref.length + cycled.length;
+            inp.setSelectionRange(newPos, newPos);
+          });
+        }
+      }
+    },
+    [gridMode, commitEdit, cancelEdit, inlineDraft, handleInlineDraftChange]
+  );
+
+  /** Keyboard handler for the formula bar input */
+  const handleFormulaBarKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEdit();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit();
+        return;
+      }
+    },
+    [commitEdit, cancelEdit]
+  );
+
+  // Reset grid mode when exercise/example changes
+  useEffect(() => {
+    setGridMode('idle');
+    setInlineDraft('');
+  }, [activeContext]);
 
   const shiftFormulaRows = (formula: string, delta: number): string => {
     let inQuotes = false;
@@ -431,20 +719,6 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     setLoadedExampleId(example.id);
     gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
-
-  const quickFunctionChips = useMemo(
-    () => [
-      '=CONTAR.SI(',
-      '=O(',
-      '=PROMEDIO(',
-      '=SI(',
-      '=SI.ERROR(',
-      '=SUMA(',
-      '=SUMAR.SI(',
-      '=Y(',
-    ],
-    []
-  );
 
   const solvedCount = useMemo(
     () => allExercises.filter((ex) => solvedIds.includes(ex.id)).length,
@@ -977,37 +1251,45 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
           )}
         </div>
 
-        {/* Formula Bar */}
-        <div className="px-3 py-2.5 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2 min-w-0">
-          <span className="px-2.5 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 min-w-[44px] min-h-[38px] flex items-center justify-center shrink-0">
+        {/* ── Formula Bar ─────────────────────────────────────────────────── */}
+        <div className="px-3 py-2 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2 min-w-0">
+          {/* Cell address indicator */}
+          <span className="px-2.5 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 min-w-[48px] min-h-[38px] flex items-center justify-center shrink-0">
             {selectedCell}
           </span>
           <span className="text-xs font-serif italic font-bold text-[#107C41] dark:text-emerald-400 shrink-0">
             fx
           </span>
           <input
+            ref={formulaBarInputRef}
             type="text"
             value={formulaDraft}
             disabled={activeSheetTab === 'secondary'}
-            onChange={(e) => setFormulaDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitFormula(formulaDraft);
+            onChange={(e) => handleFormulaBarChange(e.target.value)}
+            onKeyDown={handleFormulaBarKeyDown}
+            onBlur={() => {
+              // Only commit on blur when we were actually editing
+              if (gridMode === 'editing' || gridMode === 'formula-select') {
+                commitEdit();
               }
             }}
-            onBlur={() => commitFormula(formulaDraft)}
+            onFocus={() => {
+              // Entering formula bar counts as entering edit mode
+              if (gridMode === 'idle' || gridMode === 'selected') {
+                prevCellValue.current = String(sheet[selectedCell] ?? '');
+                const mode: GridMode = formulaDraft.startsWith('=') ? 'formula-select' : 'editing';
+                setGridMode(mode);
+                setInlineDraft(formulaDraft);
+              }
+            }}
             placeholder={`Escribe un valor o fórmula en ${selectedCell} (inicia con =)`}
-            className="flex-1 min-w-0 w-full sm:w-auto rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-base sm:text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#107C41] disabled:opacity-60 min-h-[44px]"
+            className={`flex-1 min-w-0 w-full sm:w-auto rounded-lg border px-3 py-2 text-base sm:text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#107C41] disabled:opacity-60 min-h-[44px] transition-colors ${
+              gridMode === 'formula-select'
+                ? 'border-amber-400 dark:border-amber-500 bg-amber-50/60 dark:bg-amber-950/20'
+                : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950'
+            }`}
           />
-          <button
-            type="button"
-            disabled={activeSheetTab === 'secondary'}
-            onClick={() => commitFormula(formulaDraft)}
-            className="rounded-lg bg-slate-900 dark:bg-slate-100 px-3.5 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-50 min-h-[44px] shrink-0"
-          >
-            Aplicar
-          </button>
+          {/* Fill-down button (only for multi-row sheets) */}
           {activeRows.length > 6 && (
             <button
               type="button"
@@ -1023,31 +1305,32 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               <span>Rellenar abajo</span>
             </button>
           )}
-        </div>
-
-        {/* Autocomplete quick function chips */}
-        <div className="px-3 py-2 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar sm:flex-wrap text-xs">
-          <span className="text-slate-500 dark:text-slate-300 mr-1 flex items-center gap-1 shrink-0">
-            <Table2 className="w-3.5 h-3.5 shrink-0" />
-            Insertar:
-          </span>
-          {quickFunctionChips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => {
-                setActiveSheetTab('primary');
-                setFormulaDraft(chip);
-              }}
-              className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-200 hover:border-[#107C41] hover:text-[#107C41] dark:hover:text-emerald-300 transition-colors min-h-[38px] shrink-0"
+          {/* Mode indicator badge */}
+          {(gridMode === 'editing' || gridMode === 'formula-select') && (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded shrink-0 ${
+                gridMode === 'formula-select'
+                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
             >
-              {chip}
-            </button>
-          ))}
+              {gridMode === 'formula-select' ? 'Selección de rango' : 'Editando'}
+            </span>
+          )}
         </div>
 
-        {/* Spreadsheet Grid */}
-        <div className="overflow-auto max-h-[460px] bg-white dark:bg-[#0D1320]">
+        {/* ── Spreadsheet Grid ─────────────────────────────────────────────── */}
+        {/*
+          The grid container is a focusable div so it can receive keyboard events
+          when no inline input is open. tabIndex=0 enables keyboard focus.
+        */}
+        <div
+          ref={gridContainerRef}
+          tabIndex={0}
+          onKeyDown={handleGridKeyDown}
+          className="overflow-auto max-h-[460px] bg-white dark:bg-[#0D1320] focus:outline-none"
+          aria-label="Hoja de cálculo interactiva"
+        >
           <table className="w-full border-collapse text-xs font-mono">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400">
@@ -1055,7 +1338,11 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                 {activeCols.map((c) => (
                   <th
                     key={c}
-                    className="border border-slate-200 dark:border-slate-800 py-1.5 px-3 text-center font-semibold min-w-[110px]"
+                    className={`border py-1.5 px-3 text-center font-semibold min-w-[110px] transition-colors ${
+                      selectedCell.startsWith(c)
+                        ? 'bg-emerald-100/60 dark:bg-emerald-950/40 text-[#107C41] dark:text-emerald-300 border-slate-200 dark:border-slate-800'
+                        : 'border-slate-200 dark:border-slate-800'
+                    }`}
                   >
                     {c}
                   </th>
@@ -1068,14 +1355,27 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                 if (hiddenByFilter) return null;
                 return (
                   <tr key={r}>
-                    <td className="border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/70 text-center text-[11px] text-slate-500 dark:text-slate-400 font-semibold py-1.5">
+                    {/* Row header */}
+                    <td
+                      className={`border border-slate-200 dark:border-slate-800 text-center text-[11px] font-semibold py-1.5 transition-colors ${
+                        selectedCell.endsWith(String(r))
+                          ? 'bg-emerald-100/60 dark:bg-emerald-950/40 text-[#107C41] dark:text-emerald-300'
+                          : 'bg-slate-100/70 dark:bg-slate-900/70 text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
                       {r}
                     </td>
                     {activeCols.map((c) => {
                       const addr = `${c}${r}`;
-                      const isSelected = selectedCell === addr;
+                      const isActive = selectedCell === addr;
+                      const isEditing = isActive && (gridMode === 'editing' || gridMode === 'formula-select');
                       const isTarget =
                         addr === activeContext.targetCell && activeSheetTab === 'primary';
+                      // Detect if this cell is referenced in the active formula
+                      const isFormulaRef =
+                        (gridMode === 'formula-select') &&
+                        inlineDraft.toUpperCase().includes(addr.toUpperCase()) &&
+                        !isActive;
                       const rawSource =
                         activeSheetTab === 'secondary' && activeContext.secondarySheet
                           ? activeContext.secondarySheet.cells[addr]
@@ -1088,35 +1388,65 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                       return (
                         <td
                           key={addr}
-                          onClick={() => handleSelectCell(addr)}
-                          className={`border px-2.5 py-1.5 cursor-pointer transition-colors relative ${
-                            isSelected
+                          onClick={() => handleCellClick(addr)}
+                          onDoubleClick={() => {
+                            handleSelectCell(addr);
+                            setTimeout(() => enterEditMode(), 0);
+                          }}
+                          className={`border transition-colors relative p-0 ${
+                            isActive
                               ? 'border-[#107C41] ring-2 ring-inset ring-[#107C41] bg-emerald-50/40 dark:bg-emerald-950/20'
-                              : isTarget
-                                ? 'border-blue-400 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20'
-                                : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                              : isFormulaRef
+                                ? 'border-amber-400 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-950/20'
+                                : isTarget
+                                  ? 'border-blue-400 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20'
+                                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer'
                           } ${r === 1 ? 'font-sans font-bold bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200' : ''}`}
                         >
-                          <div className="flex items-center justify-between gap-1 min-h-[20px]">
-                            <span
-                              className={`truncate ${
-                                isErr
-                                  ? 'text-red-600 dark:text-red-400 font-bold'
-                                  : hasFormula
-                                    ? 'text-[#107C41] dark:text-emerald-400 font-semibold'
-                                    : typeof val === 'number'
-                                      ? 'text-slate-900 dark:text-slate-100'
-                                      : 'text-slate-700 dark:text-slate-300 font-sans'
-                              }`}
-                            >
-                              {String(val)}
-                            </span>
-                            {isTarget && (
-                              <span className="text-[9px] font-sans font-semibold px-1 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0">
-                                Meta
+                          {isEditing ? (
+                            /* ── Inline Cell Input (Excel-style editing) ── */
+                            <input
+                              ref={inlineCellInputRef}
+                              type="text"
+                              value={inlineDraft}
+                              onChange={(e) => handleInlineDraftChange(e.target.value)}
+                              onKeyDown={handleInlineInputKeyDown}
+                              onBlur={() => {
+                                // Commit on blur unless focus moved to formula bar
+                                setTimeout(() => {
+                                  const focused = document.activeElement;
+                                  if (focused !== formulaBarInputRef.current) {
+                                    commitEdit();
+                                  }
+                                }, 50);
+                              }}
+                              className="w-full h-full px-2.5 py-1.5 min-h-[28px] font-mono text-xs bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none"
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                          ) : (
+                            /* ── Display value ── */
+                            <div className="flex items-center justify-between gap-1 px-2.5 py-1.5 min-h-[28px]">
+                              <span
+                                className={`truncate ${
+                                  isErr
+                                    ? 'text-red-600 dark:text-red-400 font-bold'
+                                    : hasFormula
+                                      ? 'text-[#107C41] dark:text-emerald-400 font-semibold'
+                                      : typeof val === 'number'
+                                        ? 'text-slate-900 dark:text-slate-100'
+                                        : 'text-slate-700 dark:text-slate-300 font-sans'
+                                }`}
+                              >
+                                {String(val)}
                               </span>
-                            )}
-                          </div>
+                              {isTarget && (
+                                <span className="text-[9px] font-sans font-semibold px-1 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0">
+                                  Meta
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
@@ -1154,7 +1484,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
             </button>
           )}
           <span className="ml-auto text-[10px] text-slate-400">
-            Haz clic en cualquier celda para editar o probar fórmulas
+            Clic para seleccionar · Escribe para editar · Enter confirma · Esc cancela · F2 edita · ↑↓←→ navega
           </span>
         </div>
       </section>
