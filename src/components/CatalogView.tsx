@@ -460,12 +460,13 @@ export const CatalogView: React.FC = () => {
 
                     {hasPrereqs && (
                       <div className="mt-3">
-                        {prereqsCompleted ? (
+                        {prereqsCompleted || isAdmin ? (
                           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded border border-emerald-200/60 dark:border-emerald-800/60">
                             <Check className="w-3.5 h-3.5 shrink-0" />
                             <span>
-                              Prerrequisito completado:{' '}
-                              {prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}
+                              {isAdmin
+                                ? 'Acceso Administrador (Sin restricciones)'
+                                : `Prerrequisito completado: ${prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}`}
                             </span>
                           </span>
                         ) : (

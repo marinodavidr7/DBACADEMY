@@ -180,11 +180,12 @@ export const CourseDetailView: React.FC = () => {
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-200">
-                    Prerrequisitos aprobados
+                    {isAdmin ? 'Acceso de Administrador (Sin restricciones)' : 'Prerrequisitos aprobados'}
                   </p>
                   <p className="text-xs text-emerald-800 dark:text-emerald-300/80 leading-relaxed">
-                    Has completado con éxito{' '}
-                    <strong>{prereqCourses.map((p) => p.title).join(', ')}</strong>. Cuentas con la base sólida recomendada para avanzar en este nivel.
+                    {isAdmin
+                      ? 'Como administrador tienes acceso total e irrestricto a este programa, todos sus módulos y contenidos sin bloqueos.'
+                      : `Has completado con éxito ${prereqCourses.map((p) => p.title).join(', ')}. Cuentas con la base sólida recomendada para avanzar en este nivel.`}
                   </p>
                 </div>
               </div>

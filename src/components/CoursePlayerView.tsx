@@ -379,48 +379,53 @@ export const CoursePlayerView: React.FC = () => {
 
   const isModuleUnlocked = useCallback(
     (moduleId: string) => {
+      if (isAdmin && !viewAsStudent) return true;
       const idx = moduleProgression.moduleIndexById.get(moduleId) ?? 0;
       return idx <= moduleProgression.firstIncompleteModuleIndex;
     },
-    [moduleProgression]
+    [moduleProgression, isAdmin, viewAsStudent]
   );
 
   const isLessonUnlocked = useCallback(
     (lessonId: string) => {
+      if (isAdmin && !viewAsStudent) return true;
       const globalIdx = moduleProgression.lessonGlobalIndexById.get(lessonId);
       if (globalIdx === undefined) return false;
       return globalIdx <= moduleProgression.firstIncompleteLessonIndex;
     },
-    [moduleProgression]
+    [moduleProgression, isAdmin, viewAsStudent]
   );
 
   const defaultUnlockedLessonIndex = useMemo(() => {
     if (allLessons.length === 0) return -1;
+    if (isAdmin && !viewAsStudent) return 0;
     const firstIncompleteUnlocked = allLessons.findIndex(
       (l) => isLessonUnlocked(l.id) && !completedLessonSet.has(l.id)
     );
     if (firstIncompleteUnlocked >= 0) return firstIncompleteUnlocked;
     const firstUnlocked = allLessons.findIndex((l) => isLessonUnlocked(l.id));
     return firstUnlocked >= 0 ? firstUnlocked : 0;
-  }, [allLessons, isLessonUnlocked, completedLessonSet]);
+  }, [allLessons, isLessonUnlocked, completedLessonSet, isAdmin, viewAsStudent]);
 
   const currentLessonIndex = useMemo(() => {
     if (allLessons.length === 0) return -1;
     if (activeLessonId) {
       const idx = allLessons.findIndex((l) => l.id === activeLessonId);
-      if (idx >= 0 && isLessonUnlocked(allLessons[idx].id)) {
+      if (idx >= 0 && (isLessonUnlocked(allLessons[idx].id) || (isAdmin && !viewAsStudent))) {
         return idx;
       }
     }
     return defaultUnlockedLessonIndex;
-  }, [allLessons, activeLessonId, isLessonUnlocked, defaultUnlockedLessonIndex]);
+  }, [allLessons, activeLessonId, isLessonUnlocked, defaultUnlockedLessonIndex, isAdmin, viewAsStudent]);
 
   const currentLesson = currentLessonIndex >= 0 ? allLessons[currentLessonIndex] : null;
   const isLessonDone = Boolean(
     currentLesson && completedLessonSet.has(currentLesson.id)
   );
   const blockingLesson =
-    allLessons[moduleProgression.firstIncompleteLessonIndex] ?? null;
+    isAdmin && !viewAsStudent
+      ? null
+      : allLessons[moduleProgression.firstIncompleteLessonIndex] ?? null;
 
   const isExcelCourse = Boolean(
     activeCourse && (activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title))
@@ -716,7 +721,9 @@ export const CoursePlayerView: React.FC = () => {
     currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1
       ? allLessons[currentLessonIndex + 1]
       : null;
-  const isNextLessonLocked = Boolean(nextLesson && !isLessonUnlocked(nextLesson.id));
+  const isNextLessonLocked = Boolean(
+    nextLesson && (!isAdmin || viewAsStudent) && !isLessonUnlocked(nextLesson.id)
+  );
   const currentModuleMeta = moduleProgression.moduleMetaById.get(currentLesson.module.id);
 
   const handleCompleteLesson = async () => {
@@ -1586,7 +1593,7 @@ export const CoursePlayerView: React.FC = () => {
                 </div>
               </div>
 
-              {(isNextLessonLocked || lockWarning) && (
+              {(!isAdmin || viewAsStudent) && (isNextLessonLocked || lockWarning) && (
                 <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/35 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-100">
                   <div className="flex items-start gap-2 min-w-0">
                     <Lock className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
@@ -1763,7 +1770,7 @@ export const CoursePlayerView: React.FC = () => {
                         style={{ width: `${modPct}%` }}
                       />
                     </div>
-                    {isModuleLocked && blockingModule && (
+                    {isModuleLocked && blockingModule && (!isAdmin || viewAsStudent) && (
                       <p className="text-[11px] text-amber-700 dark:text-amber-300/90 flex items-center gap-1 pt-0.5">
                         <Lock className="w-3 h-3 shrink-0" />
                         <span className="truncate">
@@ -1777,7 +1784,7 @@ export const CoursePlayerView: React.FC = () => {
                     {filteredLessons.map((lesson) => {
                       const done = completedLessonSet.has(lesson.id);
                       const active = currentLesson.id === lesson.id;
-                      const lessonLocked = !isLessonUnlocked(lesson.id);
+                      const lessonLocked = (!isAdmin || viewAsStudent) && !isLessonUnlocked(lesson.id);
                       return (
                         <button
                           key={lesson.id}
