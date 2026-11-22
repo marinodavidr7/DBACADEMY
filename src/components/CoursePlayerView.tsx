@@ -445,9 +445,16 @@ export const CoursePlayerView: React.FC = () => {
       return (enr && enr.progressPercent >= 100) || hasCert;
     });
   }, [prereqCourses, enrollments, certificates, isAdmin, viewAsStudent]);
-  const isSiLesson = currentLesson?.id === 'les-excel-1-13';
-  const isGridBasicsLesson = currentLesson?.id === 'les-excel-0-0';
-  const isF4Lesson = currentLesson?.id === 'les-excel-0-2';
+  const isSiLesson = currentLesson?.id === 'les-excel-4-13' || currentLesson?.id === 'les-excel-1-13';
+  const isGridBasicsLesson =
+    currentLesson?.id === 'les-excel-1-1' ||
+    currentLesson?.id === 'les-excel-1-2' ||
+    currentLesson?.id === 'les-excel-1-3' ||
+    currentLesson?.id === 'les-excel-0-0';
+  const isF4Lesson =
+    currentLesson?.id === 'les-excel-3-2' ||
+    currentLesson?.id === 'les-excel-3-4' ||
+    currentLesson?.id === 'les-excel-0-2';
   const lessonExerciseCount = useMemo(() => {
     if (!isExcelCourse || !currentLesson) return 0;
     const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
@@ -537,7 +544,7 @@ export const CoursePlayerView: React.FC = () => {
     setActiveTab('reader');
     setRequestedExampleId(null);
     setLockWarning(null);
-    const isSi = currentLesson?.id === 'les-excel-1-13';
+    const isSi = currentLesson?.id === 'les-excel-4-13' || currentLesson?.id === 'les-excel-1-13';
     setShowSimulator(isSi);
     if (currentLesson?.module?.id) {
       setExpandedModules((prev) => ({
@@ -1819,7 +1826,7 @@ export const CoursePlayerView: React.FC = () => {
                             <span className="truncate">{lesson.title}</span>
                           </span>
                           <span className="flex items-center gap-1.5 shrink-0">
-                            {lesson.id === 'les-excel-1-13' && (
+                            {(lesson.id === 'les-excel-4-13' || lesson.id === 'les-excel-1-13') && (
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                   lessonLocked
