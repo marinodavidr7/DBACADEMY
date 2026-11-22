@@ -365,6 +365,21 @@ export const CoursePlayerView: React.FC = () => {
   const isExcelCourse = Boolean(
     activeCourse && (activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title))
   );
+
+  const prereqCourses = useMemo(() => {
+    if (!activeCourse?.prerequisites || activeCourse.prerequisites.length === 0) return [];
+    return courses.filter((c) => activeCourse.prerequisites?.includes(c.id));
+  }, [activeCourse, courses]);
+
+  const prereqsMet = useMemo(() => {
+    if (prereqCourses.length === 0) return true;
+    if (isAdmin && !viewAsStudent) return true;
+    return prereqCourses.every((p) => {
+      const enr = enrollments.find((e) => e.courseId === p.id);
+      const hasCert = certificates.some((c) => c.courseId === p.id);
+      return (enr && enr.progressPercent >= 100) || hasCert;
+    });
+  }, [prereqCourses, enrollments, certificates, isAdmin, viewAsStudent]);
   const isSiLesson = currentLesson?.id === 'les-excel-1-13';
   const lessonExerciseCount = useMemo(() => {
     if (!isExcelCourse || !currentLesson) return 0;
@@ -624,6 +639,35 @@ export const CoursePlayerView: React.FC = () => {
               />
             </div>
           </section>
+
+          {prereqCourses.length > 0 && !prereqsMet && (
+            <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-900 dark:text-amber-200">
+                    Ruta formativa recomendada
+                  </p>
+                  <p className="text-amber-800 dark:text-amber-300/80 mt-0.5">
+                    Este curso asume conocimientos previos de{' '}
+                    <strong>{prereqCourses.map((p) => p.title).join(', ')}</strong>. Puedes repasarlo si encuentras conceptos nuevos.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (prereqCourses[0]) {
+                    setSelectedCourseId(prereqCourses[0].id);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-900/40 px-3 py-1.5 font-semibold text-amber-900 dark:text-amber-100 hover:bg-amber-100/70 dark:hover:bg-amber-800/50 transition-colors whitespace-nowrap self-start sm:self-auto shrink-0 min-h-[32px]"
+              >
+                <span>Ver curso previo</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
 

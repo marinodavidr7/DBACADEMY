@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, Check, Play, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Lock, Play, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
@@ -12,6 +12,7 @@ export const CatalogView: React.FC = () => {
     isAdmin,
     courses,
     enrollments,
+    certificates,
     enrollWithPayment,
     setActiveView,
     setSelectedCourseId,
@@ -183,6 +184,15 @@ export const CatalogView: React.FC = () => {
             {filtered.map((course, idx) => {
               const enrollment = enrollments.find((e) => e.courseId === course.id);
               const isEnrolled = Boolean(enrollment);
+              const prereqCourses = courses.filter((c) => course.prerequisites?.includes(c.id));
+              const hasPrereqs = prereqCourses.length > 0;
+              const prereqsCompleted =
+                hasPrereqs &&
+                prereqCourses.every((p) => {
+                  const enr = enrollments.find((e) => e.courseId === p.id);
+                  const cert = certificates.some((c) => c.courseId === p.id);
+                  return (enr && enr.progressPercent >= 100) || cert || isAdmin;
+                });
 
               return (
                 <motion.article
@@ -240,6 +250,28 @@ export const CatalogView: React.FC = () => {
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                       {course.subtitle}
                     </p>
+
+                    {hasPrereqs && (
+                      <div className="mt-3">
+                        {prereqsCompleted ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded border border-emerald-200/60 dark:border-emerald-800/60">
+                            <Check className="w-3.5 h-3.5 shrink-0" />
+                            <span>
+                              Prerrequisito completado:{' '}
+                              {prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded border border-amber-200/60 dark:border-amber-800/60">
+                            <Lock className="w-3.5 h-3.5 shrink-0" />
+                            <span>
+                              Prerrequisito:{' '}
+                              {prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {isEnrolled && enrollment && (
                       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">

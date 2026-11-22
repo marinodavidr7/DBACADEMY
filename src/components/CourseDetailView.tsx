@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Award,
@@ -9,6 +10,7 @@ import {
   ChevronDown,
   Clock,
   Layers,
+  Lock,
   Play,
   ShieldCheck,
 } from 'lucide-react';
@@ -23,6 +25,7 @@ export const CourseDetailView: React.FC = () => {
     isAdmin,
     courses,
     enrollments,
+    certificates,
     selectedCourseId,
     setSelectedCourseId,
     setActiveView,
@@ -66,6 +69,21 @@ export const CourseDetailView: React.FC = () => {
   const isEnrolled = Boolean(enrollment);
   const hasInstructorAccess = isAdmin;
   const isExcelCourse = course.id === 'excel-basico-05' || /excel/i.test(course.title);
+
+  const prereqCourses = useMemo(() => {
+    if (!course?.prerequisites || course.prerequisites.length === 0) return [];
+    return courses.filter((c) => course.prerequisites?.includes(c.id));
+  }, [course, courses]);
+
+  const prereqsMet = useMemo(() => {
+    if (prereqCourses.length === 0) return true;
+    if (isAdmin) return true;
+    return prereqCourses.every((p) => {
+      const enr = enrollments.find((e) => e.courseId === p.id);
+      const hasCert = certificates.some((c) => c.courseId === p.id);
+      return (enr && enr.progressPercent >= 100) || hasCert;
+    });
+  }, [prereqCourses, enrollments, certificates, isAdmin]);
 
   const totalMinutes = course.modules.reduce((acc, m) => acc + (m.durationMinutes || 0), 0);
   const totalHours = Math.max(1, Math.round((totalMinutes / 60) * 10) / 10);
@@ -149,6 +167,51 @@ export const CourseDetailView: React.FC = () => {
       {/* Main Content + Sticky Enrollment Card */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(360px,24vw,480px)] gap-8 2xl:gap-10 items-start">
         <div className="min-w-0 space-y-8 2xl:space-y-10">
+          {/* Prerrequisitos de la ruta formativa */}
+          {prereqCourses.length > 0 && (
+            prereqsMet ? (
+              <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-4 sm:p-5 flex items-start gap-3.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-200">
+                    Prerrequisitos aprobados
+                  </p>
+                  <p className="text-xs text-emerald-800 dark:text-emerald-300/80 leading-relaxed">
+                    Has completado con éxito{' '}
+                    <strong>{prereqCourses.map((p) => p.title).join(', ')}</strong>. Cuentas con la base sólida recomendada para avanzar en este nivel.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-amber-950 dark:text-amber-200">
+                      Prerrequisito recomendado antes de comenzar
+                    </p>
+                    <p className="text-xs text-amber-900/85 dark:text-amber-300/80 leading-relaxed max-w-xl">
+                      Para garantizar el máximo aprovechamiento sin lagunas de concepto, te sugerimos completar previamente:{' '}
+                      <strong>{prereqCourses.map((p) => p.title).join(', ')}</strong>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (prereqCourses[0]) {
+                      setSelectedCourseId(prereqCourses[0].id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-900/40 px-3.5 py-2 text-xs font-semibold text-amber-900 dark:text-amber-100 hover:bg-amber-100/70 dark:hover:bg-amber-800/50 transition-colors whitespace-nowrap self-start sm:self-auto min-h-[38px]"
+                >
+                  <span>Ver curso previo</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )
+          )}
+
           {/* Descripción y Enfoque */}
           <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 sm:p-7 2xl:p-8 space-y-4">
             <h2 className="font-display text-xl 2xl:text-2xl font-bold text-slate-900 dark:text-slate-100">
@@ -307,6 +370,17 @@ export const CourseDetailView: React.FC = () => {
             </button>
 
             <ul className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+              {prereqCourses.length > 0 && (
+                <li className="flex items-center gap-2.5">
+                  <BookOpen className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                  <span>
+                    Prerrequisito:{' '}
+                    <strong className="font-semibold text-slate-800 dark:text-slate-200">
+                      {prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}
+                    </strong>
+                  </span>
+                </li>
+              )}
               <li className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
                 <span className="tabular-nums">

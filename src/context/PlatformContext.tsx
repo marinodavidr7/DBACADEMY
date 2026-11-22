@@ -480,7 +480,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const existingIds = new Set(existingCourses.docs.map((d) => d.id));
           const missingCourses = SEED_COURSES.filter((c) => !existingIds.has(c.id));
           const coursesToDelete = existingCourses.docs.filter((d) => {
-            if (d.id === EXCEL_BASICO_COURSE.id) return false;
+            if (SEED_COURSES.some((s) => s.id === d.id)) return false;
             return REMOVED_SEED_COURSE_IDS.includes(d.id) || !alreadyCleaned;
           });
 
@@ -684,9 +684,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ...loaded,
           ...SEED_COURSES.filter((s) => !loadedIds.has(s.id)),
         ];
-        // Curso de Excel gratis por ahora: forzar priceCents = 0 sin importar Firestore
+        // Cursos de Excel gratis por ahora: forzar priceCents = 0 sin importar Firestore
         const cursosGratis = merged.map((c) =>
-          c.id === 'excel-basico-05' ? { ...c, priceCents: 0 } : c
+          ['excel-basico-05', 'excel-intermedio-01', 'excel-avanzado-01'].includes(c.id)
+            ? { ...c, priceCents: 0 }
+            : c
         );
         setCourses(cursosGratis);
       } else {
