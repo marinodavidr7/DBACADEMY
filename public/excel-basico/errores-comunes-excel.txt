@@ -1,0 +1,11 @@
+CHEATSHEET — ERRORE COMUNES EN EXCEL (Excel Básico)
+
+#¡DIV/0!  → A lenders o celda vacía en división. Corrige el divisor.
+#N/A      → Búsqueda sin coincidencia (VLOOKUP, HLOOKUP, MATCH). Verifica el criterio.
+#¡VALOR!  → Se sumó texto donde hacía falta un número. Usa VALOR() o ajusta datos.
+#####     → La columna es muy angosta. Doble clic en el borde derecho para autoajuste.
+#¿NOMBRE? → Fórmula mal escrita o referencia que Excel no conoce. Revisa el nombre.
+
+Sugerencias:
+- Usa SI.ERROR(=C2, "sin datos") cuando el error es esperado.
+- Usa Formato General para valores numéricos y verifica que las celdas contengan datos (no texto).

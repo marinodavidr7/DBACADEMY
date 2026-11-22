@@ -1,0 +1,31 @@
+CHEATSHEET — FICHA RÁPIDA SUMA / RESTA / PRODUCTO / ANÁLITICAS
+
+SUMA
+=SUMA(A1:A10) suma lo que hay DENTRO de las celdas del rango.
+Regla del curso: se suman las celdas, NO los datos (no escribas =SUMA(10+20+30)).
+
+RESTA
+El operador - entre celdas: =A1-A2 (resta el contenido de A2 de A1).
+
+PRODUCTO
+=PRODUCTO(A1:A4) multiplica los valores de las celdas del rango.
+
+PROMEDIO / MEDIANA / MODA
+=PROMEDIO(A1:A10), =MEDIANA(A1:A10), =MODA.UNO(A1:A10)
+
+MAX / MIN / MAXIFS / MINIFS
+=MAX(A1:A10), =MIN(A1:A10)
+=MAX.SI.CONJUNTO(rango_max; rango_criterio; criterio)  (español)
+=MAXIFS(rango_max; rango_criterio; criterio)           (inglés equivalente)
+
+CONTAR / CONTARA / CONTAR.BLANCO
+=CONTAR(A1:A10), =CONTARA(A1:A10), =CONTAR.BLANCO(A1:A10)
+
+SUMAR.SI / PROMEDIO.SI
+=SUMAR.SI(rango_criterio; criterio; rango_suma)
+=PROMEDIO.SI(rango_criterio; criterio; rango_suma)
+
+SUMAR.SI.CONJUNTO
+=SUMAR.SI.CONJUNTO(rango_suma; rango_crit1; criterio1; [rango_crit2; criterio2]; ...)
+
+RECOMENDACIÓN: use ; como separador de fórmulas en español.

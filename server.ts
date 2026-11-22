@@ -1345,12 +1345,11 @@ async function startServer() {
   const server = http.createServer(app);
 
   if (!isProduction) {
-    process.env.DISABLE_HMR = 'true';
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: false,
+        hmr: process.env.DISABLE_HMR !== 'true',
         ws: { server, path: '/vite-ws' },
         allowedHosts: true,
       },
