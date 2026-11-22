@@ -41,16 +41,24 @@
     --dba-border: #1E293B;
     --dba-border-strong: #334155;
     --dba-text-primary: #F8FAFC;
-    --dba-text-secondary: #94A3B8;
+    --dba-text-secondary: #CBD5E1;
     --dba-accent: #2563EB;
     --dba-accent-hover: #3B82F6;
     --dba-cyan: #06B6D4;
     --dba-success: #10B981;
   }
 
+  html,
+  body {
+    height: 100%;
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+
   html {
     font-size: 16px;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -59,6 +67,56 @@
     line-height: 1.6;
     background-color: var(--dba-bg-canvas);
     color: var(--dba-text-primary);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Permitir selección de texto en lecciones, inputs y código */
+  .lesson-content,
+  .lesson-content *,
+  input,
+  textarea,
+  select,
+  pre,
+  code {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
+  /* Evitar desbordamiento horizontal en bloques de código y fórmulas */
+  pre,
+  code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+  }
+
+  /* Mínimo 16px en móviles para prevenir zoom automático en iOS Safari */
+  @media (max-width: 767px) {
+    input:not([type='checkbox']):not([type='radio']),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Feedback táctil nativo en botones y controles pulsables */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a.tap-target {
+    touch-action: manipulation;
+    transition: transform 110ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active,
+  a.tap-target:active {
+    transform: scale(0.98);
   }
 
   h1, h2, h3, h4, .font-display {
@@ -85,10 +143,43 @@
   }
 }
 
+/* Utilidades de áreas seguras iOS/Android y scroll discreto */
+.safe-pt {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-px {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-thin-scroll::-webkit-scrollbar {
+    height: 3px;
+    width: 3px;
+  }
+  .mobile-thin-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 9999px;
+  }
+}
+
+/* Transiciones suaves entre capítulos/vistas cuando no hay prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

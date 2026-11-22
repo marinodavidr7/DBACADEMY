@@ -181,23 +181,23 @@ const COURSE_EDITOR_LABELS = (t: (key: TranslationKeys) => string) => ({
 const STUDIO_COVER_PRESETS = [
   {
     label: 'Excel / Productividad',
-    url: '/src/assets/images/course_excel_basico_1795186770853.jpg',
+    url: '/assets/images/course_excel_basico_1795186770853.webp',
   },
   {
     label: 'Ingeniería',
-    url: '/src/assets/images/course_system_architecture_1795146988857.jpg',
+    url: '/assets/images/course_system_architecture_1795146988857.webp',
   },
   {
     label: 'Datos',
-    url: '/src/assets/images/course_data_science_1795146987818.jpg',
+    url: '/assets/images/course_data_science_1795146987818.webp',
   },
   {
     label: 'Diseño',
-    url: '/src/assets/images/course_ux_engineering_1795146988343.jpg',
+    url: '/assets/images/course_ux_engineering_1795146988343.webp',
   },
   {
     label: 'Seguridad',
-    url: '/src/assets/images/course_cybersecurity_e2ee_1795146988090.jpg',
+    url: '/assets/images/course_cybersecurity_e2ee_1795146988090.webp',
   },
 ];
 
@@ -717,6 +717,10 @@ export const InstructorDashboard: React.FC = () => {
                   <img
                     src={course.coverImage}
                     alt={course.title}
+                    width={1280}
+                    height={714}
+                    loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
                   />

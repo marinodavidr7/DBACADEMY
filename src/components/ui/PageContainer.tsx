@@ -13,7 +13,7 @@ export const PageContainer: React.FC<PageContainerProps> = ({
 }) => {
   return (
     <div
-      className={`w-full px-3 sm:px-4 lg:px-5 2xl:px-6 ${prose ? 'max-w-prose mx-auto' : 'max-w-[2400px] mx-auto'} ${className}`.trim()}
+      className={`w-full pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(1.25rem,env(safe-area-inset-right))] lg:px-6 ${prose ? 'max-w-prose mx-auto' : 'max-w-[2400px] mx-auto'} ${className}`.trim()}
       {...rest}
     >
       {children}

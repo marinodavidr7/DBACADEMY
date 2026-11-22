@@ -30,7 +30,11 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   const useFullEmblem = !showWordmark && size === 'lg';
   const lightSrc = useFullEmblem ? FULL_LIGHT_SRC : MARK_LIGHT_SRC;
   const darkSrc = useFullEmblem ? FULL_DARK_SRC : MARK_DARK_SRC;
-  const imgClass = `${HEIGHT_CLASSES[size]} object-contain select-none pointer-events-none shrink-0`;
+  const aspectClass = useFullEmblem ? 'aspect-[1349/940]' : 'aspect-[878/728]';
+  const imgClass = `${HEIGHT_CLASSES[size]} ${aspectClass} object-contain select-none pointer-events-none shrink-0`;
+
+  const imgWidth = useFullEmblem ? 1349 : 878;
+  const imgHeight = useFullEmblem ? 940 : 728;
 
   return (
     <span className={`inline-flex items-center gap-2.5 shrink-0 ${className}`.trim()}>
@@ -38,6 +42,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         <img
           src={lightSrc}
           alt="DB Academy"
+          width={imgWidth}
+          height={imgHeight}
           referrerPolicy="no-referrer"
           className={imgClass}
         />
@@ -46,6 +52,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         <img
           src={darkSrc}
           alt="DB Academy"
+          width={imgWidth}
+          height={imgHeight}
           referrerPolicy="no-referrer"
           className={imgClass}
         />
@@ -55,12 +63,16 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           <img
             src={lightSrc}
             alt="DB Academy"
+            width={imgWidth}
+            height={imgHeight}
             referrerPolicy="no-referrer"
             className={`${imgClass} dark:hidden`}
           />
           <img
             src={darkSrc}
             alt="DB Academy"
+            width={imgWidth}
+            height={imgHeight}
             referrerPolicy="no-referrer"
             className={`${imgClass} hidden dark:block`}
           />

@@ -39,11 +39,11 @@ import { ToastStack, type ToastItem } from './Toast';
 import { StudentPreviewModal } from './StudentPreviewModal';
 
 const COVER_PRESETS = [
-  { label: 'Excel / Productividad', url: '/src/assets/images/course_excel_basico_1795186770853.jpg' },
-  { label: 'Ingeniería', url: '/src/assets/images/course_system_architecture_1795146988857.jpg' },
-  { label: 'Datos', url: '/src/assets/images/course_data_science_1795146987818.jpg' },
-  { label: 'Diseño', url: '/src/assets/images/course_ux_engineering_1795146988343.jpg' },
-  { label: 'Seguridad', url: '/src/assets/images/course_cybersecurity_e2ee_1795146988090.jpg' },
+  { label: 'Excel / Productividad', url: '/assets/images/course_excel_basico_1795186770853.webp' },
+  { label: 'Ingeniería', url: '/assets/images/course_system_architecture_1795146988857.webp' },
+  { label: 'Datos', url: '/assets/images/course_data_science_1795146987818.webp' },
+  { label: 'Diseño', url: '/assets/images/course_ux_engineering_1795146988343.webp' },
+  { label: 'Seguridad', url: '/assets/images/course_cybersecurity_e2ee_1795146988090.webp' },
 ];
 
 type SaveStatus = 'idle' | 'saved' | 'saving' | 'unsaved' | 'error';
@@ -803,7 +803,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100vh-7rem)]">{index}</div>
+        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100dvh-7rem)]">{index}</div>
 
         <AnimatePresence>
           {indexOpen && (

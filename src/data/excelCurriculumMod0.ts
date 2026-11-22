@@ -142,7 +142,7 @@ export const EXCEL_CURRICULUM_MOD0: Record<string, ExcelLessonCurriculum> = {
       },
       {
         name: 'SUMA / PROMEDIO / MAX / MIN (Primeros bloques)',
-        syntax: '=SUMA(rango) · =PROMEDIO(rango) · =MAX(rango)',
+        syntax: '=SUMA(rango)\n=PROMEDIO(rango)\n=MAX(rango)\n=MIN(rango)',
         summary:
           'Las funciones de agregación reciben un rango continuo como B2:B5 o celdas separadas por ; y devuelven un único resumen numérico.',
         arguments: [

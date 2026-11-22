@@ -4,6 +4,7 @@ import {
   Archive,
   ArrowRight,
   Award,
+  BarChart3,
   BookOpen,
   Box,
   CheckCircle2,
@@ -36,7 +37,7 @@ import {
   User,
   Video,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import { EXCEL_CURRICULUM } from '../data/excelCurriculum';
 import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
@@ -46,11 +47,25 @@ import { AuthGateNotice } from './AuthGateNotice';
 import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
-import { InteractiveExcelLab } from './InteractiveExcelLab';
 import { CourseProgressBar } from './ui/CourseProgressBar';
+
+const InteractiveExcelLab = lazy(() =>
+  import('./InteractiveExcelLab').then((m) => ({ default: m.InteractiveExcelLab }))
+);
+
+const LearningProgressDashboard = lazy(() =>
+  import('./LearningProgressDashboard').then((m) => ({ default: m.LearningProgressDashboard }))
+);
 
 const ExcelSimulator3D = lazy(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
+);
+
+const LabSkeleton: React.FC = () => (
+  <div className="space-y-3 animate-pulse py-2" aria-busy="true" aria-label="Cargando laboratorio">
+    <div className="h-24 rounded-xl bg-slate-200/80 dark:bg-slate-800/70" />
+    <div className="h-52 rounded-xl bg-slate-200/70 dark:bg-slate-800/60" />
+  </div>
 );
 
 /* ------------------------------------------------------------------ */
@@ -83,10 +98,10 @@ const typeLabel: Record<CourseMaterialType, string> = {
 function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
   if (materials.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-400">
-        <Paperclip className="w-8 h-8 opacity-50" />
-        <p className="text-sm">Esta lección no tiene materiales adjuntos.</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+      <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-600 dark:text-slate-300">
+        <Paperclip className="w-8 h-8 opacity-60" />
+        <p className="text-sm font-medium">Esta lección no tiene materiales adjuntos.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-300">
           El instructor puede agregar archivos desde el panel de administración.
         </p>
       </div>
@@ -134,6 +149,7 @@ export const CoursePlayerView: React.FC = () => {
   const {
     user,
     isAdmin,
+    theme,
     courses,
     enrollments,
     certificates,
@@ -149,7 +165,28 @@ export const CoursePlayerView: React.FC = () => {
     t,
   } = usePlatform();
 
+  const shouldReduceMotion = useReducedMotion();
   const [viewAsStudent, setViewAsStudent] = useState(false);
+  const [showDashboard, setShowDashboard] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('dbacademy_learning_dashboard');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleDashboard = () => {
+    setShowDashboard((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('dbacademy_learning_dashboard', String(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
 
   const enrolledCourses = useMemo(() => {
     // Modo estudiante: ignora el bypass de administrador y filtra como alumno normal
@@ -213,6 +250,20 @@ export const CoursePlayerView: React.FC = () => {
 
   const inFlightLessonsRef = useRef<Set<string>>(new Set());
   const simulatorWrapRef = useRef<HTMLDivElement | null>(null);
+  const stageTopRef = useRef<HTMLDivElement | null>(null);
+
+  // Restore saved active lesson per course when course changes
+  useEffect(() => {
+    if (!activeCourse) return;
+    try {
+      const savedLesson = localStorage.getItem(`dbacademy_last_lesson_v1_${activeCourse.id}`);
+      if (savedLesson) {
+        setActiveLessonId(savedLesson);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [activeCourse?.id]);
 
   const isSyntheticPreview = Boolean(activeEnrollment?.id.startsWith('preview_'));
 
@@ -432,12 +483,23 @@ export const CoursePlayerView: React.FC = () => {
       if (!activeCourse || !activeEnrollment) return;
       if (completedLessonSet.has(lessonId)) return;
 
+      const triggerHaptic = () => {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          try {
+            navigator.vibrate(20);
+          } catch {
+            // Ignore vibrate restrictions
+          }
+        }
+      };
+
       if (isSyntheticPreview) {
         setPreviewCompletedByCourse((prev) => ({
           ...prev,
           [activeCourse.id]: Array.from(new Set([...(prev[activeCourse.id] ?? []), lessonId])),
         }));
         setLockWarning(null);
+        triggerHaptic();
         return;
       }
 
@@ -448,6 +510,7 @@ export const CoursePlayerView: React.FC = () => {
       try {
         const res = await completeLesson(activeCourse, lessonId, durationMinutes);
         setLockWarning(null);
+        triggerHaptic();
         if (res.certificateIssued) {
           setNewlyIssuedCert(res.certificateIssued);
         }
@@ -459,7 +522,7 @@ export const CoursePlayerView: React.FC = () => {
     [activeCourse, activeEnrollment, completedLessonSet, isSyntheticPreview, completeLesson]
   );
 
-  // Reset tab, clear stale example selection, and auto-open 3D simulator strictly on 1.13 SI
+  // Reset tab, clear stale example selection, persist active lesson, and restore saved scroll position
   useEffect(() => {
     setActiveTab('reader');
     setRequestedExampleId(null);
@@ -472,7 +535,58 @@ export const CoursePlayerView: React.FC = () => {
         [currentLesson.module.id]: true,
       }));
     }
-  }, [currentLesson?.id, currentLesson?.module?.id]);
+    if (activeCourse?.id && currentLesson?.id) {
+      try {
+        localStorage.setItem(`dbacademy_last_lesson_v1_${activeCourse.id}`, currentLesson.id);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [activeCourse?.id, currentLesson?.id, currentLesson?.module?.id]);
+
+  // Save and restore lesson scroll position cleanly
+  useEffect(() => {
+    if (!activeCourse?.id || !currentLesson?.id) return;
+    const key = `dbacademy_lesson_scroll_v1_${activeCourse.id}_${currentLesson.id}`;
+    const scrollHost =
+      (stageTopRef.current?.closest('.lg\\:overflow-y-auto') as HTMLElement | null) || null;
+    const isDesktopScroll = Boolean(scrollHost && window.matchMedia('(min-width: 1024px)').matches);
+
+    try {
+      const savedY = Number(localStorage.getItem(key) || '0');
+      if (savedY > 24) {
+        window.requestAnimationFrame(() => {
+          if (isDesktopScroll && scrollHost) {
+            scrollHost.scrollTo({ top: savedY, behavior: 'auto' });
+          } else {
+            window.scrollTo({ top: savedY, behavior: 'auto' });
+          }
+        });
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    let timer: number | undefined;
+    const handleScroll = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        try {
+          const currentY = isDesktopScroll && scrollHost ? scrollHost.scrollTop : window.scrollY;
+          localStorage.setItem(key, String(Math.round(currentY)));
+        } catch {
+          // Ignore storage errors
+        }
+      }, 180);
+    };
+
+    const target: Window | HTMLElement = isDesktopScroll && scrollHost ? scrollHost : window;
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      target.removeEventListener('scroll', handleScroll);
+    };
+  }, [activeCourse?.id, currentLesson?.id]);
 
   // Esc key exits Zen Mode cleanly and leaving view resets Zen Mode
   useEffect(() => {
@@ -660,8 +774,8 @@ export const CoursePlayerView: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Compact Integrated Student Header + Controls */}
-          <section className="rounded-xl border border-slate-800/90 bg-[#070E1D] text-slate-100 p-3.5 sm:p-4 space-y-3">
+          {/* Compact Integrated Student Header + Controls (edge-to-edge on <480px) */}
+          <section className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-slate-800/90 bg-[#070E1D] text-slate-100 px-4 py-3.5 sm:p-4 space-y-3">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 min-w-0">
                 <div className="min-w-0">
@@ -678,27 +792,27 @@ export const CoursePlayerView: React.FC = () => {
                 </div>
 
                 {/* Compact Inline KPIs */}
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
                   <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-400 mr-1.5">Cursos</span>
+                    <span className="text-[10px] text-slate-300 mr-1.5">Cursos</span>
                     <span className="text-xs font-bold font-mono tabular-nums text-white">
                       {enrolledCourses.length}
                     </span>
                   </div>
                   <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-400 mr-1.5">Progreso</span>
+                    <span className="text-[10px] text-slate-300 mr-1.5">Progreso</span>
                     <span className="text-xs font-bold font-mono tabular-nums text-cyan-300">
                       {effectiveProgressPercent}%
                     </span>
                   </div>
                   <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-400 mr-1.5">Lecciones</span>
+                    <span className="text-[10px] text-slate-300 mr-1.5">Lecciones</span>
                     <span className="text-xs font-bold font-mono tabular-nums text-white">
                       {effectiveCompletedLessonIds.length}/{activeCourse.totalLessons}
                     </span>
                   </div>
                   <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-400 mr-1.5">Certificados</span>
+                    <span className="text-[10px] text-slate-300 mr-1.5">Certificados</span>
                     <span className="text-xs font-bold font-mono tabular-nums text-emerald-400">
                       {certificates.length}
                     </span>
@@ -707,7 +821,7 @@ export const CoursePlayerView: React.FC = () => {
               </div>
 
               {/* Action Controls & Course Switcher */}
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 xl:shrink-0">
                 {isAdmin && (
                   <button
                     type="button"
@@ -741,6 +855,19 @@ export const CoursePlayerView: React.FC = () => {
 
                 <button
                   type="button"
+                  onClick={toggleDashboard}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 min-h-[36px] ${
+                    showDashboard
+                      ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
+                      : 'border-slate-700 bg-[#0D1930] text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>{showDashboard ? 'Ocultar gráficos' : 'Ver gráficos'}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={toggleZenMode}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#0D1930] px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[36px]"
                 >
@@ -757,7 +884,7 @@ export const CoursePlayerView: React.FC = () => {
                     setNewlyIssuedCert(null);
                   }}
                   aria-label={t('myCoursesTitle')}
-                  className="rounded-lg border border-slate-700 bg-[#0D1930] px-2.5 py-1.5 text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[36px] max-w-[230px]"
+                  className="rounded-lg border border-slate-700 bg-[#0D1930] px-3 py-2 text-base sm:text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] sm:min-h-[36px] max-w-full sm:max-w-[230px]"
                 >
                   {enrolledCourses.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -776,6 +903,31 @@ export const CoursePlayerView: React.FC = () => {
               />
             </div>
           </section>
+
+          {showDashboard && (
+            <Suspense
+              fallback={
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] h-[340px] flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
+                  Cargando gráficos de progreso...
+                </div>
+              }
+            >
+              <LearningProgressDashboard
+                courses={enrolledCourses}
+                enrollments={enrollments}
+                certificates={certificates}
+                activeCourseId={activeCourse.id}
+                previewCompletedByCourse={previewCompletedByCourse}
+                theme={theme}
+                onSelectCourse={(courseId) => {
+                  setSelectedCourseId(courseId);
+                  setActiveLessonId(null);
+                  setLockWarning(null);
+                  setNewlyIssuedCert(null);
+                }}
+              />
+            </Suspense>
+          )}
 
           {prereqCourses.length > 0 && !prereqsMet && (
             <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
@@ -844,25 +996,31 @@ export const CoursePlayerView: React.FC = () => {
       )}
 
       {/* Two-Zone Course Stage + Syllabus (Syllabus hidden & stage maximized in Zen Mode) */}
-      <div className={`grid grid-cols-1 ${zenMode ? '' : 'lg:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]'} gap-4 xl:gap-5 items-start`}>
+      <div
+        ref={stageTopRef}
+        className={`grid grid-cols-1 ${zenMode ? '' : 'lg:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]'} gap-4 xl:gap-5 items-start`}
+      >
         <div className="min-w-0 space-y-4">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
-            {/* Compact Lesson Header (no giant 16:9 image pushing content off-screen) */}
-            <div className="relative bg-[#070E1D] border-b border-slate-800 p-4 sm:p-5 overflow-hidden">
+          <div className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+            {/* Compact Lesson Header */}
+            <div className="relative bg-[#070E1D] border-b border-slate-800 px-4 py-4 sm:p-5 overflow-hidden">
               <img
                 src={activeCourse.coverImage}
                 alt={currentLesson.title}
+                width={1280}
+                height={714}
+                decoding="async"
                 referrerPolicy="no-referrer"
                 className="absolute inset-y-0 right-0 w-1/2 h-full object-cover opacity-20 pointer-events-none select-none"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#070E1D] via-[#070E1D]/95 to-[#070E1D]/60 pointer-events-none" />
               <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-cyan-300 font-semibold">
                     <PlayCircle className="w-4 h-4 shrink-0" />
-                    <span>{currentLesson.module.title}</span>
+                    <span className="min-w-0">{currentLesson.module.title}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono tabular-nums text-slate-300">
+                    <span className="font-mono tabular-nums text-slate-200">
                       {currentLesson.durationMinutes} min
                     </span>
                     {isSiLesson && (
@@ -871,7 +1029,7 @@ export const CoursePlayerView: React.FC = () => {
                       </span>
                     )}
                     {isGridBasicsLesson && (
-                      <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-300 text-[11px] font-semibold">
+                      <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold">
                         Cuadrícula 2D Interactiva
                       </span>
                     )}
@@ -881,123 +1039,143 @@ export const CoursePlayerView: React.FC = () => {
                   </h2>
                 </div>
                 {isLessonDone && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 shrink-0 self-start sm:self-center">
-                    <CheckCircle2 className="w-4 h-4" />
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-emerald-200 shrink-0 self-start sm:self-center">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>Lección completada</span>
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Clean Step-by-Step Tabs */}
-            <div className="flex items-center overflow-x-auto border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 px-4 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setActiveTab('reader')}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                  activeTab === 'reader'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
+            {/* Scroll-Snap Concise Lesson Tabs with visible active indicator */}
+            <div className="relative border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60">
+              <div
+                role="tablist"
+                aria-label="Secciones de la lección"
+                className="flex items-center overflow-x-auto no-scrollbar snap-x snap-mandatory px-3 sm:px-4 gap-1 text-xs font-semibold"
               >
-                <BookOpen className="w-4 h-4" />
-                <span>{isExcelCourse ? '1. Teoría y Ejemplos' : '1. Teoría & Fundamento'}</span>
-              </button>
-
-              {isExcelCourse ? (
                 <button
                   type="button"
-                  onClick={() => setActiveTab('practice')}
-                  className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'practice'
-                      ? 'border-[#107C41] text-[#107C41] dark:text-emerald-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  role="tab"
+                  aria-selected={activeTab === 'reader'}
+                  onClick={() => setActiveTab('reader')}
+                  className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                    activeTab === 'reader'
+                      ? 'border-blue-600 dark:border-cyan-400 text-blue-700 dark:text-cyan-300 bg-white/70 dark:bg-[#111827]/70'
+                      : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>2. Práctica en Excel</span>
-                  {lessonExerciseCount > 0 && (
-                    <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-[#107C41] dark:text-emerald-300 font-mono text-[11px] font-bold">
-                      {lessonExerciseCount}
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>Teoría</span>
+                </button>
+
+                {isExcelCourse ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'practice'}
+                    onClick={() => setActiveTab('practice')}
+                    className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                      activeTab === 'practice'
+                        ? 'border-[#107C41] dark:border-emerald-400 text-[#107C41] dark:text-emerald-300 bg-white/70 dark:bg-[#111827]/70'
+                        : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                    <span>Práctica</span>
+                    {lessonExerciseCount > 0 && (
+                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-[#107C41] dark:text-emerald-300 font-mono text-[11px] font-bold">
+                        {lessonExerciseCount}
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'syntax'}
+                    onClick={() => setActiveTab('syntax')}
+                    className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                      activeTab === 'syntax'
+                        ? 'border-blue-600 dark:border-cyan-400 text-blue-700 dark:text-cyan-300 bg-white/70 dark:bg-[#111827]/70'
+                        : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Terminal className="w-4 h-4 shrink-0" />
+                    <span>Sintaxis</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'lab'}
+                  onClick={() => setActiveTab('lab')}
+                  className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                    activeTab === 'lab'
+                      ? 'border-blue-600 dark:border-cyan-400 text-blue-700 dark:text-cyan-300 bg-white/70 dark:bg-[#111827]/70'
+                      : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Code className="w-4 h-4 shrink-0" />
+                  <span>Apuntes</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'materials'}
+                  onClick={() => setActiveTab('materials')}
+                  className={`snap-start min-h-[44px] py-2.5 px-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 relative ${
+                    activeTab === 'materials'
+                      ? 'border-blue-600 dark:border-cyan-400 text-blue-700 dark:text-cyan-300 bg-white/70 dark:bg-[#111827]/70'
+                      : 'border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span>Materiales</span>
+                  {(currentLesson.materials?.length ?? 0) > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                      {currentLesson.materials!.length}
                     </span>
                   )}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('syntax')}
-                  className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'syntax'
-                      ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Terminal className="w-4 h-4" />
-                  <span>2. Sintaxis & Troubleshooting</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('lab')}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
-                  activeTab === 'lab'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <Code className="w-4 h-4" />
-                <span>3. Apuntes</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('materials')}
-                className={`py-3 px-3.5 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap relative ${
-                  activeTab === 'materials'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <Paperclip className="w-4 h-4" />
-                <span>4. Materiales</span>
-                {(currentLesson.materials?.length ?? 0) > 0 && (
-                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                    {currentLesson.materials!.length}
-                  </span>
-                )}
-              </button>
+              </div>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-slate-100/90 dark:from-slate-900/90 to-transparent sm:hidden"
+              />
             </div>
 
-            <div className="p-4 sm:p-5 space-y-4">
+            <div className="px-4 py-4 sm:p-5 space-y-4 min-w-0">
               {/* Tab 1: Theory & Practical Examples (+ 3D Simulator ONLY on 1.13 SI) */}
               {activeTab === 'reader' && (
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={currentLesson.id}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-4"
+                    exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
+                    className="lesson-content space-y-4"
                   >
-                    <div className="rounded-lg border border-blue-100 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
-                        <Lightbulb className="w-4 h-4" />
+                    <div className="border-l-2 border-blue-600 dark:border-cyan-400 bg-blue-50/50 dark:bg-blue-950/20 pl-3.5 pr-3 py-2.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-cyan-300 mb-1">
+                        <Lightbulb className="w-4 h-4 shrink-0" />
                         <span>Objetivo de la lección</span>
                       </div>
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-snug">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug">
                         {currentLesson.summary}
                       </p>
                     </div>
 
-                    <div className="space-y-3 text-slate-700 dark:text-slate-300 leading-relaxed text-sm">
+                    <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
                       <p className={zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}>
                         {currentLesson.content}
                       </p>
                     </div>
 
                     {!isExcelCourse && (
-                      <div className="rounded-lg border border-amber-200/70 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+                      <div className="border-l-2 border-amber-500 bg-amber-50/60 dark:bg-amber-950/20 pl-3.5 pr-3 py-2.5 text-xs text-amber-900 dark:text-amber-100 flex items-start gap-2.5">
                         <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                         <div>
                           <span className="font-semibold block mb-0.5">Buenas Prácticas de Ingeniería:</span>
@@ -1012,26 +1190,28 @@ export const CoursePlayerView: React.FC = () => {
               )}
 
               {activeTab === 'reader' && isExcelCourse && (
-                <div className="space-y-5">
+                <div className="space-y-5 min-w-0">
                   {isGridBasicsLesson && (
                     <div className="space-y-3">
                       <ExcelGridBasicsViewer />
                     </div>
                   )}
 
-                  <InteractiveExcelLab
-                    lessonId={currentLesson.id}
-                    lessonTitle={currentLesson.title}
-                    mode="guide"
-                    onRequestExamplePractice={(exId) => {
-                      setRequestedExampleId(exId);
-                      setActiveTab('practice');
-                    }}
-                    onGoToPractice={() => {
-                      setRequestedExampleId(null);
-                      setActiveTab('practice');
-                    }}
-                  />
+                  <Suspense fallback={<LabSkeleton />}>
+                    <InteractiveExcelLab
+                      lessonId={currentLesson.id}
+                      lessonTitle={currentLesson.title}
+                      mode="guide"
+                      onRequestExamplePractice={(exId) => {
+                        setRequestedExampleId(exId);
+                        setActiveTab('practice');
+                      }}
+                      onGoToPractice={() => {
+                        setRequestedExampleId(null);
+                        setActiveTab('practice');
+                      }}
+                    />
+                  </Suspense>
 
                   {/* Simulador 3D interactivo: EXCLUSIVO de 1.13 SI (Función lógica de decisión) */}
                   {isSiLesson && (
@@ -1148,21 +1328,23 @@ export const CoursePlayerView: React.FC = () => {
 
               {/* Tab 2 (Excel): Dedicated Interactive Spreadsheet Exercises Workspace */}
               {activeTab === 'practice' && isExcelCourse && (
-                <InteractiveExcelLab
-                  lessonId={currentLesson.id}
-                  lessonTitle={currentLesson.title}
-                  mode="practice"
-                  requestedExampleId={requestedExampleId}
-                  onSolved={() => {
-                    if (!isLessonDone) {
-                      void markSubModuleComplete(
-                        currentLesson.id,
-                        currentLesson.title,
-                        currentLesson.durationMinutes
-                      );
-                    }
-                  }}
-                />
+                <Suspense fallback={<LabSkeleton />}>
+                  <InteractiveExcelLab
+                    lessonId={currentLesson.id}
+                    lessonTitle={currentLesson.title}
+                    mode="practice"
+                    requestedExampleId={requestedExampleId}
+                    onSolved={() => {
+                      if (!isLessonDone) {
+                        void markSubModuleComplete(
+                          currentLesson.id,
+                          currentLesson.title,
+                          currentLesson.durationMinutes
+                        );
+                      }
+                    }}
+                  />
+                </Suspense>
               )}
 
               {/* Tab 2 (Non-Excel): Syntax & Troubleshooting Inspector */}
@@ -1210,13 +1392,15 @@ export const CoursePlayerView: React.FC = () => {
 
               {/* Tab 3: Field Engineering Notes */}
               {activeTab === 'lab' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                <div className="lesson-content space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
                     <span className="flex items-center gap-1.5 font-medium">
-                      <FileText className="w-3.5 h-3.5 text-blue-500" />
+                      <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       Cuaderno de Laboratorio del Alumno (Guardado local automático)
                     </span>
-                    <span className="text-[10px] text-slate-400">Persistente en tu navegador</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-300">
+                      Persistente en tu navegador
+                    </span>
                   </div>
                   <textarea
                     rows={6}
@@ -1226,10 +1410,12 @@ export const CoursePlayerView: React.FC = () => {
                       setQuickNotes(val);
                       try {
                         localStorage.setItem('dbacademy_reader_notes', val);
-                      } catch {}
+                      } catch {
+                        // Ignore storage errors
+                      }
                     }}
                     placeholder="Escribe aquí tus observaciones, pruebas de fórmulas o dudas antes del examen modular..."
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-3.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 p-3.5 text-base sm:text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
                   />
                 </div>
               )}
@@ -1238,106 +1424,115 @@ export const CoursePlayerView: React.FC = () => {
               {activeTab === 'materials' && (
                 <MaterialsTab materials={currentLesson.materials ?? []} />
               )}
+            </div>
 
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock className="w-4 h-4" />
-                      <span className="tabular-nums">{currentLesson.durationMinutes} min</span>
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="font-mono tabular-nums">
-                      Módulo: {currentModuleMeta?.doneCount ?? 0}/{currentModuleMeta?.totalCount ?? 0} completadas
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {prevLesson && (
-                      <button
-                        type="button"
-                        onClick={() => void handleNavigateLesson(prevLesson.id, false)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors min-h-[42px]"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                        <span>{t('prevSubModule')}</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      disabled={saving || isLessonDone}
-                      onClick={() => void handleCompleteLesson()}
-                      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium transition-colors min-h-[42px] ${
-                        isLessonDone
-                          ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{isLessonDone ? t('lessonCompleted') : t('completeLesson')}</span>
-                    </button>
-
-                    {nextLesson && (
-                      isNextLessonLocked ? (
-                        <button
-                          type="button"
-                          disabled
-                          title={
-                            nextLesson.module.id !== currentLesson.module.id
-                              ? `Completa "${currentLesson.title}" y todo ${currentLesson.module.title} para desbloquear ${nextLesson.module.title}`
-                              : `Completa "${currentLesson.title}" para desbloquear "${nextLesson.title}"`
-                          }
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/70 px-4 py-2 text-xs font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed min-h-[42px]"
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>
-                            {nextLesson.module.id !== currentLesson.module.id
-                              ? 'Siguiente módulo bloqueado'
-                              : 'Siguiente capítulo bloqueado'}
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void handleNavigateLesson(nextLesson.id, false)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-medium text-white dark:text-slate-900 hover:opacity-90 transition-opacity min-h-[42px]"
-                        >
-                          <span>{t('nextSubModule')}</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      )
-                    )}
-                  </div>
+            {/* Sticky Bottom Action Bar (always reachable with safe-area padding & legible locked contrast) */}
+            <div
+              className={`sticky z-20 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F172A]/95 backdrop-blur-md px-4 pt-3 space-y-2.5 ${
+                zenMode
+                  ? 'bottom-0 pb-[calc(12px+env(safe-area-inset-bottom))]'
+                  : 'bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-0 pb-3 lg:pb-[calc(12px+env(safe-area-inset-bottom))]'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 shrink-0" />
+                    <span className="tabular-nums">{currentLesson.durationMinutes} min</span>
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span className="font-mono tabular-nums">
+                    Módulo: {currentModuleMeta?.doneCount ?? 0}/{currentModuleMeta?.totalCount ?? 0} completadas
+                  </span>
                 </div>
 
-                {(isNextLessonLocked || lockWarning) && (
-                  <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                      <span>
-                        {lockWarning
-                          ? lockWarning
-                          : !isLessonDone
-                            ? `Capítulo bloqueado: para desbloquear "${nextLesson?.title}", primero completa este capítulo ("${currentLesson.title}").`
-                            : blockingLesson
-                              ? `Para desbloquear "${nextLesson?.title}", primero completa el capítulo pendiente "${blockingLesson.title}".`
-                              : `No puedes avanzar a "${nextLesson?.module.title}" sin terminar "${currentLesson.module.title}".`}
-                      </span>
-                    </div>
-                    {blockingLesson && blockingLesson.id !== currentLesson.id && (
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+                  {prevLesson && (
+                    <button
+                      type="button"
+                      onClick={() => void handleNavigateLesson(prevLesson.id, false)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[44px]"
+                    >
+                      <ChevronLeft className="w-4 h-4 shrink-0" />
+                      <span>{t('prevSubModule')}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={saving || isLessonDone}
+                    onClick={() => void handleCompleteLesson()}
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
+                      !prevLesson && !nextLesson ? 'col-span-2' : ''
+                    } ${
+                      isLessonDone
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700'
+                        : 'bg-[#0052CC] hover:bg-[#0747A6] text-white'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{isLessonDone ? t('lessonCompleted') : t('completeLesson')}</span>
+                  </button>
+
+                  {nextLesson && (
+                    isNextLessonLocked ? (
                       <button
                         type="button"
-                        onClick={() => selectLesson(blockingLesson.id)}
-                        className="rounded-md bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-700 transition-colors shrink-0"
+                        disabled
+                        title={
+                          nextLesson.module.id !== currentLesson.module.id
+                            ? `Completa "${currentLesson.title}" y todo ${currentLesson.module.title} para desbloquear ${nextLesson.module.title}`
+                            : `Completa "${currentLesson.title}" para desbloquear "${nextLesson.title}"`
+                        }
+                        className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 cursor-not-allowed min-h-[44px]"
                       >
-                        Ir a pendiente: {blockingLesson.title}
+                        <Lock className="w-3.5 h-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                        <span className="truncate">
+                          {nextLesson.module.id !== currentLesson.module.id
+                            ? 'Siguiente módulo bloqueado'
+                            : 'Siguiente capítulo bloqueado'}
+                        </span>
                       </button>
-                    )}
-                  </div>
-                )}
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void handleNavigateLesson(nextLesson.id, false)}
+                        className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity min-h-[44px]"
+                      >
+                        <span>{t('nextSubModule')}</span>
+                        <ChevronRight className="w-4 h-4 shrink-0" />
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
+
+              {(isNextLessonLocked || lockWarning) && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/35 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-100">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Lock className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+                    <span className="min-w-0 leading-snug">
+                      {lockWarning
+                        ? lockWarning
+                        : !isLessonDone
+                          ? `Completa "${currentLesson.title}" para desbloquear "${nextLesson?.title}".`
+                          : blockingLesson
+                            ? `Para desbloquear "${nextLesson?.title}", primero completa "${blockingLesson.title}".`
+                            : `No puedes avanzar a "${nextLesson?.module.title}" sin terminar "${currentLesson.module.title}".`}
+                    </span>
+                  </div>
+                  {blockingLesson && blockingLesson.id !== currentLesson.id && (
+                    <button
+                      type="button"
+                      onClick={() => selectLesson(blockingLesson.id)}
+                      className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 transition-colors shrink-0 min-h-[36px]"
+                    >
+                      Ir a pendiente: {blockingLesson.title}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1408,7 +1603,7 @@ export const CoursePlayerView: React.FC = () => {
                   value={searchTopic}
                   onChange={(e) => setSearchTopic(e.target.value)}
                   placeholder="Buscar tema en el temario..."
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-2 text-base sm:text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600 min-h-[44px] sm:min-h-[36px]"
                 />
               </div>
               {lockWarning && (
@@ -1419,7 +1614,7 @@ export const CoursePlayerView: React.FC = () => {
               )}
             </div>
 
-            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[calc(100dvh-8rem)] overflow-y-auto">
             {activeCourse.modules.map((mod, mIdx) => {
               const modDone = effectiveCompletedModuleIds.includes(mod.id);
               const doneInModule = mod.lessons.filter((l) =>
@@ -1518,19 +1713,19 @@ export const CoursePlayerView: React.FC = () => {
                                 : `Completa "${blockingLesson?.title ?? 'el capítulo anterior'}" para desbloquear este capítulo`
                               : undefined
                           }
-                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors min-h-[34px] ${
+                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors min-h-[44px] sm:min-h-[36px] ${
                             lessonLocked
-                              ? 'text-slate-400 dark:text-slate-500 opacity-65 cursor-not-allowed hover:bg-amber-50/40 dark:hover:bg-amber-950/20'
+                              ? 'text-slate-500 dark:text-slate-300 opacity-75 cursor-not-allowed hover:bg-amber-50/40 dark:hover:bg-amber-950/20'
                               : active
                                 ? 'bg-blue-600 text-white font-medium shadow-xs'
                                 : done
-                                  ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                                  ? 'text-slate-700 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40'
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
                             {lessonLocked ? (
-                              <Lock className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                              <Lock className="w-3.5 h-3.5 shrink-0 text-slate-500 dark:text-slate-300" />
                             ) : done ? (
                               <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
                             ) : (

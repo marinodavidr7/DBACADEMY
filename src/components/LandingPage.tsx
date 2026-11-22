@@ -18,6 +18,7 @@ import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
 import { BrandLogo } from './ui/BrandLogo';
 import { Container } from './ui/Container';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface LandingPageProps {
   onExplore: () => void;
@@ -60,9 +61,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   ];
 
   return (
-    <div id="top" className="min-h-screen bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)]">
+    <div id="top" className="min-h-[100dvh] overflow-x-hidden bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)]">
       {/* Header — borde a borde, contenedor limitado */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100">
+      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100 safe-pt">
         <Container>
           <div className="flex h-16 items-center justify-between gap-8">
             {/* Zone 1: Single-line Brand Logo + Wordmark */}
@@ -89,12 +90,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               ))}
             </nav>
 
-            {/* Zone 3: 1 Primary Action + Mobile Menu Trigger */}
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Zone 3: Install CTA + Primary Action + Mobile Menu Trigger */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="hidden sm:block">
+                <PWAInstallButton label={t('installApp')} />
+              </div>
               <button
                 type="button"
                 onClick={user ? onOpenLearning : onExplore}
-                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
               >
                 <span>{user ? 'Mi Aprendizaje' : 'Explorar catálogo'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -126,18 +130,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {link.label}
               </a>
             ))}
-            <button
-              type="button"
-              onClick={() => {
-                setMobileNavOpen(false);
-                if (user) onOpenLearning();
-                else onExplore();
-              }}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] px-4 py-2.5 text-sm font-semibold text-white min-h-[44px]"
-            >
-              <span>{user ? 'Ir a Mi Aprendizaje' : 'Explorar catálogo'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="pt-1 flex flex-col gap-2">
+              <PWAInstallButton label={t('installApp')} />
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  if (user) onOpenLearning();
+                  else onExplore();
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] px-4 py-2.5 text-sm font-semibold text-white min-h-[44px]"
+              >
+                <span>{user ? 'Ir a Mi Aprendizaje' : 'Explorar catálogo'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -173,7 +180,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       <main>
         {/* Hero — fondo de borde a borde, aprovechando el viewport con balance vertical */}
-        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 py-10 sm:py-12 lg:py-14 flex items-center min-h-[min(calc(100vh-4rem),660px)]">
+        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 py-10 sm:py-12 lg:py-14 flex items-center min-h-[min(calc(100dvh-4rem),660px)]">
           <Container prose={false}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12 items-center">
               <div className="flex flex-col justify-center">
@@ -321,15 +328,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <article className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden flex flex-col">
                   <div className="aspect-[16/9] w-full bg-slate-900 relative overflow-hidden">
                     <img
-                      src="/src/assets/images/track_data_analytics_1795271913869.jpg"
+                      src="/assets/images/track_data_analytics_1795271913869.webp"
                       alt="Ruta de Productividad y Analítica en Excel en DB Academy"
+                      width={1200}
+                      height={896}
+                      loading="lazy"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="p-6 sm:p-7 flex-1 flex flex-col">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
                         Ruta Principal · {excelCourse.category}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -372,8 +383,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
                     <div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                        <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
                           {track.category}
                         </span>
                         <span aria-hidden="true">·</span>
@@ -434,7 +445,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <img
                         src={course.coverImage}
                         alt={course.title}
+                        width={1280}
+                        height={714}
                         loading="lazy"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       />
@@ -445,8 +459,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     )}
                   </div>
                   <div className="p-5 flex-1 flex flex-col">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
                         {course.category}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -643,8 +657,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 onClick={() => void toggleTheme()}
-                aria-label="Cambiar tema claro u oscuro"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600"
+                title="Cambiar tema claro u oscuro"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-200 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 min-h-[36px]"
               >
                 {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                 <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
@@ -692,7 +706,7 @@ function ProductPreview() {
         {/* Barra de fórmulas activa */}
         <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-800 bg-[#0B1325] font-mono text-xs">
           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-semibold">D2</span>
-          <span className="text-[#107C41] font-serif italic font-bold">fx</span>
+          <span className="text-emerald-400 font-serif italic font-bold">fx</span>
           <span className="text-cyan-300 truncate">{'=SI(B2>=60;"Aprobado";"Reprobado")'}</span>
         </div>
 
@@ -701,7 +715,7 @@ function ProductPreview() {
           <div className="flex-1 border border-slate-800 rounded-lg bg-[#020617] overflow-hidden">
             <table className="w-full text-xs font-mono">
               <thead>
-                <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-400">
+                <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-300">
                   <th className="border-r border-slate-800 px-2 py-1.5 text-center w-8">#</th>
                   <th className="border-r border-slate-800 px-3 py-1.5 text-left">A · Estudiante</th>
                   <th className="border-r border-slate-800 px-3 py-1.5 text-center">B · Nota</th>
@@ -713,20 +727,20 @@ function ProductPreview() {
                 {rows.map((r, i) => (
                   <tr
                     key={r.row}
-                    className={`border-b border-slate-800/80 text-slate-300 ${
+                    className={`border-b border-slate-800/80 text-slate-200 ${
                       i === 0 ? 'bg-blue-950/30' : i % 2 === 1 ? 'bg-[#0F172A]/40' : ''
                     }`}
                   >
-                    <td className="border-r border-slate-800 px-2 py-2 text-center text-slate-500">
+                    <td className="border-r border-slate-800 px-2 py-2 text-center text-slate-300">
                       {r.row}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-left font-sans text-slate-200 truncate">
+                    <td className="border-r border-slate-800 px-3 py-2 text-left font-sans text-slate-100 truncate">
                       {r.student}
                     </td>
                     <td className="border-r border-slate-800 px-3 py-2 text-center text-cyan-300 tabular-nums">
                       {r.score}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center text-slate-400 tabular-nums">
+                    <td className="border-r border-slate-800 px-3 py-2 text-center text-slate-300 tabular-nums">
                       {r.attendance}
                     </td>
                     <td

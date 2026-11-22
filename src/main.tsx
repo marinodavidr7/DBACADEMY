@@ -1,4 +1,5 @@
 import {createRoot} from 'react-dom/client';
+import {registerSW} from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
 
@@ -8,7 +9,10 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
     .then((registrations) => {
       let hadDevSw = false;
       for (const reg of registrations) {
-        if (reg.active?.scriptURL.includes('dev-sw.js') || reg.installing?.scriptURL.includes('dev-sw.js')) {
+        if (
+          reg.active?.scriptURL.includes('dev-sw.js') ||
+          reg.installing?.scriptURL.includes('dev-sw.js')
+        ) {
           hadDevSw = true;
         }
         void reg.unregister();
@@ -23,6 +27,23 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
     .catch(() => {
       // Ignore SW cleanup errors in restricted frames
     });
+} else if (!import.meta.env.DEV && 'serviceWorker' in navigator) {
+  const updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      void updateSW(true);
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) {
+        window.setInterval(() => {
+          void registration.update();
+        }, 60 * 60 * 1000);
+      }
+    },
+    onRegisterError() {
+      // Ignore SW registration errors in restricted frames
+    },
+  });
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

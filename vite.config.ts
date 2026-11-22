@@ -12,17 +12,26 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
+        includeAssets: [
+          'icon.svg',
+          'offline.html',
+          'apple-touch-icon.png',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'pwa-maskable-512x512.png',
+        ],
         manifest: {
           id: '/',
           name: 'DB Academy — Formación técnica, en tiempo real.',
           short_name: 'DB Academy',
-          description: 'DB Academy: Formación técnica, en tiempo real. Cursos virtuales con progreso en vivo, certificación automática y cifrado E2EE.',
-          theme_color: '#0F172A',
+          description: 'DB Academy: Formación técnica, en tiempo real. Cursos interactivos de Excel, Power Query, seguimiento en vivo y certificación verificable.',
+          theme_color: '#090D16',
           background_color: '#090D16',
           display: 'standalone',
+          orientation: 'portrait',
           start_url: '/',
           scope: '/',
+          lang: 'es',
           icons: [
             {
               src: '/pwa-192x192.png',
@@ -48,9 +57,40 @@ export default defineConfig(() => {
           skipWaiting: true,
           clientsClaim: true,
           cleanupOutdatedCaches: true,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,woff,woff2}'],
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//, /^\/offline\.html$/],
           runtimeCaching: [
+            {
+              urlPattern: /\/api\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-data-cache',
+                networkTimeoutSeconds: 5,
+                expiration: {
+                  maxEntries: 60,
+                  maxAgeSeconds: 60 * 60 * 24,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: /\.(?:png|jpg|jpeg|webp|avif|svg|ico)$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'static-assets-cache',
+                expiration: {
+                  maxEntries: 80,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',

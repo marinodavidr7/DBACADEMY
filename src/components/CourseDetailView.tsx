@@ -324,6 +324,9 @@ export const CourseDetailView: React.FC = () => {
               <img
                 src={course.coverImage}
                 alt={course.title}
+                width={1280}
+                height={714}
+                decoding="async"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />

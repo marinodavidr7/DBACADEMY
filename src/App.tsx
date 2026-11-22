@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -21,26 +21,56 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { ApiIntegrationsView } from './components/ApiIntegrationsView';
-import { CalendarTasksView } from './components/CalendarTasksView';
-import { CatalogView } from './components/CatalogView';
-import { CertificatesView } from './components/CertificatesView';
-import { CourseDetailView } from './components/CourseDetailView';
-import { CoursePlayerView } from './components/CoursePlayerView';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ForumView } from './components/ForumView';
-import { InstructorDashboard } from './components/InstructorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
-import { BrandLogo } from './components/ui/BrandLogo';
-import { PageContainer } from './components/ui/PageContainer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
-import { SecurityCloudView } from './components/SecurityCloudView';
+import { BrandLogo } from './components/ui/BrandLogo';
+import { PageContainer } from './components/ui/PageContainer';
 import { PlatformProvider, usePlatform } from './context/PlatformContext';
 import { LANGUAGE_LABELS } from './i18n/translations';
 import type { AppView, Language } from './types';
+
+const CatalogView = lazy(() =>
+  import('./components/CatalogView').then((m) => ({ default: m.CatalogView }))
+);
+const CourseDetailView = lazy(() =>
+  import('./components/CourseDetailView').then((m) => ({ default: m.CourseDetailView }))
+);
+const CoursePlayerView = lazy(() =>
+  import('./components/CoursePlayerView').then((m) => ({ default: m.CoursePlayerView }))
+);
+const InstructorDashboard = lazy(() =>
+  import('./components/InstructorDashboard').then((m) => ({ default: m.InstructorDashboard }))
+);
+const ForumView = lazy(() =>
+  import('./components/ForumView').then((m) => ({ default: m.ForumView }))
+);
+const CertificatesView = lazy(() =>
+  import('./components/CertificatesView').then((m) => ({ default: m.CertificatesView }))
+);
+const CalendarTasksView = lazy(() =>
+  import('./components/CalendarTasksView').then((m) => ({ default: m.CalendarTasksView }))
+);
+const SecurityCloudView = lazy(() =>
+  import('./components/SecurityCloudView').then((m) => ({ default: m.SecurityCloudView }))
+);
+const ApiIntegrationsView = lazy(() =>
+  import('./components/ApiIntegrationsView').then((m) => ({ default: m.ApiIntegrationsView }))
+);
+
+const ViewSkeleton: React.FC = () => (
+  <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Cargando sección">
+    <div className="h-32 sm:h-40 rounded-xl bg-slate-200/80 dark:bg-slate-800/70" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="h-44 rounded-xl bg-slate-200/70 dark:bg-slate-800/60" />
+      <div className="h-44 rounded-xl bg-slate-200/70 dark:bg-slate-800/60 hidden sm:block" />
+      <div className="h-44 rounded-xl bg-slate-200/70 dark:bg-slate-800/60 hidden lg:block" />
+    </div>
+  </div>
+);
 
 const AppShell: React.FC = () => {
   const {
@@ -59,13 +89,13 @@ const AppShell: React.FC = () => {
     toggleTheme,
     setLanguage,
     signInWithGoogle,
-    signInAsAdmin,
     logout,
     authError,
     clearAuthError,
     t,
   } = usePlatform();
 
+  const shouldReduceMotion = useReducedMotion();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -101,22 +131,33 @@ const AppShell: React.FC = () => {
   ];
 
   const handleSelectNav = (view: AppView) => {
-    setActiveView(view);
-    if (view === 'instructor') setWorkspaceRole('instructor');
-    else if (view === 'learning') setWorkspaceRole('student');
-    setMobileMenuOpen(false);
+    const apply = () => {
+      setActiveView(view);
+      if (view === 'instructor') setWorkspaceRole('instructor');
+      else if (view === 'learning') setWorkspaceRole('student');
+      setMobileMenuOpen(false);
+    };
+
+    const docWithTransition = document as Document & {
+      startViewTransition?: (cb: () => void) => void;
+    };
+    if (!shouldReduceMotion && typeof docWithTransition.startViewTransition === 'function') {
+      docWithTransition.startViewTransition(apply);
+    } else {
+      apply();
+    }
   };
 
   if (activeView === 'landing') {
     return (
       <>
         <LandingPage
-          onExplore={() => setActiveView('catalog')}
+          onExplore={() => handleSelectNav('catalog')}
           onSelectCourse={(courseId) => {
             setSelectedCourseId(courseId);
-            setActiveView('course-detail');
+            handleSelectNav('course-detail');
           }}
-          onOpenLearning={() => setActiveView('learning')}
+          onOpenLearning={() => handleSelectNav('learning')}
           onSignIn={async () => {
             await signInWithGoogle();
           }}
@@ -130,451 +171,518 @@ const AppShell: React.FC = () => {
   const isZenActive = zenMode && activeView === 'learning';
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
+    <div className="min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden overflow-x-hidden bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
       {/* Desktop Sidebar (Collapsible Rail, hidden in Zen Mode) */}
       {!isZenActive && (
         <aside
-          className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 ${
+          className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-[100dvh] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 shrink-0 ${
             sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-56'
           }`}
         >
-        <div
-          className={`h-14 border-b border-slate-200 dark:border-slate-800 flex items-center shrink-0 ${
-            sidebarCollapsed ? 'justify-center px-1.5 gap-1' : 'justify-between px-3'
-          }`}
-        >
-          {!sidebarCollapsed ? (
-            <button
-              type="button"
-              onClick={() => handleSelectNav('catalog')}
-              className="text-left min-w-0 flex items-center"
-            >
-              <BrandLogo size="sm" showWordmark={true} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleSelectNav('catalog')}
-              title={t('brand')}
-              aria-label={t('brand')}
-              className="flex items-center justify-center shrink-0"
-            >
-              <BrandLogo size="xs" showWordmark={false} />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
-            title={sidebarCollapsed ? 'Expandir menú' : 'Retraer menú'}
-            className={`rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0 ${
-              sidebarCollapsed ? 'p-1' : 'p-1.5'
+          <div
+            className={`h-14 border-b border-slate-200 dark:border-slate-800 flex items-center shrink-0 ${
+              sidebarCollapsed ? 'justify-center px-1.5 gap-1' : 'justify-between px-3'
             }`}
           >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="w-3.5 h-3.5" />
+            {!sidebarCollapsed ? (
+              <button
+                type="button"
+                onClick={() => handleSelectNav('catalog')}
+                className="text-left min-w-0 flex items-center"
+              >
+                <BrandLogo size="sm" showWordmark={true} />
+              </button>
             ) : (
-              <PanelLeftClose className="w-4 h-4" />
+              <button
+                type="button"
+                onClick={() => handleSelectNav('catalog')}
+                title={t('brand')}
+                aria-label={t('brand')}
+                className="flex items-center justify-center shrink-0"
+              >
+                <BrandLogo size="xs" showWordmark={false} />
+              </button>
             )}
-          </button>
-        </div>
 
-        <nav className="flex-1 px-2 py-2.5 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = activeView === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSelectNav(item.id)}
-                title={sidebarCollapsed ? item.label : undefined}
-                aria-label={item.label}
-                className={`w-full flex items-center rounded-lg py-2 text-[13px] font-medium transition-colors whitespace-nowrap min-h-[38px] ${
-                  sidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
-                } ${
-                  active
-                    ? 'bg-[#0052CC] text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div
-          className={`border-t border-slate-200 dark:border-slate-800 space-y-2 ${
-            sidebarCollapsed ? 'p-2 flex flex-col items-center' : 'p-3'
-          }`}
-        >
-          {!sidebarCollapsed && user && (
-            <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
-              <p className="font-medium text-slate-800 dark:text-slate-200 truncate">
-                {user.displayName || user.email}
-              </p>
-              <p className="tabular-nums">
-                {connectedDevicesCount} {t('devicesConnected')} · {wsConnected ? 'WS' : 'Local'}
-              </p>
-            </div>
-          )}
-
-          {sidebarCollapsed ? (
-            <div className="flex flex-col items-center gap-2 w-full">
-              <button
-                type="button"
-                onClick={() => {
-                  const codes: Language[] = ['es', 'en', 'fr', 'pt'];
-                  const next = codes[(codes.indexOf(language) + 1) % codes.length];
-                  void setLanguage(next);
-                }}
-                title={`Idioma: ${LANGUAGE_LABELS[language]}`}
-                aria-label="Cambiar idioma"
-                className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[11px] font-mono font-semibold uppercase text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-              >
-                {language}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void toggleTheme()}
-                title="Cambiar tema"
-                aria-label="Cambiar tema"
-                className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-
-              {user ? (
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  title={t('signOut')}
-                  aria-label={t('signOut')}
-                  className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
+              title={sidebarCollapsed ? 'Expandir menú' : 'Retraer menú'}
+              className={`rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0 ${
+                sidebarCollapsed ? 'p-1' : 'p-1.5'
+              }`}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="w-3.5 h-3.5" />
               ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+
+          <nav className="flex-1 px-2 py-2.5 space-y-0.5 overflow-y-auto overflow-x-hidden">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = activeView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectNav(item.id)}
+                  title={sidebarCollapsed ? item.label : undefined}
+                  aria-label={item.label}
+                  className={`w-full flex items-center rounded-lg py-2 text-[13px] font-medium transition-colors whitespace-nowrap min-h-[40px] ${
+                    sidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
+                  } ${
+                    active
+                      ? 'bg-[#0052CC] text-white'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div
+            className={`border-t border-slate-200 dark:border-slate-800 space-y-2 ${
+              sidebarCollapsed ? 'p-2 flex flex-col items-center' : 'p-3'
+            }`}
+          >
+            {!sidebarCollapsed && user && (
+              <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <p className="font-medium text-slate-800 dark:text-slate-100 truncate">
+                  {user.displayName || user.email}
+                </p>
+                <p className="tabular-nums text-slate-500 dark:text-slate-300">
+                  {connectedDevicesCount} {t('devicesConnected')} · {wsConnected ? 'WS' : 'Local'}
+                </p>
+              </div>
+            )}
+
+            {sidebarCollapsed ? (
+              <div className="flex flex-col items-center gap-2 w-full">
                 <button
                   type="button"
-                  onClick={() => void signInWithGoogle()}
-                  title={t('signInGoogle')}
-                  aria-label={t('signInGoogle')}
-                  className="w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  onClick={() => {
+                    const codes: Language[] = ['es', 'en', 'fr', 'pt'];
+                    const next = codes[(codes.indexOf(language) + 1) % codes.length];
+                    void setLanguage(next);
+                  }}
+                  title={`Idioma: ${LANGUAGE_LABELS[language]}`}
+                  aria-label="Cambiar idioma"
+                  className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[11px] font-mono font-semibold uppercase text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
                 >
-                  <LogIn className="w-4 h-4" />
+                  {language}
                 </button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <select
-                  value={language}
-                  onChange={(e) => void setLanguage(e.target.value as Language)}
-                  aria-label="Idioma"
-                  className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[40px]"
-                >
-                  {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
-                    <option key={code} value={code}>
-                      {LANGUAGE_LABELS[code]}
-                    </option>
-                  ))}
-                </select>
 
                 <button
                   type="button"
                   onClick={() => void toggleTheme()}
+                  title="Cambiar tema"
                   aria-label="Cambiar tema"
-                  className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[40px]"
+                  className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
                 >
                   {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
-              </div>
 
-              {user ? (
-                <div className="space-y-2">
+                {user ? (
                   <button
                     type="button"
                     onClick={() => void logout()}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+                    title={t('signOut')}
+                    aria-label={t('signOut')}
+                    className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>{t('signOut')}</span>
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void signInWithGoogle()}
+                    title={t('signInGoogle')}
+                    aria-label={t('signInGoogle')}
+                    className="w-10 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  >
+                    <LogIn className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={language}
+                    onChange={(e) => void setLanguage(e.target.value as Language)}
+                    aria-label="Idioma"
+                    className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[40px]"
+                  >
+                    {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
+                      <option key={code} value={code}>
+                        {LANGUAGE_LABELS[code]}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => void toggleTheme()}
+                    aria-label="Cambiar tema"
+                    className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[40px]"
+                  >
+                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {user ? (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => void logout()}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>{t('signOut')}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void signInWithGoogle()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>{t('signInGoogle')}</span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 lg:h-[100dvh] lg:overflow-y-auto overflow-x-hidden">
+        {/* Clean 3-Zone Top Bar (hidden in Zen Mode) */}
+        {!isZenActive && (
+          <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs safe-pt px-4 sm:px-5 flex items-center justify-between gap-3 min-h-[54px]">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Abrir menú"
+                className="lg:hidden -ml-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectNav('catalog')}
+                className="lg:hidden flex items-center min-h-[44px] shrink-0"
+              >
+                <BrandLogo size="sm" showWordmark={true} />
+              </button>
+              <span className="hidden lg:inline text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
+                {sidebarCollapsed ? `${t('brand')} · ` : ''}
+                {navItems.find((n) => n.id === activeView)?.label || 'Programa del curso'}
+              </span>
+            </div>
+
+            <nav className="hidden xl:flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <button
+                type="button"
+                onClick={() => handleSelectNav('catalog')}
+                className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
+              >
+                {t('navCatalog')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectNav('learning')}
+                className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
+              >
+                {t('navLearning')}
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectNav('instructor')}
+                  className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
+                >
+                  {t('navInstructor')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleSelectNav('calendar')}
+                className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
+              >
+                {t('navCalendar')}
+              </button>
+            </nav>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <PWAInstallButton label={t('installApp')} />
+              <button
+                type="button"
+                onClick={() => setNotifOpen(true)}
+                aria-label={t('notifications')}
+                className="relative px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="ml-1 text-[11px] font-mono tabular-nums font-semibold text-blue-600 dark:text-cyan-300">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {user ? (
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Administrador</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void logout()}
+                    title={t('signOut')}
+                    aria-label={t('signOut')}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-[44px] min-h-[44px]"
+                  >
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline">{t('signOut')}</span>
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => void signInWithGoogle()}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>{t('signInGoogle')}</span>
+                  <LogIn className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">{t('signInGoogle')}</span>
+                  <span className="sm:hidden">Entrar</span>
                 </button>
               )}
-            </>
-          )}
-        </div>
-        </aside>
-      )}
-
-      {/* Main Content Area */}
-      <div
-        className="flex-1 flex flex-col min-w-0 lg:h-screen lg:overflow-y-auto"
-      >
-        {/* Clean 3-Zone Top Bar (hidden in Zen Mode for maximum viewport) */}
-        {!isZenActive && (
-          <header className="sticky top-0 z-30 h-13 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs px-3 sm:px-5 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              aria-label="Abrir menú"
-              className="lg:hidden p-2 -ml-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[40px] min-h-[40px] flex items-center justify-center"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectNav('catalog')}
-              className="lg:hidden flex items-center shrink-0"
-            >
-              <BrandLogo size="sm" showWordmark={true} />
-            </button>
-            <span className="hidden lg:inline text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
-              {sidebarCollapsed ? `${t('brand')} · ` : ''}
-              {navItems.find((n) => n.id === activeView)?.label || 'Programa del curso'}
-            </span>
-          </div>
-
-          <nav className="hidden xl:flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300">
-            <button
-              type="button"
-              onClick={() => handleSelectNav('catalog')}
-              className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
-            >
-              {t('navCatalog')}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectNav('learning')}
-              className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
-            >
-              {t('navLearning')}
-            </button>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => handleSelectNav('instructor')}
-                className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
-              >
-                {t('navInstructor')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleSelectNav('calendar')}
-              className="hover:text-slate-900 dark:hover:text-white whitespace-nowrap shrink-0"
-            >
-              {t('navCalendar')}
-            </button>
-          </nav>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <PWAInstallButton label={t('installApp')} />
-            <button
-              type="button"
-              onClick={() => setNotifOpen(true)}
-              aria-label={t('notifications')}
-              className="relative p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 min-w-[40px] min-h-[40px] flex items-center justify-center"
-            >
-              <Bell className="w-4 h-4" />
-              {unreadCount > 0 && (
-                <span className="ml-1 text-[11px] font-mono tabular-nums font-semibold text-blue-600 dark:text-blue-400">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {user ? (
-              <div className="flex items-center gap-2">
-                {isAdmin && (
-                  <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Administrador</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  title={t('signOut')}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[40px]"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{t('signOut')}</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t('signInGoogle')}</span>
-                <span className="sm:hidden">Google</span>
-              </button>
-            )}
-          </div>
+            </div>
           </header>
         )}
 
-        <main className="flex-1 min-w-0 w-full">
+        <main
+          className={`flex-1 min-w-0 w-full ${
+            isZenActive ? 'safe-pb' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6'
+          }`}
+        >
           <PageContainer
             className={`transition-all duration-200 ${
               isZenActive ? 'py-3 sm:py-4 max-w-none' : 'py-3 sm:py-4'
             }`}
           >
-          {authError && (
-            <div className="mb-5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300 flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="block">{authError}</span>
-                  {authError.includes('Authorized domains') && (
-                    <a
-                      href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-semibold underline hover:text-red-900 dark:hover:text-red-100"
-                    >
-                      Abrir Firebase Console → Authentication → Settings
-                    </a>
-                  )}
+            {authError && (
+              <div className="mb-4 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="space-y-1 min-w-0">
+                    <span className="block break-words">{authError}</span>
+                    {authError.includes('Authorized domains') && (
+                      <a
+                        href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-semibold underline hover:text-red-900 dark:hover:text-red-100"
+                      >
+                        Abrir Firebase Console → Authentication → Settings
+                      </a>
+                    )}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={clearAuthError}
+                  aria-label="Cerrar aviso"
+                  className="min-w-[36px] min-h-[36px] rounded hover:bg-red-100 dark:hover:bg-red-900/40 shrink-0 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={clearAuthError}
-                aria-label="Cerrar aviso"
-                className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/40 shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={activeView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-            >
-              {activeView === 'catalog' && <CatalogView />}
-              {activeView === 'course-detail' && <CourseDetailView />}
-              {activeView === 'learning' && <CoursePlayerView />}
-              {activeView === 'instructor' && <InstructorDashboard />}
-              {activeView === 'forums' && <ForumView />}
-              {activeView === 'certificates' && <CertificatesView />}
-              {activeView === 'calendar' && <CalendarTasksView />}
-              {activeView === 'security' && <SecurityCloudView />}
-              {activeView === 'integrations' && <ApiIntegrationsView />}
-            </motion.div>
-          </AnimatePresence>
+            )}
+
+            <Suspense fallback={<ViewSkeleton />}>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={activeView}
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+                  transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+                  className="min-w-0"
+                >
+                  {activeView === 'catalog' && <CatalogView />}
+                  {activeView === 'course-detail' && <CourseDetailView />}
+                  {activeView === 'learning' && <CoursePlayerView />}
+                  {activeView === 'instructor' && <InstructorDashboard />}
+                  {activeView === 'forums' && <ForumView />}
+                  {activeView === 'certificates' && <CertificatesView />}
+                  {activeView === 'calendar' && <CalendarTasksView />}
+                  {activeView === 'security' && <SecurityCloudView />}
+                  {activeView === 'integrations' && <ApiIntegrationsView />}
+                </motion.div>
+              </AnimatePresence>
+            </Suspense>
           </PageContainer>
         </main>
       </div>
+
+      {/* Native Mobile Bottom Tab Bar (hidden on lg+ and in Zen Mode) */}
+      {!isZenActive && (
+        <nav
+          aria-label="Navegación inferior"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#090D16]/95 backdrop-blur-md safe-pb safe-px"
+        >
+          <div className="grid grid-cols-4 h-14 max-w-md mx-auto">
+            {[
+              { id: 'catalog' as AppView, label: 'Catálogo', icon: BookOpen, match: ['catalog', 'course-detail'] },
+              { id: 'learning' as AppView, label: 'Aprender', icon: GraduationCap, match: ['learning'] },
+              { id: 'certificates' as AppView, label: 'Diplomas', icon: Award, match: ['certificates'] },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = tab.match.includes(activeView);
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleSelectNav(tab.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] px-1 transition-colors ${
+                    isActive
+                      ? 'text-[#0052CC] dark:text-cyan-300 font-semibold'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="text-[11px] leading-tight truncate max-w-full">
+                    {tab.label}
+                  </span>
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-expanded={mobileMenuOpen}
+              className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] px-1 transition-colors ${
+                mobileMenuOpen
+                  ? 'text-[#0052CC] dark:text-cyan-300 font-semibold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Menu className="w-5 h-5 shrink-0" />
+              <span className="text-[11px] leading-tight">Más</span>
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* Mobile Navigation Drawer */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 lg:hidden flex bg-slate-950/60 backdrop-blur-xs"
+            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
+            className="fixed inset-0 z-50 lg:hidden flex bg-slate-950/65 backdrop-blur-xs"
+            onClick={() => setMobileMenuOpen(false)}
           >
             <motion.div
-              initial={{ x: '-100%' }}
+              initial={shouldReduceMotion ? false : { x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800"
+              exit={shouldReduceMotion ? undefined : { x: '-100%' }}
+              transition={
+                shouldReduceMotion
+                  ? { duration: 0 }
+                  : { type: 'spring', damping: 28, stiffness: 300 }
+              }
+              className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800 safe-pt safe-pb"
+              onClick={(e) => e.stopPropagation()}
             >
-            <div className="h-14 px-3.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-              <BrandLogo size="sm" showWordmark={true} />
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = activeView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleSelectNav(item.id)}
-                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium min-h-[44px] ${
-                      active
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-              <div className="flex items-center gap-2">
-                <select
-                  value={language}
-                  onChange={(e) => void setLanguage(e.target.value as Language)}
-                  className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2 text-xs text-slate-800 dark:text-slate-200 min-h-[44px]"
-                >
-                  {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
-                    <option key={code} value={code}>
-                      {LANGUAGE_LABELS[code]}
-                    </option>
-                  ))}
-                </select>
+              <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
+                <BrandLogo size="sm" showWordmark={true} />
                 <button
                   type="button"
-                  onClick={() => void toggleTheme()}
-                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 min-h-[44px]"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Cerrar menú"
+                  className="min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
                 >
-                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-              {user && (
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[44px]"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>{t('signOut')}</span>
-                </button>
-              )}
-            </div>
+
+              <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectNav(item.id)}
+                      className={`w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium min-h-[44px] ${
+                        active
+                          ? 'bg-[#0052CC] text-white'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={language}
+                    onChange={(e) => void setLanguage(e.target.value as Language)}
+                    aria-label="Idioma"
+                    className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-base sm:text-xs text-slate-800 dark:text-slate-200 min-h-[44px]"
+                  >
+                    {(Object.keys(LANGUAGE_LABELS) as Language[]).map((code) => (
+                      <option key={code} value={code}>
+                        {LANGUAGE_LABELS[code]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void toggleTheme()}
+                    aria-label="Cambiar tema"
+                    className="min-w-[44px] min-h-[44px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 flex items-center justify-center"
+                  >
+                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => void logout()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 min-h-[44px]"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>{t('signOut')}</span>
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
         )}
       </AnimatePresence>
 

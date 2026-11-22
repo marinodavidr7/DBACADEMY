@@ -213,8 +213,11 @@ export const CatalogView: React.FC = () => {
 
           <div className="lg:col-span-4 relative min-h-[170px] lg:min-h-full bg-[#0D1930]">
             <img
-              src="/src/assets/images/track_data_analytics_1795271913869.jpg"
+              src="/assets/images/track_data_analytics_1795271913869.webp"
               alt="Laboratorio de Excel y Analítica de DB Academy"
+              width={1200}
+              height={896}
+              decoding="async"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
@@ -246,7 +249,7 @@ export const CatalogView: React.FC = () => {
                 }}
                 aria-label={t('searchCourses')}
                 placeholder={t('searchCourses')}
-                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] pl-10 pr-10 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[44px]"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] pl-10 pr-11 py-2.5 text-base sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[44px]"
               />
               {search && (
                 <button
@@ -254,7 +257,7 @@ export const CatalogView: React.FC = () => {
                   onClick={() => setSearch('')}
                   aria-label="Limpiar búsqueda"
                   title="Limpiar búsqueda"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -405,6 +408,10 @@ export const CatalogView: React.FC = () => {
                       <img
                         src={course.coverImage}
                         alt={course.title}
+                        width={1280}
+                        height={714}
+                        loading="lazy"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       />

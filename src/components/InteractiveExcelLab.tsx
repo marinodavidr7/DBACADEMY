@@ -71,6 +71,13 @@ function saveSolvedSet(lessonId: string, ids: string[]) {
   }
 }
 
+function splitSyntaxLines(syntax: string): string[] {
+  return syntax
+    .split(/\n|\s*[·|]\s*/g)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   lessonId,
   lessonTitle,
@@ -356,6 +363,13 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
 
   const markExerciseSolved = useCallback(
     (exId: string) => {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate(18);
+        } catch {
+          // Ignore vibrate errors on restricted browsers
+        }
+      }
       setSolvedIds((prev) => {
         if (prev.includes(exId)) return prev;
         const next = [...prev, exId];
@@ -440,62 +454,64 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   // Mode 2: Tab "Sintaxis & Troubleshooting"
   if (mode === 'syntax') {
     return (
-      <div className="space-y-4 text-xs">
-        {curriculum.functions.map((fn) => (
-          <div
-            key={fn.name}
-            className="rounded-xl bg-[#090D16] border border-slate-800 p-4 space-y-3 font-mono"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2 text-slate-400 border-b border-slate-800 pb-2">
-              <span className="flex items-center gap-1.5 font-sans font-semibold text-xs text-emerald-400">
-                <Terminal className="w-3.5 h-3.5" />
-                {fn.name}
-              </span>
-              <button
-                type="button"
-                onClick={() => onSolved?.()}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#107C41] hover:bg-[#0d6535] text-white font-sans font-semibold text-[11px] transition-colors"
-              >
-                <Play className="w-3 h-3" />
-                <span>Practicar en laboratorio</span>
-              </button>
-            </div>
+      <div className="lesson-content space-y-4 text-xs min-w-0">
+        {curriculum.functions.map((fn) => {
+          const syntaxLines = splitSyntaxLines(fn.syntax);
+          return (
+            <div
+              key={fn.name}
+              className="rounded-xl bg-[#090D16] border border-slate-800 p-4 space-y-3 font-mono min-w-0"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 text-slate-300 border-b border-slate-800 pb-2.5">
+                <span className="flex items-center gap-2 font-sans font-semibold text-xs text-emerald-400 min-w-0">
+                  <Terminal className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0 break-words">{fn.name}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onSolved?.()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] text-white font-sans font-semibold text-xs transition-colors min-h-[44px]"
+                >
+                  <Play className="w-3.5 h-3.5 shrink-0" />
+                  <span>Practicar en laboratorio</span>
+                </button>
+              </div>
 
-            <div className="space-y-2 text-slate-200">
-              <p className="text-slate-500">// Sintaxis oficial:</p>
-              <p className="text-emerald-400 font-bold break-all">{fn.syntax}</p>
-              <p className="text-slate-300 font-sans text-xs">{fn.summary}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-sans">
-                {fn.arguments.map((arg) => (
-                  <div
-                    key={arg.name}
-                    className="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5 space-y-0.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono font-semibold text-blue-300 text-[11px]">
-                        {arg.name}
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                          arg.required
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                            : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {arg.required ? 'Obligatorio' : 'Opcional'}
-                      </span>
+              <div className="space-y-3 text-slate-200 min-w-0">
+                <p className="text-slate-300">// Sintaxis oficial:</p>
+                <pre className="rounded-lg bg-slate-950/90 border border-slate-800 px-3 py-2.5 text-emerald-300 font-mono text-xs font-bold whitespace-pre-wrap break-words max-w-full overflow-x-hidden">
+                  <code>{syntaxLines.join('\n')}</code>
+                </pre>
+                <p className="text-slate-200 font-sans text-xs sm:text-sm leading-relaxed">{fn.summary}</p>
+                <div className="divide-y divide-slate-800 border-t border-b border-slate-800 font-sans">
+                  {fn.arguments.map((arg) => (
+                    <div key={arg.name} className="py-2.5 space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-mono font-semibold text-cyan-300 text-xs break-words">
+                          {arg.name}
+                        </span>
+                        <span
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded shrink-0 ${
+                            arg.required
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              : 'bg-slate-800 text-slate-200 border border-slate-700'
+                          }`}
+                        >
+                          {arg.required ? 'Obligatorio' : 'Opcional'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-snug">{arg.description}</p>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-snug">{arg.description}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 p-2.5 rounded border border-amber-900/60 bg-amber-950/30 text-amber-200 font-sans">
-                <span className="font-semibold block">Error frecuente a evitar:</span>
-                <span className="text-[11px] text-amber-300/90">{fn.pitfall}</span>
+                  ))}
+                </div>
+                <div className="border-l-2 border-amber-400 bg-amber-950/30 pl-3 pr-2.5 py-2 text-amber-100 font-sans">
+                  <span className="font-semibold block text-amber-200">Error frecuente a evitar:</span>
+                  <span className="text-xs text-amber-100/90">{fn.pitfall}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -504,192 +520,197 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   const showPractice = mode === 'practice' || mode === 'lab';
 
   return (
-    <div className="space-y-4">
-      {/* 1. INTRODUCCIÓN A LAS FUNCIONES */}
+    <div className="space-y-5 min-w-0">
+      {/* 1–3: Guía de Teoría, Sintaxis y Ejemplos con jerarquía plana (1 solo nivel de tarjeta) */}
       {showGuide && (
-      <>
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-2.5">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-          <BookOpen className="w-4 h-4" />
-          <span>1. Introducción a las funciones · {lessonTitle}</span>
-        </div>
-        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-          {curriculum.introduction}
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
-          {curriculum.keyTakeaways.map((tip) => (
-            <div
-              key={tip}
-              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#107C41] dark:text-emerald-400 shrink-0 mt-0.5" />
-              <span>{tip}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 2. EXPLICACIÓN DETALLADA DE CADA FUNCIÓN */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-          <Terminal className="w-4 h-4" />
-          <span>2. Explicación detallada de las funciones</span>
-        </div>
-
-        <div className="space-y-4">
-          {curriculum.functions.map((fn) => (
-            <div
-              key={fn.name}
-              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4 space-y-3"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{fn.name}</h4>
-                <code className="px-2.5 py-1 rounded-md bg-slate-900 text-emerald-400 font-mono text-xs font-semibold">
-                  {fn.syntax}
-                </code>
-              </div>
-
-              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                {fn.summary}
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {fn.arguments.map((arg) => (
-                  <div
-                    key={arg.name}
-                    className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="font-mono text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        {arg.name}
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                          arg.required
-                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                        }`}
-                      >
-                        {arg.required ? 'Obligatorio' : 'Opcional'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">{arg.description}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-lg border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 flex items-start gap-2 text-xs text-amber-900 dark:text-amber-200">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold">Cuidado: </span>
-                  <span>{fn.pitfall}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 3. EJEMPLOS PRÁCTICOS */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-            <Lightbulb className="w-4 h-4" />
-            <span>3. Ejemplos prácticos</span>
+      <div className="lesson-content divide-y divide-slate-200 dark:divide-slate-800 min-w-0">
+        {/* 1. INTRODUCCIÓN A LAS FUNCIONES */}
+        <section className="py-4 first:pt-1 space-y-3 min-w-0">
+          <div className="flex items-start gap-2.5 text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-cyan-300 min-w-0">
+            <BookOpen className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="min-w-0 leading-snug">
+              1. Introducción a las funciones · {lessonTitle}
+            </span>
           </div>
-          {activeExample && (
-            <button
-              type="button"
-              onClick={() => setLoadedExampleId(null)}
-              className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Volver al ejercicio activo
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {curriculum.examples.map((ex) => {
-            const isLoaded = loadedExampleId === ex.id;
-            return (
-              <div
-                key={ex.id}
-                className={`rounded-xl border p-4 space-y-2.5 transition-colors ${
-                  isLoaded
-                    ? 'border-[#107C41] bg-emerald-50/50 dark:bg-emerald-950/20'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40'
-                }`}
+          <p className="text-sm sm:text-[15px] text-slate-700 dark:text-slate-200 leading-relaxed">
+            {curriculum.introduction}
+          </p>
+          <ul className="divide-y divide-slate-200/80 dark:divide-slate-800/80 border-t border-b border-slate-200 dark:border-slate-800">
+            {curriculum.keyTakeaways.map((tip) => (
+              <li
+                key={tip}
+                className="py-2.5 flex items-start gap-2.5 text-xs sm:text-[13px] text-slate-700 dark:text-slate-200 min-w-0"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                    {ex.functionTag}
-                  </span>
-                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                    Resultado esperado: <strong className="text-slate-900 dark:text-slate-100">{ex.expectedResult}</strong>
-                  </span>
-                </div>
+                <CheckCircle2 className="w-4 h-4 text-[#107C41] dark:text-emerald-400 shrink-0 mt-0.5" />
+                <span className="min-w-0 leading-relaxed">{tip}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-                <h5 className="text-sm font-bold text-slate-900 dark:text-slate-100">{ex.title}</h5>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {ex.scenario}
-                </p>
+        {/* 2. EXPLICACIÓN DETALLADA DE CADA FUNCIÓN */}
+        <section className="py-4 space-y-4 min-w-0">
+          <div className="flex items-start gap-2.5 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 min-w-0">
+            <Terminal className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="min-w-0 leading-snug">2. Explicación detallada de las funciones</span>
+          </div>
 
-                <div className="rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-emerald-400 flex items-center justify-between gap-2">
-                  <span className="truncate">{ex.formula}</span>
-                  <span className="text-[10px] text-slate-400 shrink-0">Celda {ex.targetCell}</span>
-                </div>
+          <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            {curriculum.functions.map((fn) => {
+              const syntaxLines = splitSyntaxLines(fn.syntax);
+              return (
+                <article key={fn.name} className="py-4 first:pt-1 last:pb-1 space-y-3 min-w-0">
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-50 leading-snug">
+                    {fn.name}
+                  </h4>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (mode === 'guide' && onRequestExamplePractice) {
-                      onRequestExamplePractice(ex.id);
-                    } else {
-                      handleLoadExample(ex);
-                    }
-                  }}
-                  className={`w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                  <pre className="rounded-lg bg-slate-900 dark:bg-[#090D16] border border-slate-800 px-3 py-2.5 text-emerald-300 font-mono text-xs font-semibold whitespace-pre-wrap break-words max-w-full overflow-x-hidden">
+                    <code>{syntaxLines.join('\n')}</code>
+                  </pre>
+
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                    {fn.summary}
+                  </p>
+
+                  {/* Argumentos en filas limpias con separador fino */}
+                  <div className="divide-y divide-slate-200/80 dark:divide-slate-800/80 border-t border-b border-slate-200 dark:border-slate-800">
+                    {fn.arguments.map((arg) => (
+                      <div key={arg.name} className="py-2.5 space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold text-blue-700 dark:text-cyan-300 break-words">
+                            {arg.name}
+                          </span>
+                          <span
+                            className={`text-[11px] font-semibold px-2 py-0.5 rounded shrink-0 ${
+                              arg.required
+                                ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {arg.required ? 'Obligatorio' : 'Opcional'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                          {arg.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Advertencia sin borde doble anidado */}
+                  <div className="border-l-2 border-amber-500 bg-amber-50/70 dark:bg-amber-950/25 pl-3 pr-2.5 py-2 flex items-start gap-2 text-xs text-amber-900 dark:text-amber-100 min-w-0">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <span className="font-semibold">Cuidado: </span>
+                      <span>{fn.pitfall}</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 3. EJEMPLOS PRÁCTICOS */}
+        <section className="py-4 space-y-3 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-start gap-2.5 text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 min-w-0">
+              <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="min-w-0 leading-snug">3. Ejemplos prácticos</span>
+            </div>
+            {activeExample && (
+              <button
+                type="button"
+                onClick={() => setLoadedExampleId(null)}
+                className="min-h-[36px] text-xs font-semibold text-blue-700 dark:text-cyan-300 hover:underline"
+              >
+                Volver al ejercicio activo
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+            {curriculum.examples.map((ex) => {
+              const isLoaded = loadedExampleId === ex.id;
+              return (
+                <div
+                  key={ex.id}
+                  className={`rounded-xl border p-3.5 sm:p-4 space-y-2.5 transition-colors min-w-0 ${
                     isLoaded
-                      ? 'bg-[#107C41] text-white'
-                      : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#107C41] hover:text-[#107C41]'
+                      ? 'border-[#107C41] bg-emerald-50/50 dark:bg-emerald-950/25'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/45'
                   }`}
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>
-                    {mode === 'guide' && onRequestExamplePractice
-                      ? 'Probar este ejemplo en el laboratorio'
-                      : isLoaded
-                        ? 'Ejemplo cargado en la hoja'
-                        : 'Probar ejemplo en la hoja'}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
+                      {ex.functionTag}
+                    </span>
+                    <span className="text-xs font-mono text-slate-600 dark:text-slate-300">
+                      Resultado: <strong className="text-slate-900 dark:text-white">{ex.expectedResult}</strong>
+                    </span>
+                  </div>
 
-      {mode === 'guide' && onGoToPractice && (
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              ¿Listo para practicar en la hoja de cálculo?
-            </p>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              Tienes {allExercises.length} ejercicios interactivos listos ({solvedCount} resueltos).
-            </p>
+                  <h5 className="text-sm font-bold text-slate-900 dark:text-slate-50">{ex.title}</h5>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {ex.scenario}
+                  </p>
+
+                  <div className="rounded-lg bg-slate-900 dark:bg-[#090D16] border border-slate-800 px-3 py-2 font-mono text-xs text-emerald-300 flex flex-wrap items-center justify-between gap-2 min-w-0">
+                    <code className="min-w-0 flex-1 whitespace-pre-wrap break-words">{ex.formula}</code>
+                    <span className="text-[11px] text-slate-300 shrink-0">Celda {ex.targetCell}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (mode === 'guide' && onRequestExamplePractice) {
+                        onRequestExamplePractice(ex.id);
+                      } else {
+                        handleLoadExample(ex);
+                      }
+                    }}
+                    className={`w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
+                      isLoaded
+                        ? 'bg-[#107C41] text-white'
+                        : 'border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:border-[#107C41] hover:text-[#107C41] dark:hover:text-emerald-300'
+                    }`}
+                  >
+                    <Play className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {mode === 'guide' && onRequestExamplePractice
+                        ? 'Probar este ejemplo en el laboratorio'
+                        : isLoaded
+                          ? 'Ejemplo cargado en la hoja'
+                          : 'Probar ejemplo en la hoja'}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <button
-            type="button"
-            onClick={onGoToPractice}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[40px]"
-          >
-            <span>Ir a los ejercicios en Excel</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      </>
+        </section>
+
+        {mode === 'guide' && onGoToPractice && (
+          <div className="pt-4 pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-sm font-bold text-slate-900 dark:text-slate-50">
+                ¿Listo para practicar en la hoja de cálculo?
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                Tienes {allExercises.length} ejercicios interactivos listos ({solvedCount} resueltos).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onGoToPractice}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[44px] shrink-0"
+            >
+              <span>Ir a los ejercicios en Excel</span>
+              <ChevronRight className="w-4 h-4 shrink-0" />
+            </button>
+          </div>
+        )}
+      </div>
       )}
 
       {/* 4. MÍNIMO 10 EJERCICIOS INTERACTIVOS EN EXCEL */}
@@ -697,35 +718,33 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       <>
       <section
         ref={gridRef}
-        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden"
+        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden min-w-0"
       >
         {/* Header + Exercise Progress */}
-        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-[#107C41] text-white font-serif italic font-bold text-xs">
+        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] space-y-3 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-[#107C41] text-white font-serif italic font-bold text-xs shrink-0">
                 fx
               </span>
-              <div>
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                  <ClipboardList className="w-4 h-4 text-[#107C41]" />
-                  <span>4. Ejercicios prácticos en Excel ({allExercises.length} retos)</span>
-                </h4>
-              </div>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 min-w-0">
+                <ClipboardList className="w-4 h-4 text-[#107C41] shrink-0" />
+                <span className="min-w-0">4. Ejercicios prácticos en Excel ({allExercises.length} retos)</span>
+              </h4>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               {canAdminManage && (
                 <button
                   type="button"
                   onClick={() => setCreatorOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-3 py-1.5 text-xs font-semibold text-white transition-colors shadow-xs"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-3 py-2 text-xs font-semibold text-white transition-colors shadow-xs min-h-[44px]"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
                   <span>Crear ejercicio</span>
                 </button>
               )}
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
                 Resueltos: {solvedCount}/{allExercises.length}
               </span>
               <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
@@ -739,8 +758,8 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
             </div>
           </div>
 
-          {/* Numbered Exercise Selector Grid (1 .. N) */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          {/* Numbered Exercise Selector Strip */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:flex-wrap">
             {allExercises.map((ex, idx) => {
               const isSolved = solvedIds.includes(ex.id);
               const isActive = !activeExample && safeIdx === idx;
@@ -753,17 +772,17 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                     setExerciseIdx(idx);
                   }}
                   title={`${ex.number}. ${ex.title} (${ex.functionTag})`}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  className={`inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors min-h-[44px] min-w-[58px] shrink-0 ${
                     isActive
                       ? 'bg-[#107C41] border-[#107C41] text-white shadow-xs'
                       : isSolved
                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
                         : ex.isCustom
-                          ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-400'
+                          ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-400'
                   }`}
                 >
-                  {isSolved && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+                  {isSolved && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
                   <span>Ej. {ex.number}</span>
                 </button>
               );
@@ -892,29 +911,29 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setShowHint((h) => !h)}
-                    className="inline-flex items-center gap-1 rounded-md border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-blue-700 dark:text-cyan-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 min-h-[44px]"
                   >
-                    <Lightbulb className="w-3 h-3" />
+                    <Lightbulb className="w-3.5 h-3.5 shrink-0" />
                     <span>{showHint ? 'Ocultar pista' : 'Ver pista'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleApplySolution}
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 min-h-[44px]"
                   >
-                    <HelpCircle className="w-3 h-3" />
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>Ver solución</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleVerifyChallenge}
-                    className="inline-flex items-center gap-1 rounded-md bg-[#107C41] hover:bg-[#0d6535] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[44px]"
                   >
-                    <Sparkles className="w-3 h-3" />
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
                     <span>Verificar reto</span>
                   </button>
                 </div>
@@ -923,10 +942,10 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                   <button
                     type="button"
                     onClick={() => setExerciseIdx((i) => Math.min(allExercises.length - 1, i + 1))}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"
                   >
                     <span>Siguiente ejercicio</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                   </button>
                 )}
               </div>
@@ -935,21 +954,21 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
 
           {checkResult && (
             <div
-              className={`rounded-lg px-3 py-2 text-xs font-medium flex items-center justify-between gap-2 border ${
+              className={`rounded-lg px-3 py-2 text-xs font-medium flex flex-wrap items-center justify-between gap-2 border ${
                 checkResult.ok
-                  ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-                  : 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+                  ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+                  : 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
               }`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{checkResult.feedback}</span>
+                <span className="min-w-0">{checkResult.feedback}</span>
               </div>
               {checkResult.ok && safeIdx < allExercises.length - 1 && (
                 <button
                   type="button"
                   onClick={() => setExerciseIdx((i) => i + 1)}
-                  className="shrink-0 rounded bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1 text-[11px] font-semibold"
+                  className="shrink-0 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 text-xs font-semibold min-h-[40px]"
                 >
                   Ir al Ej. {safeIdx + 2}
                 </button>
@@ -959,11 +978,11 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         </div>
 
         {/* Formula Bar */}
-        <div className="px-3 py-2 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 min-w-[44px] text-center">
+        <div className="px-3 py-2.5 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2 min-w-0">
+          <span className="px-2.5 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 min-w-[44px] min-h-[38px] flex items-center justify-center shrink-0">
             {selectedCell}
           </span>
-          <span className="text-xs font-serif italic font-bold text-[#107C41] dark:text-emerald-400">
+          <span className="text-xs font-serif italic font-bold text-[#107C41] dark:text-emerald-400 shrink-0">
             fx
           </span>
           <input
@@ -979,13 +998,13 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
             }}
             onBlur={() => commitFormula(formulaDraft)}
             placeholder={`Escribe un valor o fórmula en ${selectedCell} (inicia con =)`}
-            className="flex-1 min-w-[200px] rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#107C41] disabled:opacity-60"
+            className="flex-1 min-w-0 w-full sm:w-auto rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-base sm:text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#107C41] disabled:opacity-60 min-h-[44px]"
           />
           <button
             type="button"
             disabled={activeSheetTab === 'secondary'}
             onClick={() => commitFormula(formulaDraft)}
-            className="rounded-md bg-slate-900 dark:bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-slate-900 dark:bg-slate-100 px-3.5 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 disabled:opacity-50 min-h-[44px] shrink-0"
           >
             Aplicar
           </button>
@@ -998,18 +1017,18 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               }
               onClick={handleFillDown}
               title="Copiar fórmula hacia las filas inferiores con referencias relativas"
-              className="inline-flex items-center gap-1 rounded-md border border-[#107C41]/40 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-lg border border-[#107C41]/40 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-[#107C41] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-40 min-h-[44px] shrink-0"
             >
-              <ArrowDownToLine className="w-3.5 h-3.5" />
+              <ArrowDownToLine className="w-3.5 h-3.5 shrink-0" />
               <span>Rellenar abajo</span>
             </button>
           )}
         </div>
 
         {/* Autocomplete quick function chips */}
-        <div className="px-3 py-1.5 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="text-slate-400 mr-1 flex items-center gap-1">
-            <Table2 className="w-3 h-3" />
+        <div className="px-3 py-2 bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar sm:flex-wrap text-xs">
+          <span className="text-slate-500 dark:text-slate-300 mr-1 flex items-center gap-1 shrink-0">
+            <Table2 className="w-3.5 h-3.5 shrink-0" />
             Insertar:
           </span>
           {quickFunctionChips.map((chip) => (
@@ -1020,7 +1039,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                 setActiveSheetTab('primary');
                 setFormulaDraft(chip);
               }}
-              className="px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-300 hover:border-[#107C41] hover:text-[#107C41] transition-colors"
+              className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-200 hover:border-[#107C41] hover:text-[#107C41] dark:hover:text-emerald-300 transition-colors min-h-[38px] shrink-0"
             >
               {chip}
             </button>
