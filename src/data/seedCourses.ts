@@ -15,12 +15,12 @@ export const EXCEL_BASICO_COURSE: Course = {
   instructorName: 'Equipo DB Academy',
   published: true,
   modulesCount: 2,
-  totalLessons: 20,
+  totalLessons: 21,
   modules: [
     {
       id: 'mod-excel-0',
       title: 'MÓDULO 0 — FUNDAMENTOS PREVIOS',
-      durationMinutes: 105,
+      durationMinutes: 120,
       quizQuestion: '¿Qué símbolo fija tanto la columna como la fila en una referencia absoluta?',
       quizOptions: [
         'El signo dólar antes de la letra y el número ($A$1)',
@@ -29,6 +29,15 @@ export const EXCEL_BASICO_COURSE: Course = {
       ],
       quizCorrectIndex: 0,
       lessons: [
+        {
+          id: 'les-excel-0-0',
+          title: '0.0 Conceptos Básicos: Columnas, Filas y Celdas',
+          durationMinutes: 15,
+          summary:
+            'Aprende a orientarte en la hoja de cálculo: cómo se organizan las columnas (verticales con letras), las filas (horizontales con números) y la intersección que da vida a las celdas y su coordenada.',
+          content:
+            'Toda hoja de cálculo en Excel está estructurada como una inmensa cuadrícula bidimensional. Las columnas son bandas verticales nombradas con letras de la A a la Z (y combinaciones como AA, AB... hasta XFD). Las filas son bandas horizontales numeradas del 1 al 1.048.576. El punto exacto donde se cruzan una columna y una fila es una celda, cuya dirección o coordenada universal se lee siempre mencionando primero la letra de la columna y luego el número de fila (por ejemplo: C3). En la parte superior, el Cuadro de Nombres te indica qué celda tienes seleccionada en todo momento, mientras que la Barra de Fórmulas (fx) exhibe el dato o valor numérico que reside en su interior.',
+        },
         {
           id: 'les-excel-0-1',
           title: '0.1 Anatomía de una función (nombre, argumentos, sintaxis)',

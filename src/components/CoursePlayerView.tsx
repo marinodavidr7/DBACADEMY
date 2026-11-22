@@ -42,6 +42,7 @@ import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
 import { formatFileSize } from '../services/storageService';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { InteractiveExcelLab } from './InteractiveExcelLab';
 import { CourseProgressBar } from './ui/CourseProgressBar';
@@ -382,6 +383,7 @@ export const CoursePlayerView: React.FC = () => {
     });
   }, [prereqCourses, enrollments, certificates, isAdmin, viewAsStudent]);
   const isSiLesson = currentLesson?.id === 'les-excel-1-13';
+  const isGridBasicsLesson = currentLesson?.id === 'les-excel-0-0';
   const lessonExerciseCount = useMemo(() => {
     if (!isExcelCourse || !currentLesson) return 0;
     const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
@@ -857,6 +859,11 @@ export const CoursePlayerView: React.FC = () => {
                         Incluye Simulador 3D =SI()
                       </span>
                     )}
+                    {isGridBasicsLesson && (
+                      <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-300 text-[11px] font-semibold">
+                        Cuadrícula 2D Interactiva
+                      </span>
+                    )}
                   </div>
                   <h2 className="font-display text-lg sm:text-2xl font-bold text-white leading-snug">
                     {currentLesson.title}
@@ -995,6 +1002,12 @@ export const CoursePlayerView: React.FC = () => {
 
               {activeTab === 'reader' && isExcelCourse && (
                 <div className="space-y-5">
+                  {isGridBasicsLesson && (
+                    <div className="space-y-3">
+                      <ExcelGridBasicsViewer />
+                    </div>
+                  )}
+
                   <InteractiveExcelLab
                     lessonId={currentLesson.id}
                     lessonTitle={currentLesson.title}

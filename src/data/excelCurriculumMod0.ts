@@ -2,6 +2,110 @@ import type { ExcelLessonCurriculum } from './excelCurriculumTypes';
 import { checkNumericFormula, checkTextFormula } from './excelCurriculumTypes';
 
 export const EXCEL_CURRICULUM_MOD0: Record<string, ExcelLessonCurriculum> = {
+  'les-excel-0-0': {
+    lessonId: 'les-excel-0-0',
+    introduction:
+      'La hoja de cálculo organiza toda la información en una cuadrícula bidimensional de columnas (verticales, identificadas con letras) y filas (horizontales, identificadas con números). La intersección entre una columna y una fila da origen a una celda única con su coordenada universal (por ejemplo: C3). Comprender cómo leer, navegar y referenciar esta cuadrícula es el pilar de todo cálculo en Excel.',
+    keyTakeaways: [
+      'Las columnas son verticales y se identifican con letras (A, B, C... hasta XFD).',
+      'Las filas son horizontales y se identifican con números (1, 2, 3... hasta 1.048.576).',
+      'Una celda nace donde se cruzan una columna y una fila; se nombra siempre indicando primero la letra y luego el número (ej. C3).',
+      'El Cuadro de Nombres exhibe la coordenada activa y la Barra de Fórmulas muestra su contenido subyacente.',
+    ],
+    functions: [
+      {
+        name: 'Coordenadas de Celda: Columna + Fila',
+        syntax: 'Columna (Letra) + Fila (Número) = Celda (ej. C3)',
+        summary:
+          'Es el sistema de coordenadas universal de Excel para ubicar datos. La celda C3 está en la columna C y en la fila 3.',
+        arguments: [
+          {
+            name: 'Letra de Columna (A-Z)',
+            required: true,
+            description: 'Ubicación vertical en la hoja.',
+          },
+          {
+            name: 'Número de Fila (1-1048576)',
+            required: true,
+            description: 'Ubicación horizontal en la hoja.',
+          },
+        ],
+        pitfall: 'Escribir el número antes que la letra (ej. 3C en vez de C3) no es una coordenada válida en Excel.',
+      },
+    ],
+    examples: [
+      {
+        id: 'ex00-1',
+        title: 'Referenciar una celda directamente',
+        functionTag: 'CELDA',
+        scenario: 'Obtener el nombre del producto ubicado en la celda C3 escribiendo =C3 en B6.',
+        formula: '=C3',
+        expectedResult: 'Manzana',
+        targetCell: 'B6',
+        sheet: {
+          A1: 'Código', B1: 'Categoría', C1: 'Producto', D1: 'Precio',
+          A2: 'F-01', B2: 'Frutas', C2: 'Banana', D2: 1.20,
+          A3: 'F-02', B3: 'Frutas', C3: 'Manzana', D3: 1.50,
+          A4: 'V-01', B4: 'Verduras', C4: 'Zanahoria', D4: 0.90,
+          A6: 'Selección', B6: '',
+        },
+      },
+    ],
+    exercises: [
+      {
+        id: 'les00-ej1',
+        number: 1,
+        functionTag: 'CELDA',
+        title: 'Leer la celda C3',
+        prompt: 'En la celda B6 escribe =C3 para extraer el producto "Manzana" de la intersección C3.',
+        hint: 'Escribe el signo igual seguido de la letra C y el número 3: =C3',
+        targetCell: 'B6',
+        solutionFormula: '=C3',
+        initialSheet: {
+          A1: 'Código', B1: 'Categoría', C1: 'Producto', D1: 'Precio',
+          A2: 'F-01', B2: 'Frutas', C2: 'Banana', D2: 1.20,
+          A3: 'F-02', B3: 'Frutas', C3: 'Manzana', D3: 1.50,
+          A4: 'V-01', B4: 'Verduras', C4: 'Zanahoria', D4: 0.90,
+          A6: 'Selección', B6: '',
+        },
+        validate: (f, v) =>
+          checkTextFormula(
+            f,
+            v,
+            'Manzana',
+            /^=C3$/i,
+            '¡Excelente! =C3 extrae el dato "Manzana" de la celda C3.',
+            'Escribe =C3 en la celda B6.'
+          ),
+      },
+      {
+        id: 'les00-ej2',
+        number: 2,
+        functionTag: 'CELDA',
+        title: 'Leer el precio en D3',
+        prompt: 'En la celda B6 escribe =D3 para extraer el precio del producto (1.50).',
+        hint: 'Escribe =D3 en la celda activa B6.',
+        targetCell: 'B6',
+        solutionFormula: '=D3',
+        initialSheet: {
+          A1: 'Código', B1: 'Categoría', C1: 'Producto', D1: 'Precio',
+          A2: 'F-01', B2: 'Frutas', C2: 'Banana', D2: 1.20,
+          A3: 'F-02', B3: 'Frutas', C3: 'Manzana', D3: 1.50,
+          A4: 'V-01', B4: 'Verduras', C4: 'Zanahoria', D4: 0.90,
+          A6: 'Precio', B6: '',
+        },
+        validate: (f, v) =>
+          checkNumericFormula(
+            f,
+            v,
+            1.5,
+            /^=D3$/i,
+            '¡Correcto! =D3 apunta a la columna D y fila 3.',
+            'Escribe =D3 en la celda B6.'
+          ),
+      },
+    ],
+  },
   'les-excel-0-1': {
     lessonId: 'les-excel-0-1',
     introduction:

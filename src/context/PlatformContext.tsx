@@ -93,7 +93,10 @@ function mergeSeedLessonsIntoCourse(course: Course): { course: Course; changed: 
     const missingLessons = seedMod.lessons.filter((sl) => !existingLessonIds.has(sl.id));
     if (missingLessons.length === 0) return mod;
     changed = true;
-    const mergedLessons = [...(mod.lessons || []), ...missingLessons];
+    const seedOrderMap = new Map(seedMod.lessons.map((sl, idx) => [sl.id, idx]));
+    const mergedLessons = [...(mod.lessons || []), ...missingLessons].sort(
+      (a, b) => (seedOrderMap.get(a.id) ?? 999) - (seedOrderMap.get(b.id) ?? 999)
+    );
     return {
       ...mod,
       durationMinutes: mergedLessons.reduce((acc, l) => acc + (Number(l.durationMinutes) || 15), 0),
