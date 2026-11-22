@@ -188,6 +188,7 @@ interface PlatformContextValue {
   payments: PaymentRecord[];
   instructorPayments: PaymentRecord[];
   certificates: Certificate[];
+  instructorCertificates: Certificate[];
   forumThreads: ForumThread[];
   calendarEvents: CalendarEvent[];
   encryptedNotes: EncryptedNote[];
@@ -255,7 +256,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return 'es';
   });
 
-  const [activeView, setActiveView] = useState<AppView>('landing');
+  const [activeView, setActiveView] = useState<AppView>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('verify')) return 'certificates';
+    }
+    return 'landing';
+  });
   const [zenMode, setZenMode] = useState<boolean>(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');
@@ -269,6 +276,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [instructorPayments, setInstructorPayments] = useState<PaymentRecord[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [instructorCertificates, setInstructorCertificates] = useState<Certificate[]>([]);
   const [forumThreads, setForumThreads] = useState<ForumThread[]>(SEED_FORUM_THREADS);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [encryptedNotes, setEncryptedNotes] = useState<EncryptedNote[]>([]);
@@ -430,46 +438,76 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
 
         const userRef = doc(db, 'users', firebaseUser.uid);
-        const snap = await withRetry(() => getDoc(userRef));
+        let snap;
+        try {
+          snap = await withRetry(() => getDoc(userRef));
+        } catch (err) {
+          if (!isFirestoreOfflineError(err)) {
+            handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+          }
+          throw err;
+        }
         if (!snap.exists()) {
-          await withRetry(() =>
-            setDoc(userRef, {
-              uid: firebaseUser.uid,
-              displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
-              photoURL: (firebaseUser.photoURL || '').slice(0, 500),
-              role: 'student',
-              preferredLanguage: language,
-              preferredTheme: theme,
-              e2eeKeyFingerprint: fingerprint,
-              activeDevicesCount: 1,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            })
-          );
+          try {
+            await withRetry(() =>
+              setDoc(userRef, {
+                uid: firebaseUser.uid,
+                displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
+                photoURL: (firebaseUser.photoURL || '').slice(0, 500),
+                role: 'student',
+                preferredLanguage: language,
+                preferredTheme: theme,
+                e2eeKeyFingerprint: fingerprint,
+                activeDevicesCount: 1,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })
+            );
+          } catch (err) {
+            if (!isFirestoreOfflineError(err)) {
+              handleFirestoreError(err, OperationType.CREATE, `users/${firebaseUser.uid}`);
+            }
+            throw err;
+          }
         }
 
         const privRef = doc(db, 'users', firebaseUser.uid, 'private', 'info');
-        const privSnap = await withRetry(() => getDoc(privRef));
+        let privSnap;
+        try {
+          privSnap = await withRetry(() => getDoc(privRef));
+        } catch (err) {
+          if (!isFirestoreOfflineError(err)) {
+            handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}/private/info`);
+          }
+          throw err;
+        }
         if (!privSnap.exists()) {
-          await withRetry(() =>
-            setDoc(privRef, {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || 'user@catedra.campus',
-              pushEnabled: true,
-              notifyDeadlines: true,
-              notifyForumReplies: true,
-              notifyPayments: true,
-              notifyCertificates: true,
-              deadlineLeadMinutes: 60,
-              quietHoursStart: '22:00',
-              quietHoursEnd: '07:00',
-              cloudProvider: 'none',
-              cloudFolder: '/Catedra-Backups',
-              cloudAutoBackup: false,
-              cloudLastSyncedAt: '',
-              updatedAt: serverTimestamp(),
-            })
-          );
+          try {
+            await withRetry(() =>
+              setDoc(privRef, {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || 'user@catedra.campus',
+                pushEnabled: true,
+                notifyDeadlines: true,
+                notifyForumReplies: true,
+                notifyPayments: true,
+                notifyCertificates: true,
+                deadlineLeadMinutes: 60,
+                quietHoursStart: '22:00',
+                quietHoursEnd: '07:00',
+                cloudProvider: 'none',
+                cloudFolder: '/Catedra-Backups',
+                cloudAutoBackup: false,
+                cloudLastSyncedAt: '',
+                updatedAt: serverTimestamp(),
+              })
+            );
+          } catch (err) {
+            if (!isFirestoreOfflineError(err)) {
+              handleFirestoreError(err, OperationType.CREATE, `users/${firebaseUser.uid}/private/info`);
+            }
+            throw err;
+          }
         }
 
         const isCurrentAdmin = Boolean(
@@ -479,7 +517,15 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (isCurrentAdmin) {
           // Solo el administrador único puede sembrar, limpiar o actualizar cursos en Firestore
-          const existingCourses = await withRetry(() => getDocs(collection(db, 'courses')));
+          let existingCourses;
+          try {
+            existingCourses = await withRetry(() => getDocs(collection(db, 'courses')));
+          } catch (err) {
+            if (!isFirestoreOfflineError(err)) {
+              handleFirestoreError(err, OperationType.LIST, 'courses');
+            }
+            throw err;
+          }
           const existingIds = new Set(existingCourses.docs.map((d) => d.id));
           const missingCourses = SEED_COURSES.filter((c) => !existingIds.has(c.id));
           const coursesToDelete = existingCourses.docs.filter((d) => {
@@ -516,7 +562,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 updatedAt: serverTimestamp(),
               });
             }
-            await withRetry(() => batch.commit());
+            try {
+              await withRetry(() => batch.commit());
+            } catch (err) {
+              if (!isFirestoreOfflineError(err)) {
+                handleFirestoreError(err, OperationType.WRITE, 'courses');
+              }
+              throw err;
+            }
           }
           if (!alreadyCleaned) {
             localStorage.setItem('db_academy_non_excel_cleaned_v1', '1');
@@ -813,6 +866,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         (err) => handleFirestoreError(err, OperationType.LIST, 'certificates')
       )
     );
+
+    if (isAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'certificates'),
+          (snap) => setInstructorCertificates(snap.docs.map((d) => d.data() as Certificate)),
+          (err) => handleFirestoreError(err, OperationType.LIST, 'certificates/instructor')
+        )
+      );
+    } else {
+      setInstructorCertificates([]);
+    }
 
     unsubs.push(
       onSnapshot(
@@ -1336,6 +1401,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         allowedPatch.instructorName = patch.instructorName.trim().slice(0, 100);
       }
       if (typeof patch.published === 'boolean') allowedPatch.published = patch.published;
+      if (Array.isArray(patch.prerequisites)) {
+        allowedPatch.prerequisites = patch.prerequisites
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 10);
+      }
+      if (Array.isArray(patch.technologies)) {
+        allowedPatch.technologies = patch.technologies
+          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 20);
+      }
 
       if (Array.isArray(patch.modules) && patch.modules.length > 0) {
         const modulesSlice = patch.modules.slice(0, 12);
@@ -1844,6 +1919,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     payments,
     instructorPayments,
     certificates,
+    instructorCertificates,
     forumThreads,
     calendarEvents,
     encryptedNotes,

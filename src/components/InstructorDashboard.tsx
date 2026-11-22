@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
+  Award,
   BookOpen,
   CheckCircle2,
   ExternalLink,
+  Eye,
   FileDown,
   FileSpreadsheet,
   Image as ImageIcon,
@@ -21,9 +23,10 @@ import {
 import { usePlatform } from '../context/PlatformContext';
 import type { TranslationKeys } from '../i18n/translations';
 import { isAuthorizedAdminEmail } from '../firebase';
-import type { Course } from '../types';
-import { exportTableToPdf, exportToCsv } from '../utils/export';
+import type { Certificate, Course } from '../types';
+import { exportCertificatePdf, exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import { CertificateDocumentCard, CertificatePreviewModal } from './CertificatePreviewModal';
 import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
@@ -205,6 +208,7 @@ export const InstructorDashboard: React.FC = () => {
     courses,
     instructorEnrollments,
     instructorPayments,
+    instructorCertificates,
     createCourse,
     updateCourse,
     deleteCourse,
@@ -213,7 +217,7 @@ export const InstructorDashboard: React.FC = () => {
     t,
   } = usePlatform();
 
-  const [adminTab, setAdminTab] = useState<'courses' | 'coupons' | 'referrals'>('courses');
+  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'coupons' | 'referrals'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
@@ -221,6 +225,9 @@ export const InstructorDashboard: React.FC = () => {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [previewCert, setPreviewCert] = useState<{ cert: Certificate; isSample?: boolean } | null>(null);
+  const [sampleCourseId, setSampleCourseId] = useState('');
+  const [sampleStudentName, setSampleStudentName] = useState('María Fernanda López');
 
   const [saveSuccess, setSaveSuccess] = useState('');
 
@@ -257,6 +264,28 @@ export const InstructorDashboard: React.FC = () => {
         e.courseTitle.toLowerCase().includes(q)
     );
   }, [instructorEnrollments, searchStudent]);
+
+  const sampleCourse = useMemo(
+    () => courses.find((c) => c.id === sampleCourseId) || courses[0] || null,
+    [courses, sampleCourseId]
+  );
+
+  const sampleCertificate: Certificate = useMemo(
+    () => ({
+      id: 'cert_admin_preview',
+      verificationCode: 'DB-EXCEL-PREVIEW01',
+      courseId: sampleCourse?.id || 'excel-basico-05',
+      courseTitle: sampleCourse?.title || 'Excel Básico: Fundamentos, Fórmulas y Simulador 3D',
+      studentId: user?.uid || 'admin',
+      studentName: sampleStudentName.trim() || user?.displayName || 'Estudiante DB Academy',
+      instructorId: sampleCourse?.instructorId || 'admin',
+      instructorName: sampleCourse?.instructorName || 'Equipo DB Academy',
+      completionPercent: 100,
+      hashSignature: '8f4e2a9c1b7d3065f12a4c890de341fa7b92c6018e54ab3190cd7712e4f8a109',
+      issuedAt: new Date().toISOString(),
+    }),
+    [sampleCourse, sampleStudentName, user]
+  );
 
   if (!user) return <AuthGateNotice />;
 
@@ -364,7 +393,7 @@ export const InstructorDashboard: React.FC = () => {
   };
 
   const handleExportProgressPdf = () => {
-    exportTableToPdf(
+    void exportTableToPdf(
       'db-academy-progreso-alumnos',
       t('liveProgressTable'),
       `Generado: ${new Date().toLocaleDateString('es-ES')}`,
@@ -396,7 +425,7 @@ export const InstructorDashboard: React.FC = () => {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100">
@@ -413,8 +442,16 @@ export const InstructorDashboard: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setPreviewCert({ cert: sampleCertificate, isSample: true })}
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3.5 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors whitespace-nowrap min-h-[40px]"
+          >
+            <Award className="w-4 h-4" />
+            <span>Ver certificados</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setShowExerciseCreator(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[42px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[40px]"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Crear ejercicio de Excel</span>
@@ -428,7 +465,7 @@ export const InstructorDashboard: React.FC = () => {
                 handleStartNew();
               }
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap min-h-[42px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap min-h-[40px]"
           >
             <Plus className="w-4 h-4" />
             <span>{t('createCourseBtn')}</span>
@@ -436,9 +473,10 @@ export const InstructorDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
         {([
           { id: 'courses', label: 'Cursos' },
+          { id: 'certificates', label: `Certificados (${instructorCertificates.length})` },
           { id: 'coupons', label: t('couponsTitle') },
           { id: 'referrals', label: t('referralsTitle') },
         ] as const).map((tab) => (
@@ -446,12 +484,141 @@ export const InstructorDashboard: React.FC = () => {
             key={tab.id}
             type="button"
             onClick={() => setAdminTab(tab.id)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${adminTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${adminTab === tab.id ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           >
             {tab.label}
           </button>
         ))}
       </div>
+
+      {adminTab === 'certificates' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-[#0052CC] dark:text-cyan-400" />
+                  <span>Vista previa del certificado oficial con logo DB Academy</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Comprueba cómo se ve el diploma oficial que reciben los estudiantes y descárgalo en PDF.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewCert({ cert: sampleCertificate, isSample: true })}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Ampliar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportCertificatePdf(sampleCertificate)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  <span>Descargar PDF de muestra</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  Programa de muestra
+                </label>
+                <select
+                  value={sampleCourse?.id || ''}
+                  onChange={(e) => setSampleCourseId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  Nombre de estudiante de prueba
+                </label>
+                <input
+                  type="text"
+                  value={sampleStudentName}
+                  onChange={(e) => setSampleStudentName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <CertificateDocumentCard certificate={sampleCertificate} isSample={true} />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Certificados emitidos a estudiantes ({instructorCertificates.length})
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                  <tr>
+                    <th className="py-2.5 px-4 font-medium">Estudiante</th>
+                    <th className="py-2.5 px-4 font-medium">Curso</th>
+                    <th className="py-2.5 px-4 font-medium">Código</th>
+                    <th className="py-2.5 px-4 font-medium text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {instructorCertificates.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-slate-500 dark:text-slate-400">
+                        Todavía no hay certificados reales emitidos por estudiantes. Puedes usar la vista previa superior para inspeccionar el diseño final.
+                      </td>
+                    </tr>
+                  ) : (
+                    instructorCertificates.map((cert) => (
+                      <tr key={cert.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100">
+                          {cert.studentName}
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-600 dark:text-slate-300">
+                          {cert.courseTitle}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono text-blue-600 dark:text-blue-400">
+                          {cert.verificationCode}
+                        </td>
+                        <td className="py-2.5 px-4 text-right space-x-2 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewCert({ cert, isSample: false })}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void exportCertificatePdf(cert)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 px-2.5 py-1 text-xs font-medium text-white"
+                          >
+                            <FileDown className="w-3.5 h-3.5" />
+                            <span>PDF</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {adminTab === 'coupons' && <CouponsAdminPanel />}
       {adminTab === 'referrals' && (
@@ -474,31 +641,38 @@ export const InstructorDashboard: React.FC = () => {
       )}
 
       {/* 4-Column KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiStudents')}</p>
-          <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
+          <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
             {instructorEnrollments.length}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiRevenue')}</p>
-          <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
+          <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
             ${(totalRevenueCents / 100).toFixed(2)}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiAvgProgress')}</p>
-          <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-blue-600 dark:text-blue-400">
+          <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-blue-600 dark:text-blue-400">
             {avgProgress}%
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
-          <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiCertificates')}</p>
-          <p className="mt-2 text-2xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
-            {completedCount}
+        <button
+          type="button"
+          onClick={() => setAdminTab('certificates')}
+          className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 hover:border-emerald-400/70 transition-colors"
+        >
+          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>{t('kpiCertificates')}</span>
+            <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Ver diseño →</span>
           </p>
-        </div>
+          <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+            {instructorCertificates.length || completedCount}
+          </p>
+        </button>
       </div>
 
       {/* Editor de curso: índice + editor de lección + evaluación */}
@@ -512,7 +686,7 @@ export const InstructorDashboard: React.FC = () => {
       )}
 
       {/* Active Courses Strip */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-4">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3.5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -526,7 +700,7 @@ export const InstructorDashboard: React.FC = () => {
             {courses.length} programas
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {courses.map((course) => (
             <div
               key={course.id}
@@ -868,6 +1042,14 @@ export const InstructorDashboard: React.FC = () => {
         }
       />
       </>)}
+
+      {previewCert && (
+        <CertificatePreviewModal
+          certificate={previewCert.cert}
+          isSample={previewCert.isSample}
+          onClose={() => setPreviewCert(null)}
+        />
+      )}
     </div>
   );
 };

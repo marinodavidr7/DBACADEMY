@@ -61,6 +61,8 @@
         "modulesCount": { "type": "number" },
         "totalLessons": { "type": "number" },
         "modules": { "type": "array" },
+        "prerequisites": { "type": "array" },
+        "technologies": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

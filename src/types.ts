@@ -89,6 +89,7 @@ export interface Course {
   totalLessons: number;
   modules: CourseModule[];
   prerequisites?: string[];
+  technologies?: string[];
   createdAt?: unknown;
   updatedAt?: unknown;
 }

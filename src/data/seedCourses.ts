@@ -14,6 +14,7 @@ export const EXCEL_BASICO_COURSE: Course = {
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
   published: true,
+  technologies: ['Excel', 'Fórmulas', 'SI()', 'SUMAR.SI', 'CONTAR.SI', 'Simulador 3D'],
   modulesCount: 2,
   totalLessons: 21,
   modules: [
@@ -227,6 +228,7 @@ export const EXCEL_INTERMEDIO_COURSE: Course = {
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
   published: true,
+  technologies: ['Excel', 'BUSCARX', 'XLOOKUP', 'Tablas Dinámicas', 'Slicers', 'Validación de Datos'],
   modulesCount: 3,
   totalLessons: 11,
   prerequisites: ['excel-basico-05'],
@@ -378,6 +380,7 @@ export const EXCEL_AVANZADO_COURSE: Course = {
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
   published: true,
+  technologies: ['Excel', 'Power Query', 'Lenguaje M', 'DAX', 'Power Pivot', 'Macros VBA', 'Dashboards'],
   modulesCount: 3,
   totalLessons: 12,
   prerequisites: ['excel-intermedio-01'],

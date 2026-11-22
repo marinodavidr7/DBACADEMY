@@ -126,9 +126,9 @@ export const CourseDetailView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Dark Technological Course Header */}
-      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-6 sm:p-8 lg:p-10 2xl:p-12">
+      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-5 sm:p-6">
         <button
           type="button"
           onClick={() => setActiveView('catalog')}
@@ -171,8 +171,8 @@ export const CourseDetailView: React.FC = () => {
       </section>
 
       {/* Main Content + Sticky Enrollment Card */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_clamp(360px,24vw,480px)] gap-8 2xl:gap-10 items-start">
-        <div className="min-w-0 space-y-8 2xl:space-y-10">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
+        <div className="min-w-0 space-y-5">
           {/* Prerrequisitos de la ruta formativa */}
           {prereqCourses.length > 0 && (
             prereqsMet ? (
@@ -221,7 +221,7 @@ export const CourseDetailView: React.FC = () => {
           )}
 
           {/* Descripción y Enfoque */}
-          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 sm:p-7 2xl:p-8 space-y-4">
+          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-3.5">
             <h2 className="font-display text-xl 2xl:text-2xl font-bold text-slate-900 dark:text-slate-100">
               Acerca del programa
             </h2>

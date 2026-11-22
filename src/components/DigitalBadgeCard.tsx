@@ -15,6 +15,7 @@ import {
   buildLinkedInAddCertUrl,
   type DigitalBadge,
 } from '../utils/badges';
+import { BrandLogo } from './ui/BrandLogo';
 
 interface DigitalBadgeCardProps {
   badge: DigitalBadge;
@@ -82,16 +83,19 @@ export const DigitalBadgeCard: React.FC<DigitalBadgeCardProps> = ({
       <div className="space-y-4 relative z-10">
         {/* Top Meta Bar */}
         <div className="flex items-center justify-between gap-2">
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${themeConfig.pill}`}>
-            {badge.category}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <BrandLogo size="xs" showWordmark={false} surface="dark" />
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border truncate ${themeConfig.pill}`}>
+              {badge.category}
+            </span>
+          </div>
           {badge.unlocked ? (
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold">
+            <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Desbloqueada</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 shrink-0">
               <Lock className="w-3.5 h-3.5" />
               <span>{badge.progressPercent}%</span>
             </div>

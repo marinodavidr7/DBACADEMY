@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { BrandLogo } from './ui/BrandLogo';
 
 export const AuthGateNotice: React.FC = () => {
   const {
@@ -41,18 +42,16 @@ export const AuthGateNotice: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto my-6 max-w-4xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+    <div className="mx-auto my-2 max-w-4xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
       {/* Dark Technological Left Info Panel */}
-      <div className="lg:col-span-5 bg-[#070E1D] text-slate-100 p-6 sm:p-8 flex flex-col justify-between">
+      <div className="lg:col-span-5 bg-[#070E1D] text-slate-100 p-5 sm:p-7 flex flex-col justify-between">
         <div>
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#0052CC] text-white">
-            <Lock className="w-5 h-5" />
-          </span>
-          <p className="mt-5 text-xs font-semibold text-cyan-300">DB Academy · Portal de acceso</p>
-          <h2 className="mt-2 font-display text-2xl font-bold text-white leading-tight text-balance">
+          <BrandLogo size="lg" showWordmark={false} surface="dark" />
+          <p className="mt-4 text-xs font-semibold text-cyan-300">DB Academy · Portal de acceso</p>
+          <h2 className="mt-1.5 font-display text-2xl font-bold text-white leading-tight text-balance">
             {t('signInRequiredTitle')}
           </h2>
-          <p className="mt-3 text-xs leading-relaxed text-slate-300">
+          <p className="mt-2.5 text-xs leading-relaxed text-slate-300">
             Accede a tu panel de estudiante con progreso en vivo, simuladores prácticos y certificados verificables.
           </p>
         </div>

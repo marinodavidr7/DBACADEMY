@@ -21,6 +21,7 @@ import {
   downloadBadgeAsSvg,
   type DigitalBadge,
 } from '../utils/badges';
+import { BrandLogo } from './ui/BrandLogo';
 
 interface BadgeModalProps {
   badge: DigitalBadge;
@@ -147,7 +148,8 @@ export const BadgeModal: React.FC<BadgeModalProps> = ({ badge, onClose }) => {
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-col items-center gap-2">
+            <BrandLogo size="sm" showWordmark={false} surface="dark" />
             <p className="text-[11px] font-bold tracking-widest text-slate-400 uppercase">
               DB ACADEMY · CREDENCIAL OFICIAL
             </p>

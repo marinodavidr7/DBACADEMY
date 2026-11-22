@@ -16,6 +16,7 @@ import {
   Compass,
   Copy,
   Download,
+  Eye,
   FileSpreadsheet,
   FileText,
   GitBranch,
@@ -42,6 +43,7 @@ import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
 import { formatFileSize } from '../services/storageService';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
+import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { InteractiveExcelLab } from './InteractiveExcelLab';
@@ -191,6 +193,7 @@ export const CoursePlayerView: React.FC = () => {
   const [quizFeedback, setQuizFeedback] = useState<Record<string, 'passed' | 'failed'>>({});
   const [saving, setSaving] = useState(false);
   const [newlyIssuedCert, setNewlyIssuedCert] = useState<Certificate | null>(null);
+  const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [externalPreset, setExternalPreset] = useState<SimulatorExternalPreset | null>(null);
   const [activeTab, setActiveTab] = useState<'reader' | 'practice' | 'syntax' | 'lab' | 'materials'>('reader');
@@ -633,10 +636,10 @@ export const CoursePlayerView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Zen Mode Minimal Focus Bar vs Standard Course Header */}
+    <div className="space-y-4">
+      {/* Zen Mode Minimal Focus Bar vs Compact Integrated Course Header */}
       {zenMode ? (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
               {activeCourse.title} · {currentLesson.title}
@@ -649,71 +652,133 @@ export const CoursePlayerView: React.FC = () => {
           <button
             type="button"
             onClick={() => setZenMode(false)}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 dark:bg-slate-100 px-3.5 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap min-h-[38px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 dark:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap min-h-[36px]"
           >
             <Minimize2 className="w-3.5 h-3.5" />
             <span>{t('exitZenMode')}</span>
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {/* Student Dashboard Header with Real Progress Metrics */}
-          <section className="rounded-xl border border-slate-800/90 bg-[#070E1D] text-slate-100 p-5 sm:p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold text-cyan-300">
-                  Panel del estudiante · {user.displayName || user.email}
-                </p>
-                <h1 className="mt-1 font-display text-xl sm:text-2xl font-bold text-white">
-                  {t('myCoursesTitle')}
-                </h1>
-                <p className="text-xs text-slate-300 mt-1">
-                  {activeCourse.title} ·{' '}
-                  <span className="font-mono tabular-nums">
-                    {activeEnrollment.studyMinutes} {t('studyMinutes')}
-                  </span>
-                </p>
+        <div className="space-y-3">
+          {/* Compact Integrated Student Header + Controls */}
+          <section className="rounded-xl border border-slate-800/90 bg-[#070E1D] text-slate-100 p-3.5 sm:p-4 space-y-3">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 min-w-0">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-cyan-300">
+                    <span>Panel · {user.displayName || user.email}</span>
+                    <span className="text-slate-500">·</span>
+                    <span className="font-mono tabular-nums text-slate-300">
+                      {activeEnrollment.studyMinutes} {t('studyMinutes')}
+                    </span>
+                  </div>
+                  <h1 className="font-display text-base sm:text-lg font-bold text-white truncate">
+                    {activeCourse.title}
+                  </h1>
+                </div>
+
+                {/* Compact Inline KPIs */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 mr-1.5">Cursos</span>
+                    <span className="text-xs font-bold font-mono tabular-nums text-white">
+                      {enrolledCourses.length}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 mr-1.5">Progreso</span>
+                    <span className="text-xs font-bold font-mono tabular-nums text-cyan-300">
+                      {effectiveProgressPercent}%
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 mr-1.5">Lecciones</span>
+                    <span className="text-xs font-bold font-mono tabular-nums text-white">
+                      {effectiveCompletedLessonIds.length}/{activeCourse.totalLessons}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-slate-400 mr-1.5">Certificados</span>
+                    <span className="text-xs font-bold font-mono tabular-nums text-emerald-400">
+                      {certificates.length}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
-                <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-3.5 py-2.5">
-                  <p className="text-[11px] text-slate-400">Cursos activos</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-white">
-                    {enrolledCourses.length}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-3.5 py-2.5">
-                  <p className="text-[11px] text-slate-400">Progreso curso</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-cyan-300">
-                    {effectiveProgressPercent}%
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-3.5 py-2.5">
-                  <p className="text-[11px] text-slate-400">Lecciones</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-white">
-                    {effectiveCompletedLessonIds.length}/{activeCourse.totalLessons}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-3.5 py-2.5">
-                  <p className="text-[11px] text-slate-400">Certificados</p>
-                  <p className="text-lg font-bold font-mono tabular-nums text-emerald-400">
-                    {certificates.length}
-                  </p>
-                </div>
+              {/* Action Controls & Course Switcher */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceRole('instructor');
+                      setSelectedCourseId(activeCourse.id);
+                      setActiveView('instructor');
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition-colors whitespace-nowrap min-h-[36px]"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Editar curso</span>
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setViewAsStudent((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap min-h-[36px] ${
+                      viewAsStudent
+                        ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
+                        : 'border-slate-700 bg-[#0D1930] text-slate-200 hover:bg-slate-800'
+                    }`}
+                    title={viewAsStudent ? 'Desactivar modo estudiante' : 'Ver como estudiante'}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>{viewAsStudent ? 'Modo estudiante: ON' : 'Modo estudiante: OFF'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={toggleZenMode}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#0D1930] px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[36px]"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>{t('zenMode')}</span>
+                </button>
+
+                <select
+                  value={activeCourse.id}
+                  onChange={(e) => {
+                    setSelectedCourseId(e.target.value);
+                    setActiveLessonId(null);
+                    setLockWarning(null);
+                    setNewlyIssuedCert(null);
+                  }}
+                  aria-label={t('myCoursesTitle')}
+                  className="rounded-lg border border-slate-700 bg-[#0D1930] px-2.5 py-1.5 text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[36px] max-w-[230px]"
+                >
+                  {enrolledCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-800/90">
+            <div className="pt-2.5 border-t border-slate-800/90">
               <CourseProgressBar
                 percent={effectiveProgressPercent}
                 label={`Avance en ${activeCourse.title}`}
-                size="md"
+                size="sm"
               />
             </div>
           </section>
 
           {prereqCourses.length > 0 && !prereqsMet && (
-            <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
@@ -740,70 +805,6 @@ export const CoursePlayerView: React.FC = () => {
               </button>
             </div>
           )}
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4">
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  setWorkspaceRole('instructor');
-                  setSelectedCourseId(activeCourse.id);
-                  setActiveView('instructor');
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors whitespace-nowrap min-h-[42px]"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>Editar curso</span>
-              </button>
-            )}
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setViewAsStudent((v) => !v)}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[42px] ${
-                  viewAsStudent
-                    ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-xs'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-                title={viewAsStudent ? 'Desactivar modo estudiante' : 'Ver como estudiante'}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>
-                  {viewAsStudent ? 'Modo estudiante: ON' : 'Modo estudiante: OFF'}
-                </span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={toggleZenMode}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[42px]"
-            >
-              <Maximize2 className="w-4 h-4" />
-              <span>{t('zenMode')}</span>
-            </button>
-
-            <select
-              value={activeCourse.id}
-              onChange={(e) => {
-                setSelectedCourseId(e.target.value);
-                setActiveLessonId(null);
-                setLockWarning(null);
-                setNewlyIssuedCert(null);
-              }}
-              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600 min-h-[42px]"
-            >
-              {enrolledCourses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          </div>
         </div>
       )}
 
@@ -821,23 +822,33 @@ export const CoursePlayerView: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => exportCertificatePdf(earnedCert)}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 transition-colors whitespace-nowrap min-h-[40px]"
-          >
-            <Award className="w-3.5 h-3.5" />
-            <span>{t('downloadPdf')}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPreviewCert(earnedCert)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-white/80 dark:bg-emerald-950/40 px-3.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/50 transition-colors whitespace-nowrap min-h-[40px]"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Vista previa</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void exportCertificatePdf(earnedCert)}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 transition-colors whitespace-nowrap min-h-[40px]"
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>{t('downloadPdf')}</span>
+            </button>
+          </div>
         </div>
       )}
 
       {/* Two-Zone Course Stage + Syllabus (Syllabus hidden & stage maximized in Zen Mode) */}
-      <div className={`grid grid-cols-1 ${zenMode ? '' : 'xl:grid-cols-[minmax(0,1fr)_clamp(320px,24vw,400px)]'} gap-6 2xl:gap-10 items-start`}>
-        <div className="min-w-0 space-y-6">
+      <div className={`grid grid-cols-1 ${zenMode ? '' : 'lg:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]'} gap-4 xl:gap-5 items-start`}>
+        <div className="min-w-0 space-y-4">
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             {/* Compact Lesson Header (no giant 16:9 image pushing content off-screen) */}
-            <div className="relative bg-[#070E1D] border-b border-slate-800 p-5 sm:p-6 overflow-hidden">
+            <div className="relative bg-[#070E1D] border-b border-slate-800 p-4 sm:p-5 overflow-hidden">
               <img
                 src={activeCourse.coverImage}
                 alt={currentLesson.title}
@@ -957,7 +968,7 @@ export const CoursePlayerView: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-4 sm:p-5 space-y-4">
               {/* Tab 1: Theory & Practical Examples (+ 3D Simulator ONLY on 1.13 SI) */}
               {activeTab === 'reader' && (
                 <AnimatePresence mode="wait">
@@ -1331,7 +1342,7 @@ export const CoursePlayerView: React.FC = () => {
           </div>
 
           {/* Interactive Module Checkpoint Quiz */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-6 space-y-4">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 space-y-3">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {t('moduleQuiz')} · {currentLesson.module.title}
             </h3>
@@ -1387,9 +1398,9 @@ export const CoursePlayerView: React.FC = () => {
 
         {/* Right Syllabus Tree (Module Explorer) */}
         {!zenMode && (
-          <aside className="min-w-0 xl:sticky xl:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+          <aside className="min-w-0 lg:sticky lg:top-16 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             {/* Syllabus Search Header */}
-            <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-2.5">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -1401,14 +1412,14 @@ export const CoursePlayerView: React.FC = () => {
                 />
               </div>
               {lockWarning && (
-                <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-2 text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-2">
                   <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <span>{lockWarning}</span>
                 </div>
               )}
             </div>
 
-            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[700px] overflow-y-auto">
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[calc(100vh-8rem)] overflow-y-auto">
             {activeCourse.modules.map((mod, mIdx) => {
               const modDone = effectiveCompletedModuleIds.includes(mod.id);
               const doneInModule = mod.lessons.filter((l) =>
@@ -1435,7 +1446,7 @@ export const CoursePlayerView: React.FC = () => {
               return (
                 <div
                   key={mod.id}
-                  className={`p-4 space-y-2.5 ${isModuleLocked ? 'bg-slate-50/50 dark:bg-slate-900/30' : ''}`}
+                  className={`p-3 space-y-2 ${isModuleLocked ? 'bg-slate-50/50 dark:bg-slate-900/30' : ''}`}
                 >
                   <button
                     type="button"
@@ -1507,7 +1518,7 @@ export const CoursePlayerView: React.FC = () => {
                                 : `Completa "${blockingLesson?.title ?? 'el capítulo anterior'}" para desbloquear este capítulo`
                               : undefined
                           }
-                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors min-h-[38px] ${
+                          className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors min-h-[34px] ${
                             lessonLocked
                               ? 'text-slate-400 dark:text-slate-500 opacity-65 cursor-not-allowed hover:bg-amber-50/40 dark:hover:bg-amber-950/20'
                               : active
@@ -1557,6 +1568,13 @@ export const CoursePlayerView: React.FC = () => {
           </aside>
         )}
       </div>
+
+      {previewCert && (
+        <CertificatePreviewModal
+          certificate={previewCert}
+          onClose={() => setPreviewCert(null)}
+        />
+      )}
     </div>
   );
 };

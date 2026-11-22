@@ -92,7 +92,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'id', 'title', 'subtitle', 'description', 'category', 'level',
           'priceCents', 'currency', 'coverImage', 'instructorId', 'instructorName',
-          'published', 'modulesCount', 'totalLessons', 'modules', 'createdAt', 'updatedAt'
+          'published', 'modulesCount', 'totalLessons', 'modules', 'prerequisites', 'technologies',
+          'createdAt', 'updatedAt'
         ])
         && isValidId(data.id)
         && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
@@ -110,6 +111,8 @@ service cloud.firestore {
         && (!('totalLessons' in data) || (data.totalLessons is number && data.totalLessons >= 1 && data.totalLessons <= 200))
         && data.modules is list && data.modules.size() >= 1 && data.modules.size() <= 12
         && data.modules[0] is map
+        && (!('prerequisites' in data) || (data.prerequisites is list && data.prerequisites.size() <= 10 && (data.prerequisites.size() == 0 || data.prerequisites[0] is string)))
+        && (!('technologies' in data) || (data.technologies is list && data.technologies.size() <= 20 && (data.technologies.size() == 0 || data.technologies[0] is string)))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }

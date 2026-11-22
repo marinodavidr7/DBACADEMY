@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
+import { BrandLogo } from './ui/BrandLogo';
 import { Container } from './ui/Container';
 
 interface LandingPageProps {
@@ -64,12 +65,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100">
         <Container>
           <div className="flex h-16 items-center justify-between gap-8">
-            {/* Zone 1: Single-line Brand Wordmark */}
+            {/* Zone 1: Single-line Brand Logo + Wordmark */}
             <a
               href="#top"
-              className="font-display text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+              className="flex items-center whitespace-nowrap shrink-0"
             >
-              DB Academy
+              <BrandLogo size="md" surface="dark" wordmarkClassName="text-white" />
             </a>
 
             {/* Zone 2: Concise single-line nav links */}
@@ -171,22 +172,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       )}
 
       <main>
-        {/* Hero — fondo de borde a borde, ancho limitado solo en contenido y párrafos */}
-        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 min-h-[calc(100vh-4rem)]">
+        {/* Hero — fondo de borde a borde, aprovechando el viewport con balance vertical */}
+        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 py-10 sm:py-12 lg:py-14 flex items-center min-h-[min(calc(100vh-4rem),660px)]">
           <Container prose={false}>
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-10 lg:gap-16 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12 items-center">
               <div className="flex flex-col justify-center">
                 <p className="text-xs font-semibold tracking-wide text-cyan-300">
                   Academia técnica interactiva · DB Academy
                 </p>
-                <h1 className="mt-3 font-display text-4xl sm:text-5xl lg:text-6xl 2xl:text-7xl font-bold tracking-tight text-white leading-[1.08] text-balance">
+                <h1 className="mt-2.5 font-display text-4xl sm:text-5xl lg:text-[3.25rem] 2xl:text-6xl font-bold tracking-tight text-white leading-[1.08] text-balance">
                   Domina habilidades técnicas con práctica interactiva paso a paso.
                 </h1>
-                <p className="mt-5 max-w-prose text-base leading-relaxed text-slate-300">
+                <p className="mt-4 max-w-prose text-base leading-relaxed text-slate-300">
                   Rutas estructuradas por nivel, laboratorio interactivo de Excel con Simulador 3D, seguimiento de progreso en tiempo real y certificados verificables.
                 </p>
 
-                <div className="mt-8 flex flex-wrap items-center gap-3">
+                <div className="mt-6 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={onExplore}
@@ -208,42 +209,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </button>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-300">
-                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
-                    <Check className="w-3 h-3 text-cyan-300" />
+                <div className="mt-6 pt-5 border-t border-slate-800 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-300">
+                  <span className="inline-flex items-center gap-1.5 text-slate-200">
+                    <Check className="w-3.5 h-3.5 text-cyan-300" />
                     <span>Acceso libre al catálogo</span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
-                    <BookOpen className="w-3 h-3 text-cyan-300" />
+                  <span className="inline-flex items-center gap-1.5 text-slate-200">
+                    <BookOpen className="w-3.5 h-3.5 text-cyan-300" />
                     <span>Curso de Excel Básico gratuito</span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-slate-200">
-                    <ShieldCheck className="w-3 h-3 text-cyan-300" />
+                  <span className="inline-flex items-center gap-1.5 text-slate-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-300" />
                     <span>Sincronización multi-dispositivo</span>
                   </span>
                 </div>
               </div>
 
-              <div className="relative h-full min-h-[280px] lg:min-h-[420px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
+              <div className="relative h-full min-h-[340px] lg:min-h-[410px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
                 <ProductPreview />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/30 to-transparent" />
-                <div className="absolute bottom-5 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
+                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#070E1D] via-[#070E1D]/85 to-transparent pointer-events-none" />
+                <div className="absolute bottom-4 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs sm:text-sm font-mono text-cyan-300 uppercase tracking-wider">
-                      Ruta destacada
+                    <p className="text-xs font-mono text-cyan-300 uppercase tracking-wider">
+                      Ruta destacada · Gratis
                     </p>
-                    <p className="mt-1 font-display text-base sm:text-lg font-bold text-white">
+                    <p className="mt-0.5 font-display text-base sm:text-lg font-bold text-white">
                       Excel Básico: Fundamentos, SI y Simulador 3D
                     </p>
-                    <span className="mt-1.5 inline-flex items-center gap-1 rounded bg-[#107C41] px-2 py-0.5 text-[10px] font-bold text-white">
-                      GRATIS
-                    </span>
                   </div>
                   {excelCourse && (
                     <button
                       type="button"
                       onClick={() => onSelectCourse(excelCourse.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/80 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
                     >
                       <span>Ver programa</span>
                       <ArrowRight className="w-3 h-3" />
@@ -259,7 +257,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <section className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A]">
           <Container>
             <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
-              <div className="p-6 sm:p-8 flex flex-col h-full">
+              <div className="p-5 sm:p-6 flex flex-col h-full">
                 <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
                   {publishedCourses.length}
                 </p>
@@ -267,7 +265,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Programa activo en catálogo
                 </p>
               </div>
-              <div className="p-6 sm:p-8 flex flex-col h-full">
+              <div className="p-5 sm:p-6 flex flex-col h-full">
                 <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[#0052CC] dark:text-cyan-400">
                   218+
                 </p>
@@ -275,7 +273,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Ejercicios interactivos de Excel
                 </p>
               </div>
-              <div className="p-6 sm:p-8 flex flex-col h-full">
+              <div className="p-5 sm:p-6 flex flex-col h-full">
                 <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
                   Certificados
                 </p>
@@ -283,7 +281,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Verificables con firma hash SHA-256
                 </p>
               </div>
-              <div className="p-6 sm:p-8 flex flex-col h-full">
+              <div className="p-5 sm:p-6 flex flex-col h-full">
                 <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
                   20
                 </p>
@@ -296,7 +294,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Rutas de Aprendizaje (Learning Paths) */}
-        <section id="rutas" className="scroll-mt-20 py-16 sm:py-20">
+        <section id="rutas" className="scroll-mt-20 py-10 sm:py-14">
           <Container>
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div className="max-w-prose">
@@ -413,7 +411,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Catálogo Completo Destacado */}
         <section
           id="cursos"
-          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
+          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-10 sm:py-14"
         >
           <Container>
             <div className="max-w-prose">
@@ -483,9 +481,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Metodología y Capacidades Reales */}
-        <section id="metodologia" className="scroll-mt-20 py-16 sm:py-20">
+        <section id="metodologia" className="scroll-mt-20 py-10 sm:py-14">
           <Container>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               <div className="lg:col-span-5 max-w-prose">
                 <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
                   03. Metodología DB Academy
@@ -497,12 +495,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Cada programa combina lecciones guiadas, validación práctica inmediata, seguimiento de avance en tiempo real y emisión automática de certificados al completar el 100% del currículo.
                 </p>
 
-                <div className="mt-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-2">
+                <div className="mt-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-4 space-y-1.5">
                   <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    Testimonios y alianzas institucionales
+                    Progresión guiada por capítulos y módulos
                   </p>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    [COMPLETAR: Agrega aquí un testimonio verificado de un estudiante o institución aliada de DB Academy con nombre completo y rol.]
+                    Cada capítulo y módulo se desbloquea de forma secuencial al completar sus prácticas y evaluaciones, asegurando dominio real antes de avanzar.
                   </p>
                 </div>
               </div>
@@ -554,7 +552,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Preguntas Frecuentes */}
         <section
           id="preguntas"
-          className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-16 sm:py-20"
+          className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-10 sm:py-14"
         >
           <Container prose={true}>
             <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
@@ -563,7 +561,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
               Información antes de comenzar
             </h2>
-            <div className="mt-8 divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] px-5">
+            <div className="mt-6 divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] px-5">
               {[
                 {
                   q: '¿Necesito cuenta para explorar los cursos y temarios?',
@@ -593,7 +591,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Cierre Oscuro CTA — fondo de borde a borde */}
-        <section className="bg-[#070E1D] text-slate-100 py-14 sm:py-16 border-t border-slate-800">
+        <section className="bg-[#070E1D] text-slate-100 py-10 sm:py-12 border-t border-slate-800">
           <Container>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="max-w-prose">
@@ -630,10 +628,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       <footer className="border-t border-slate-800 bg-[#050914] text-slate-400">
         <Container>
-          <div className="px-4 py-8 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="font-display text-sm font-bold text-white">DB Academy</span>
+              <BrandLogo size="sm" surface="dark" wordmarkClassName="text-white" />
               <span className="text-xs text-slate-400">· Formación técnica en tiempo real</span>
             </div>
 
@@ -666,64 +663,83 @@ export const LandingPage: React.FC<LandingPageProps> = ({
  * TODO: Reemplazar por una captura real del Simulador 3D o del laboratorio de Excel.
  */
 function ProductPreview() {
+  const rows = [
+    { row: 2, student: 'Laura Mendoza', score: 92, attendance: '98%', formula: '=SI(B2>=60;"Aprobado";"Reprobado")', result: 'Aprobado', pass: true },
+    { row: 3, student: 'Carlos Ortega', score: 85, attendance: '95%', formula: '=SI(B3>=60;"Aprobado";"Reprobado")', result: 'Aprobado', pass: true },
+    { row: 4, student: 'Sofía Paredes', score: 48, attendance: '82%', formula: '=SI(B4>=60;"Aprobado";"Reprobado")', result: 'Reprobado', pass: false },
+    { row: 5, student: 'Mateo Herrera', score: 74, attendance: '90%', formula: '=SI(B5>=60;"Aprobado";"Reprobado")', result: 'Aprobado', pass: true },
+    { row: 6, student: 'Elena Ríos', score: 56, attendance: '88%', formula: '=SI(B6>=60;"Aprobado";"Reprobado")', result: 'Reprobado', pass: false },
+  ];
+
   return (
     <div className="relative w-full h-full flex flex-col">
-      {/* Marco tipo ventana de navegador */}
-      <div className="absolute inset-0 flex flex-col bg-[#0F172A] border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
-        {/* Barra de título de la ventana */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-[#1E293B]/50">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500" />
-            <div className="w-3 h-3 rounded-full bg-green-500" />
+      <div className="flex-1 flex flex-col bg-[#0F172A] border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+        {/* Barra superior de ventana */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-[#1E293B]/60">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+            </div>
+            <span className="ml-2 text-[11px] font-mono text-slate-300">
+              Excel_Laboratorio — DB Academy
+            </span>
           </div>
-          <span className="ml-3 text-[10px] font-mono text-slate-400">
-            Excel_Laboratorio — DB Academy
-          </span>
+          <span className="text-[10px] font-mono text-emerald-400">fx Evaluador en vivo</span>
         </div>
 
-        {/* Contenido de la hoja de cálculo */}
-        <div className="flex-1 p-4 bg-[#070E1D] overflow-hidden flex flex-col">
-          <div className="mb-2 text-[10px] font-mono text-slate-500">
-            Libro1.xlsx · Hoja1
-          </div>
+        {/* Barra de fórmulas activa */}
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-800 bg-[#0B1325] font-mono text-xs">
+          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-semibold">D2</span>
+          <span className="text-[#107C41] font-serif italic font-bold">fx</span>
+          <span className="text-cyan-300 truncate">{'=SI(B2>=60;"Aprobado";"Reprobado")'}</span>
+        </div>
+
+        {/* Hoja de cálculo con datos completos */}
+        <div className="flex-1 p-3 pb-20 bg-[#070E1D] overflow-hidden flex flex-col">
           <div className="flex-1 border border-slate-800 rounded-lg bg-[#020617] overflow-hidden">
-            <div className="overflow-x-auto overflow-y-auto">
-              <table className="w-full min-w-[400px] text-xs font-mono">
-                <thead>
-                  <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-400 sticky top-0">
-                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">A</th>
-                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">B</th>
-                    <th className="border-r border-slate-800 px-3 py-1.5 text-center w-12">C</th>
-                    <th className="px-3 py-1.5 text-center w-16">D</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-slate-800 text-slate-300">
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Nota</td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-cyan-300">85</td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">45</td>
-                    <td className="px-3 py-2 text-center font-mono">—</td>
-                  </tr>
-                  <tr className="border-b border-slate-800 text-slate-300 bg-[#0F172A]/50">
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Resultado</td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-emerald-400 font-bold">
-                      Aprobado
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-400">
+                  <th className="border-r border-slate-800 px-2 py-1.5 text-center w-8">#</th>
+                  <th className="border-r border-slate-800 px-3 py-1.5 text-left">A · Estudiante</th>
+                  <th className="border-r border-slate-800 px-3 py-1.5 text-center">B · Nota</th>
+                  <th className="border-r border-slate-800 px-3 py-1.5 text-center">C · Asist.</th>
+                  <th className="px-3 py-1.5 text-center">D · Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr
+                    key={r.row}
+                    className={`border-b border-slate-800/80 text-slate-300 ${
+                      i === 0 ? 'bg-blue-950/30' : i % 2 === 1 ? 'bg-[#0F172A]/40' : ''
+                    }`}
+                  >
+                    <td className="border-r border-slate-800 px-2 py-2 text-center text-slate-500">
+                      {r.row}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-slate-500">
-                      —
+                    <td className="border-r border-slate-800 px-3 py-2 text-left font-sans text-slate-200 truncate">
+                      {r.student}
                     </td>
-                    <td className="px-3 py-2 text-center font-mono">—</td>
-                  </tr>
-                  <tr className="border-b border-slate-800 text-slate-300">
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono">Fórmula</td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center font-mono text-blue-400" colSpan={3}>
-                      {'=SI(B2>=60;"Aprobado";"Reprobado")'}
+                    <td className="border-r border-slate-800 px-3 py-2 text-center text-cyan-300 tabular-nums">
+                      {r.score}
+                    </td>
+                    <td className="border-r border-slate-800 px-3 py-2 text-center text-slate-400 tabular-nums">
+                      {r.attendance}
+                    </td>
+                    <td
+                      className={`px-3 py-2 text-center font-semibold ${
+                        r.pass ? 'text-emerald-400' : 'text-amber-400'
+                      }`}
+                    >
+                      {r.result}
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

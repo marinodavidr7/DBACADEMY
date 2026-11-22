@@ -21,8 +21,8 @@ export const Container: React.FC<ContainerProps> = ({
     <div
       className={`
         w-full
-        px-4 sm:px-6 lg:px-10 2xl:px-16
-        ${prose ? 'max-w-prose mx-auto' : 'mx-auto'}
+        px-4 sm:px-5 lg:px-8 2xl:px-10
+        ${prose ? 'max-w-prose mx-auto' : 'max-w-[1680px] mx-auto'}
         ${className ?? ''}
       `}
     >

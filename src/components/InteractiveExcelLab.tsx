@@ -504,11 +504,11 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   const showPractice = mode === 'practice' || mode === 'lab';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 1. INTRODUCCIÓN A LAS FUNCIONES */}
       {showGuide && (
       <>
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-3">
+      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-2.5">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
           <BookOpen className="w-4 h-4" />
           <span>1. Introducción a las funciones · {lessonTitle}</span>
@@ -530,7 +530,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       </section>
 
       {/* 2. EXPLICACIÓN DETALLADA DE CADA FUNCIÓN */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-4">
+      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
           <Terminal className="w-4 h-4" />
           <span>2. Explicación detallada de las funciones</span>
@@ -591,7 +591,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       </section>
 
       {/* 3. EJEMPLOS PRÁCTICOS */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 space-y-4">
+      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
             <Lightbulb className="w-4 h-4" />
@@ -700,7 +700,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 overflow-hidden"
       >
         {/* Header + Exercise Progress */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] space-y-3.5">
+        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-7 h-6 rounded bg-[#107C41] text-white font-serif italic font-bold text-xs">

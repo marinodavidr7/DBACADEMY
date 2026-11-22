@@ -33,6 +33,7 @@ import { ForumView } from './components/ForumView';
 import { InstructorDashboard } from './components/InstructorDashboard';
 import { LandingPage } from './components/LandingPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
+import { BrandLogo } from './components/ui/BrandLogo';
 import { PageContainer } from './components/ui/PageContainer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -134,26 +135,31 @@ const AppShell: React.FC = () => {
       {!isZenActive && (
         <aside
           className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 ${
-            sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
+            sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-56'
           }`}
         >
         <div
           className={`h-14 border-b border-slate-200 dark:border-slate-800 flex items-center shrink-0 ${
-            sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+            sidebarCollapsed ? 'justify-center px-1.5 gap-1' : 'justify-between px-3'
           }`}
         >
-          {!sidebarCollapsed && (
+          {!sidebarCollapsed ? (
             <button
               type="button"
               onClick={() => handleSelectNav('catalog')}
-              className="text-left min-w-0"
+              className="text-left min-w-0 flex items-center"
             >
-              <span className="block text-base font-bold tracking-tight text-slate-900 dark:text-slate-50 whitespace-nowrap truncate">
-                {t('brand')}
-              </span>
-              <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                {t('tagline')}
-              </span>
+              <BrandLogo size="sm" showWordmark={true} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleSelectNav('catalog')}
+              title={t('brand')}
+              aria-label={t('brand')}
+              className="flex items-center justify-center shrink-0"
+            >
+              <BrandLogo size="xs" showWordmark={false} />
             </button>
           )}
 
@@ -162,17 +168,19 @@ const AppShell: React.FC = () => {
             onClick={toggleSidebar}
             aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Retraer barra lateral'}
             title={sidebarCollapsed ? 'Expandir menú' : 'Retraer menú'}
-            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0"
+            className={`rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors shrink-0 ${
+              sidebarCollapsed ? 'p-1' : 'p-1.5'
+            }`}
           >
             {sidebarCollapsed ? (
-              <PanelLeftOpen className="w-4 h-4" />
+              <PanelLeftOpen className="w-3.5 h-3.5" />
             ) : (
               <PanelLeftClose className="w-4 h-4" />
             )}
           </button>
         </div>
 
-        <nav className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 px-2 py-2.5 space-y-0.5 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -183,8 +191,8 @@ const AppShell: React.FC = () => {
                 onClick={() => handleSelectNav(item.id)}
                 title={sidebarCollapsed ? item.label : undefined}
                 aria-label={item.label}
-                className={`w-full flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors whitespace-nowrap min-h-[42px] ${
-                  sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'
+                className={`w-full flex items-center rounded-lg py-2 text-[13px] font-medium transition-colors whitespace-nowrap min-h-[38px] ${
+                  sidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
                 } ${
                   active
                     ? 'bg-[#0052CC] text-white'
@@ -199,8 +207,8 @@ const AppShell: React.FC = () => {
         </nav>
 
         <div
-          className={`border-t border-slate-200 dark:border-slate-800 space-y-2.5 ${
-            sidebarCollapsed ? 'p-2.5 flex flex-col items-center' : 'p-4'
+          className={`border-t border-slate-200 dark:border-slate-800 space-y-2 ${
+            sidebarCollapsed ? 'p-2 flex flex-col items-center' : 'p-3'
           }`}
         >
           {!sidebarCollapsed && user && (
@@ -321,19 +329,23 @@ const AppShell: React.FC = () => {
       >
         {/* Clean 3-Zone Top Bar (hidden in Zen Mode for maximum viewport) */}
         {!isZenActive && (
-          <header className="sticky top-0 z-30 h-14 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs px-4 sm:px-6 flex items-center justify-between gap-8">
-          <div className="flex items-center gap-3 min-w-0">
+          <header className="sticky top-0 z-30 h-13 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs px-3 sm:px-5 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Abrir menú"
-              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="lg:hidden p-2 -ml-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 min-w-[40px] min-h-[40px] flex items-center justify-center"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="lg:hidden text-base font-bold text-slate-900 dark:text-slate-50 whitespace-nowrap shrink-0">
-              {t('brand')}
-            </span>
+            <button
+              type="button"
+              onClick={() => handleSelectNav('catalog')}
+              className="lg:hidden flex items-center shrink-0"
+            >
+              <BrandLogo size="sm" showWordmark={true} />
+            </button>
             <span className="hidden lg:inline text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
               {sidebarCollapsed ? `${t('brand')} · ` : ''}
               {navItems.find((n) => n.id === activeView)?.label || 'Programa del curso'}
@@ -425,7 +437,7 @@ const AppShell: React.FC = () => {
         <main className="flex-1 min-w-0 w-full">
           <PageContainer
             className={`transition-all duration-200 ${
-              isZenActive ? 'py-4 sm:py-6 max-w-5xl' : 'py-4 sm:py-6 lg:py-8 2xl:py-12'
+              isZenActive ? 'py-3 sm:py-4 max-w-none' : 'py-3 sm:py-4'
             }`}
           >
           {authError && (
@@ -496,10 +508,8 @@ const AppShell: React.FC = () => {
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
               className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800"
             >
-            <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-              <span className="text-base font-bold text-slate-900 dark:text-slate-50">
-                {t('brand')}
-              </span>
+            <div className="h-14 px-3.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+              <BrandLogo size="sm" showWordmark={true} />
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
