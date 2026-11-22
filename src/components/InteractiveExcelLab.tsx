@@ -408,26 +408,39 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     requestAnimationFrame(() => gridContainerRef.current?.focus());
   }, []);
 
-  /** Handle a click on a cell while in formula-select mode (point-and-click ref insertion) */
+  /** Handle a click on a cell while in formula mode — inserts the cell address at cursor */
   const insertCellRef = useCallback(
     (addr: string) => {
+      // Try to get cursor position from whichever input is active
       const input = inlineCellInputRef.current ?? formulaBarInputRef.current;
-      const selStart = input?.selectionStart ?? inlineDraft.length;
-      const selEnd = input?.selectionEnd ?? inlineDraft.length;
-      // Replace any trailing partial cell reference with the clicked address
-      const before = inlineDraft.slice(0, selStart);
+      const cursorPos = input?.selectionStart ?? inlineDraft.length;
+      const selEnd = input?.selectionEnd ?? cursorPos;
+
+      const before = inlineDraft.slice(0, cursorPos);
       const after = inlineDraft.slice(selEnd);
-      // Strip trailing partial ref (e.g., "=SUMA(A" → replace trailing col letter)
-      const cleaned = before.replace(/([A-L]?\d*|\$?[A-L]\$?\d*)$/i, '');
+
+      // Strip any trailing partial cell reference so we replace it cleanly.
+      // Examples handled:
+      //   "="         → clean="" + "A1"  → "=A1"
+      //   "=A"        → clean="=" + "A1" → "=A1"
+      //   "=SUMA("    → clean="=SUMA(" + "A1" → "=SUMA(A1"
+      //   "=SUMA(A1," → clean="=SUMA(A1," + "B2" → "=SUMA(A1,B2"
+      //   "=A1+B"     → clean="=A1+" + "C3" → "=A1+C3"
+      const cleaned = before.replace(/\$?[A-L]?\$?\d*$/i, '');
+
       const newDraft = cleaned + addr + after;
       setInlineDraft(newDraft);
       setFormulaDraft(newDraft);
-      const mode: GridMode = newDraft.startsWith('=') ? 'formula-select' : 'editing';
-      setGridMode(mode);
+      setGridMode('formula-select');
+
+      // Re-focus the inline input and place cursor right after the inserted ref
       requestAnimationFrame(() => {
-        const pos = cleaned.length + addr.length;
-        inlineCellInputRef.current?.setSelectionRange(pos, pos);
-        inlineCellInputRef.current?.focus();
+        const inp = inlineCellInputRef.current;
+        if (inp) {
+          const pos = cleaned.length + addr.length;
+          inp.setSelectionRange(pos, pos);
+          inp.focus();
+        }
       });
     },
     [inlineDraft]
@@ -436,13 +449,22 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   /** Handle a cell click depending on current grid mode */
   const handleCellClick = useCallback(
     (addr: string) => {
-      if (gridMode === 'formula-select' && addr !== selectedCell) {
+      // Insert a cell reference when in formula mode (starts with '=') OR
+      // when in editing mode and the current draft starts with '=' — covers
+      // the case where the user just typed '=' and the state hasn't yet
+      // transitioned from 'editing' to 'formula-select'.
+      const isInFormula =
+        (gridMode === 'formula-select' || gridMode === 'editing') &&
+        inlineDraft.startsWith('=') &&
+        addr !== selectedCell;
+
+      if (isInFormula) {
         insertCellRef(addr);
         return;
       }
       handleSelectCell(addr);
     },
-    [gridMode, selectedCell, insertCellRef, handleSelectCell]
+    [gridMode, inlineDraft, selectedCell, insertCellRef, handleSelectCell]
   );
 
   /** Handle inline draft change — keep formula bar in sync and update mode */
@@ -1388,6 +1410,18 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                       return (
                         <td
                           key={addr}
+                          onMouseDown={(e) => {
+                            // KEY FIX: when in formula mode, clicking another cell must NOT
+                            // steal focus from the inline input (which would trigger onBlur → commitEdit).
+                            // preventDefault() on mousedown keeps the input focused, then onClick
+                            // fires normally and inserts the cell reference.
+                            if (
+                              (gridMode === 'formula-select' || gridMode === 'editing') &&
+                              !isActive
+                            ) {
+                              e.preventDefault();
+                            }
+                          }}
                           onClick={() => handleCellClick(addr)}
                           onDoubleClick={() => {
                             handleSelectCell(addr);
@@ -1412,13 +1446,16 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                               onChange={(e) => handleInlineDraftChange(e.target.value)}
                               onKeyDown={handleInlineInputKeyDown}
                               onBlur={() => {
-                                // Commit on blur unless focus moved to formula bar
+                                // Only commit on blur if focus moved OUTSIDE the grid entirely
+                                // (not to formula bar, not to another cell via formula point-and-click).
+                                // The setTimeout lets the new activeElement settle first.
                                 setTimeout(() => {
                                   const focused = document.activeElement;
-                                  if (focused !== formulaBarInputRef.current) {
+                                  const inGrid = gridContainerRef.current?.contains(focused);
+                                  if (focused !== formulaBarInputRef.current && !inGrid) {
                                     commitEdit();
                                   }
-                                }, 50);
+                                }, 80);
                               }}
                               className="w-full h-full px-2.5 py-1.5 min-h-[28px] font-mono text-xs bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none"
                               autoComplete="off"
