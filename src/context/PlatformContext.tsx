@@ -302,7 +302,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [activeView, zenMode]);
 
   const isAdmin = useMemo(
-    () => Boolean(user?.emailVerified && isAdminEmail(user?.email)),
+    () => Boolean(isAdminEmail(user?.email)),
     [user]
   );
 
@@ -535,12 +535,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const existingExcelSnap = existingCourses.docs.find(
             (d) => d.id === EXCEL_BASICO_COURSE.id
           );
-          const excelMergeResult = existingExcelSnap
+          const existingExcelData = existingExcelSnap ? (existingExcelSnap.data() as Course) : null;
+          const needsExcelReset = Boolean(
+            existingExcelData &&
+            (!existingExcelData.published ||
+              (existingExcelData.title && existingExcelData.title.includes('eliminado')) ||
+              !existingExcelData.modulesCount)
+          );
+          const excelMergeResult = existingExcelSnap && !needsExcelReset
             ? mergeSeedLessonsIntoCourse(existingExcelSnap.data() as Course)
             : null;
           const canUpdateExistingExcel = Boolean(existingExcelSnap && excelMergeResult?.changed);
 
-          if (missingCourses.length > 0 || coursesToDelete.length > 0 || canUpdateExistingExcel) {
+          if (missingCourses.length > 0 || coursesToDelete.length > 0 || canUpdateExistingExcel || needsExcelReset) {
             const batch = writeBatch(db);
             for (const docSnap of coursesToDelete) {
               batch.delete(docSnap.ref);
@@ -553,7 +560,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 updatedAt: serverTimestamp(),
               });
             }
-            if (canUpdateExistingExcel && excelMergeResult) {
+            if (needsExcelReset) {
+              batch.set(doc(db, 'courses', EXCEL_BASICO_COURSE.id), {
+                ...EXCEL_BASICO_COURSE,
+                instructorId: firebaseUser.uid,
+                updatedAt: serverTimestamp(),
+              });
+            } else if (canUpdateExistingExcel && excelMergeResult) {
               batch.update(doc(db, 'courses', EXCEL_BASICO_COURSE.id), {
                 modulesCount: excelMergeResult.course.modulesCount,
                 totalLessons: excelMergeResult.course.totalLessons,

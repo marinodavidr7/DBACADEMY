@@ -51,9 +51,9 @@ export async function assertPlatformAdminWrite(
       `Acceso denegado (${actionLabel}): la sesión activa no coincide con el usuario autenticado.`
     );
   }
-  if (!currentUser.emailVerified || !isAuthorizedAdminEmail(currentUser.email)) {
+  if (!isAuthorizedAdminEmail(currentUser.email)) {
     throw new Error(
-      `Permiso denegado (${actionLabel}): solo el correo verificado Marinodavidr7@gmail.com tiene permisos de escritura, edición o eliminación.`
+      `Permiso denegado (${actionLabel}): solo el correo Marinodavidr7@gmail.com tiene permisos de escritura, edición o eliminación.`
     );
   }
 
@@ -62,10 +62,8 @@ export async function assertPlatformAdminWrite(
     typeof tokenResult.claims.email === 'string'
       ? tokenResult.claims.email
       : currentUser.email;
-  const claimVerified =
-    tokenResult.claims.email_verified === true || currentUser.emailVerified;
 
-  if (!claimVerified || !isAuthorizedAdminEmail(claimEmail)) {
+  if (!isAuthorizedAdminEmail(claimEmail)) {
     throw new Error(
       `Validación de token denegada (${actionLabel}): solo Marinodavidr7@gmail.com puede modificar o eliminar contenido.`
     );

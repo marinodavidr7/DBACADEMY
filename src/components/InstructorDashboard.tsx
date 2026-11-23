@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -213,6 +213,7 @@ export const InstructorDashboard: React.FC = () => {
     updateCourse,
     deleteCourse,
     setActiveView,
+    selectedCourseId,
     setSelectedCourseId,
     t,
   } = usePlatform();
@@ -234,8 +235,18 @@ export const InstructorDashboard: React.FC = () => {
   const courseEditorLabels = useMemo(() => COURSE_EDITOR_LABELS(t), [t]);
 
   const canAdminMutate = Boolean(
-    user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email)
+    isAdmin || isAuthorizedAdminEmail(user?.email)
   );
+
+  useEffect(() => {
+    if (selectedCourseId && courses.length > 0) {
+      const target = courses.find((c) => c.id === selectedCourseId);
+      if (target) {
+        setEditingCourse(target);
+        setShowBuilder(true);
+      }
+    }
+  }, [selectedCourseId, courses]);
 
   const totalRevenueCents = useMemo(
     () =>

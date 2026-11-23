@@ -421,7 +421,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   t = (k: any) => k,
 }) => {
   const { user, isAdmin } = usePlatform();
-  const canEdit = Boolean(user?.emailVerified && isAdmin && isAuthorizedAdminEmail(user?.email));
+  const canEdit = Boolean(isAdmin || isAuthorizedAdminEmail(user?.email));
 
   const [input, setInput] = useState<CourseInput>(() =>
     course ? courseToInput(course) : emptyInput()

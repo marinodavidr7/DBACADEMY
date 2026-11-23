@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, Check, Lock, Play, Search, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Lock, Pencil, Play, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
@@ -501,6 +501,20 @@ export const CatalogView: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCourseId(course.id);
+                              setActiveView('instructor');
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors whitespace-nowrap min-h-[40px]"
+                            title="Editar curso completo como administrador"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Editar</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

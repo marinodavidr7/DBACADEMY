@@ -11,6 +11,7 @@ import {
   Clock,
   Layers,
   Lock,
+  Pencil,
   Play,
   ShieldCheck,
 } from 'lucide-react';
@@ -391,6 +392,20 @@ export const CourseDetailView: React.FC = () => {
                 </>
               )}
             </button>
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCourseId(course.id);
+                  setActiveView('instructor');
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 px-5 py-2.5 text-xs font-semibold text-amber-800 dark:text-amber-200 transition-colors min-h-[40px]"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Editar curso completo (Administrador)</span>
+              </button>
+            )}
 
             <ul className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
               {prereqCourses.length > 0 && (
