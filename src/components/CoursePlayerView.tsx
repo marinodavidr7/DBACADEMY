@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Calculator,
   Archive,
   ArrowRight,
   Award,
@@ -50,6 +51,7 @@ import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
+import { ExcelFormulaEditor } from './ExcelFormulaEditor';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { CourseProgressBar } from './ui/CourseProgressBar';
 
@@ -99,6 +101,17 @@ const typeLabel: Record<CourseMaterialType, string> = {
   other: 'Archivo',
 };
 
+const InteractiveGuideMaterial: React.FC<{ material: CourseMaterial }> = ({ material }) => (
+  <div className="w-full h-[60vh] min-h-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F1624] overflow-hidden">
+    <iframe
+      src={material.url}
+      title={material.name}
+      className="h-full w-full"
+      loading="lazy"
+    />
+  </div>
+);
+
 function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
   if (materials.length === 0) {
     return (
@@ -121,6 +134,9 @@ function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
       <div className="space-y-2">
         {materials.map((mat) => {
           const isHtml = mat.url.endsWith('.html') || mat.url.endsWith('.htm');
+          if (isHtml) {
+            return <InteractiveGuideMaterial key={mat.id} material={mat} />;
+          }
           return (
           <a
             key={mat.id}
@@ -1347,6 +1363,20 @@ export const CoursePlayerView: React.FC = () => {
                       }}
                     />
                   </Suspense>
+
+                  {/* Práctica interactiva: escríbe fórmulas y haz clic en celdas/rangos (Excel Básico) */}
+                  {activeCourse?.id === 'excel-basico-05' && (
+                    <section className="mt-6 space-y-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-4">
+                      <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                        <Calculator className="w-4 h-4" />
+                        Práctica: Escríbe fórmulas en Excel
+                      </h3>
+                      <p className="text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                        Escríbe una fórmula que empiece con <code className="font-mono bg-white px-1 border border-emerald-300">=</code> en la barra de fórmulas, por ejemplo <code className="font-mono bg-white px-1 border border-emerald-300">=SUMA(B2:B5)</code> o <code className="font-mono bg-white px-1 border border-emerald-300">=B2*C2</code>. Haz clic en las celdas para introducir referencias y en <code className="font-mono bg-white px-1 border border-emerald-300">B2:</code> para un rango como <code className="font-mono bg-white px-1 border border-emerald-300">B2:B8</code>.
+                      </p>
+                      <ExcelFormulaEditor />
+                    </section>
+                  )}
 
                   {/* Simulador 3D interactivo: EXCLUSIVO de 1.13 SI (Función lógica de decisión) */}
                   {isSiLesson && (
