@@ -740,13 +740,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ...loaded,
           ...SEED_COURSES.filter((s) => !loadedIds.has(s.id)),
         ];
-        // Cursos de Excel gratis por ahora: forzar priceCents = 0 sin importar Firestore
-        const cursosGratis = merged.map((c) =>
-          ['excel-intermedio-01', 'excel-avanzado-01'].includes(c.id)
-            ? { ...c, priceCents: 0 }
-            : c
-        );
-        setCourses(cursosGratis);
+        // Cursos Excel eliminados por ahora: no se mutan precios ni listados
+        setCourses(merged);
       } else {
         setCourses(SEED_COURSES);
       }
