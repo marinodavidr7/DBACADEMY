@@ -15,9 +15,216 @@ export const EXCEL_BASICO_COURSE: Course = {
   instructorName: 'Equipo DB Academy',
   published: true,
   technologies: ['Excel', 'La Pantalla de Excel', 'Formato', 'Fórmulas', 'F4 / ITBIS', 'SI()', 'Simulador 3D'],
-  modulesCount: 4,
-  totalLessons: 23,
+  modulesCount: 5,
+  totalLessons: 31,
   modules: [
+    {
+      id: 'mod-excel-0',
+      title: 'MÓDULO 0 — FUNDAMENTOS PREVIOS',
+      durationMinutes: 120,
+      quizQuestion: '¿Cómo se identifica una celda en Excel y qué símbolo fija las coordenadas al arrastrar?',
+      quizOptions: [
+        'Con la letra de columna y el número de fila (ej. B3); el signo $ fija la coordenada',
+        'Con el número de fila y luego la letra (ej. 3B)',
+        'Únicamente con el número de fila',
+      ],
+      quizCorrectIndex: 0,
+      lessons: [
+        {
+          id: 'les-excel-0-0',
+          title: '0.0 Conceptos Básicos: Columnas, Filas y Celdas',
+          durationMinutes: 15,
+          summary: 'La cuadrícula bidimensional de Excel: columnas con letras (A-XFD), filas con números (1-1048576) y celdas únicas (ej. B3).',
+          content:
+            'La hoja de cálculo organiza toda la información en una cuadrícula bidimensional de columnas (verticales, identificadas con letras de la A a la XFD) y filas (horizontales, identificadas con números del 1 al 1.048.576).\n\n' +
+            '• Columnas: Verticales con letras (A, B, C...). Hay 16.384 columnas hasta XFD.\n' +
+            '• Filas: Horizontales con números (1, 2, 3...). Hay 1.048.576 filas.\n' +
+            '• Celda: El cuadro donde cruzan una columna y una fila. Se nombra por su coordenada: primero la letra y luego el número (ej. B3 o C4).\n' +
+            '• Cuadro de nombres: Muestra en todo momento la celda activa que tienes seleccionada.\n' +
+            '• Barra de fórmulas: Muestra y permite editar el contenido real de la celda activa.\n\n' +
+            'Explora la guía interactiva completa adjunta en los materiales de esta lección para ver la cuadrícula y practicar con la pantalla interactiva.',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-00',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+            {
+              id: 'mat-partes-pantalla-img',
+              name: 'Infografía: Partes principales de la hoja de Excel',
+              url: '/excel-basico/partes-principales-hoja-excel.webp',
+              type: 'image',
+              sizeByte: 107702,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-1',
+          title: '0.1 Anatomía de una función (nombre, argumentos, sintaxis)',
+          durationMinutes: 15,
+          summary: 'Estructura universal de toda fórmula en Excel: signo igual, nombre de función, paréntesis y separadores.',
+          content:
+            'Toda función inicia con = seguido del nombre (por ejemplo SUMA), paréntesis de apertura y sus argumentos separados por coma o punto y coma según la configuración regional. Ejemplo: =SUMA(A1:A10). Comprender los argumentos obligatorios frente a los opcionales [entre corchetes] te permite leer cualquier función sin memorizarla.\n\n' +
+            'Partes de una función:\n' +
+            '1. Signo igual (=): Le indica a Excel que ejecute un cálculo y no almacene texto plano.\n' +
+            '2. Nombre oficial de la función (ej. SUMA, PROMEDIO, SI).\n' +
+            '3. Paréntesis de apertura (:\n' +
+            '4. Argumentos separados por comas o punto y coma.\n' +
+            '5. Paréntesis de cierre ).',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-01',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-2',
+          title: '0.2 Referencias: relativas, absolutas ($A$1) y mixtas',
+          durationMinutes: 15,
+          summary: 'Controla cómo cambian o permanecen fijas las celdas al copiar fórmulas con F4.',
+          content:
+            'Una referencia relativa (A1) se ajusta al arrastrar la fórmula. Una referencia absoluta ($A$1) bloquea fila y columna, ideal para tasas de impuestos o tipos de cambio. Las referencias mixtas ($A1 o A$1) fijan solo la columna o solo la fila para construir tablas de doble entrada en segundos.\n\n' +
+            'Ciclo F4:\n' +
+            '• A1: Relativa (cambia al copiar)\n' +
+            '• $A$1: Absoluta (nunca cambia)\n' +
+            '• A$1: Mixta (fila fija, columna libre)\n' +
+            '• $A1: Mixta (columna fija, fila libre)',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-02',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-3',
+          title: '0.3 Referencias a hojas y libros externos',
+          durationMinutes: 15,
+          summary: 'Conecta datos entre pestañas usando el operador ! y vincula otros archivos de Excel.',
+          content:
+            'Para referenciar una celda en otra hoja usa el formato NombreHoja!Celda (o \'Nombre con espacios\'!A1). Para libros externos abiertos o guardados, Excel antepone el nombre del archivo entre corchetes: =[Presupuesto.xlsx]Resumen!$B$4.\n\n' +
+            '• Misma hoja: =A1+B1\n' +
+            '• Otra hoja del mismo libro: =Hoja2!A1\n' +
+            '• Hoja con espacios: =\'Ventas 2026\'!B5\n' +
+            '• Libro externo: =\'[Presupuesto.xlsx]Hoja1\'!A1',
+          materials: [
+            {
+              id: 'mat-03-referencias-animado-html',
+              name: 'Tutorial Animado 2D: Referencias a hojas y libros externos (HTML)',
+              url: '/excel-basico/0.3 Referencias a hojas y libros externos.html',
+              type: 'doc',
+              sizeByte: 76516,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+            {
+              id: 'mat-fundamentos-previos-html-03',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-4',
+          title: '0.4 Operadores (aritméticos, comparación, concatenación, referencia)',
+          durationMinutes: 15,
+          summary: 'Jerarquía de cálculo: +, -, *, /, ^, =, <>, &, : y espacio de intersección.',
+          content:
+            'Excel evalúa primero paréntesis y exponentes (^), luego multiplicación/división (*, /) y finalmente suma/resta (+, -). Los operadores de comparación (=, >, <, >=, <=, <>) devuelven VERDADERO o FALSO. El operador & concatena textos y : define rangos continuos (A1:C10).\n\n' +
+            '• Aritméticos: + - * / ^ %\n' +
+            '• Comparación: = > < >= <= <>\n' +
+            '• Concatenación: & (une texto)\n' +
+            '• Referencia: : (rango), , o ; (unión), espacio (intersección)',
+          materials: [
+            {
+              id: 'mat-04-operadores-animado-html',
+              name: 'Tutorial Animado 2D: Operadores en Excel (HTML)',
+              url: '/excel-basico/0.4 Operadores (aritméticos, comparación, concatenación, referencia.html',
+              type: 'doc',
+              sizeByte: 76516,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+            {
+              id: 'mat-fundamentos-previos-html-04',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-5',
+          title: '0.5 Uso del Asistente de funciones y autocompletado',
+          durationMinutes: 15,
+          summary: 'Aprovecha Tab, fx y las sugerencias en pantalla para escribir fórmulas sin errores tipográficos.',
+          content:
+            'Al escribir =PRO, Excel despliega las coincidencias; pulsa Tabulador para completar y abrir el paréntesis. El botón fx (Insertar función) muestra la descripción de cada argumento y el resultado preliminar en vivo antes de confirmar.',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-05',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-6',
+          title: '0.6 Cómo leer y corregir errores (#¡VALOR!, #N/A, #REF!, #DIV/0!)',
+          durationMinutes: 15,
+          summary: 'Diagnóstico rápido de los errores más frecuentes en hojas de cálculo profesionales.',
+          content:
+            '#DIV/0! ocurre al dividir entre cero o celda vacía; #¡VALOR! indica tipo de dato incompatible (sumar texto); #REF! aparece cuando se eliminó una celda referenciada; #N/A señala que una búsqueda no halló coincidencia. Combina la auditoría de fórmulas con SI.ERROR cuando corresponda.',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-06',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+        {
+          id: 'les-excel-0-7',
+          title: '0.7 Anidar funciones correctamente',
+          durationMinutes: 15,
+          summary: 'Usa el resultado de una función como argumento directo de otra de forma legible.',
+          content:
+            'Anidar consiste en colocar una función dentro de un argumento de otra, por ejemplo: =REDONDEAR(PROMEDIO(B2:B20); 2). Cuida que cada paréntesis de apertura tenga su cierre del mismo color y valida primero la función interna antes de envolverla.',
+          materials: [
+            {
+              id: 'mat-fundamentos-previos-html-07',
+              name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
+              url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
+              type: 'doc',
+              sizeByte: 111419,
+              uploadedAt: '2026-11-22T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    },
     {
       id: 'mod-excel-1',
       title: 'MÓDULO 1: LA PANTALLA DE EXCEL',
