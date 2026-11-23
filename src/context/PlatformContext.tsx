@@ -89,16 +89,99 @@ function mergeSeedLessonsIntoCourse(course: Course): { course: Course; changed: 
   const nextModules = existingModules.map((mod) => {
     const seedMod = EXCEL_BASICO_COURSE.modules.find((sm) => sm.id === mod.id);
     if (!seedMod) return mod;
-    const existingLessonIds = new Set((mod.lessons || []).map((l) => l.id));
+
+    let modMaterialsChanged = false;
+    const updatedExistingLessons = (mod.lessons || []).map((lesson) => {
+      const seedLesson = seedMod.lessons.find((sl) => sl.id === lesson.id);
+      if (!seedLesson) return lesson;
+
+      const currentMaterials = Array.isArray(lesson.materials) ? [...lesson.materials] : [];
+      let lessonChanged = false;
+
+      const seedMaterials = seedLesson.materials ?? [];
+      const nextMaterials = currentMaterials.map((mat) => {
+        if (
+          lesson.id === 'les-excel-0-0' &&
+          mat.id === 'mat-partes-pantalla-img' &&
+          mat.url !== '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp'
+        ) {
+          lessonChanged = true;
+          const seedMatch = seedMaterials.find((sm) => sm.id === 'mat-partes-pantalla-img');
+          return {
+            ...mat,
+            name: 'Partes principales de una hoja de cálculo de Excel',
+            url: '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp',
+            ...(seedMatch?.description ? { description: seedMatch.description } : {}),
+          };
+        }
+        if (!mat.description) {
+          const seedMatch = seedMaterials.find((sm) => sm.id === mat.id || sm.url === mat.url);
+          if (seedMatch?.description) {
+            lessonChanged = true;
+            return { ...mat, description: seedMatch.description };
+          }
+        }
+        return mat;
+      });
+
+      const missingImages = seedMaterials.filter(
+        (seedMat) =>
+          seedMat.type === 'image' &&
+          !nextMaterials.some((m) => m.id === seedMat.id || m.url === seedMat.url)
+      );
+      const missingOthers = seedMaterials.filter(
+        (seedMat) =>
+          seedMat.type !== 'image' &&
+          !nextMaterials.some((m) => m.id === seedMat.id || m.url === seedMat.url)
+      );
+      if (missingImages.length > 0 || missingOthers.length > 0) {
+        lessonChanged = true;
+        const existingImages = nextMaterials.filter((m) => m.type === 'image');
+        const existingOthers = nextMaterials.filter((m) => m.type !== 'image');
+        nextMaterials.splice(
+          0,
+          nextMaterials.length,
+          ...existingImages,
+          ...missingImages,
+          ...existingOthers,
+          ...missingOthers
+        );
+      }
+
+      if (!lessonChanged) return lesson;
+      changed = true;
+      modMaterialsChanged = true;
+      return {
+        ...lesson,
+        materials: nextMaterials,
+      };
+    });
+
+    const needsQuizUpgrade =
+      Boolean(seedMod.questions && seedMod.questions.length >= 2) &&
+      (!mod.questions || mod.questions.length < 2);
+    if (needsQuizUpgrade) {
+      changed = true;
+    }
+
+    const existingLessonIds = new Set(updatedExistingLessons.map((l) => l.id));
     const missingLessons = seedMod.lessons.filter((sl) => !existingLessonIds.has(sl.id));
-    if (missingLessons.length === 0) return mod;
-    changed = true;
+    if (missingLessons.length === 0 && !modMaterialsChanged && !needsQuizUpgrade) return mod;
+    if (missingLessons.length > 0) {
+      changed = true;
+    }
     const seedOrderMap = new Map(seedMod.lessons.map((sl, idx) => [sl.id, idx]));
-    const mergedLessons = [...(mod.lessons || []), ...missingLessons].sort(
+    const mergedLessons = [...updatedExistingLessons, ...missingLessons].sort(
       (a, b) => (seedOrderMap.get(a.id) ?? 999) - (seedOrderMap.get(b.id) ?? 999)
     );
     return {
       ...mod,
+      ...(needsQuizUpgrade
+        ? {
+            quizEnabled: true,
+            questions: seedMod.questions,
+          }
+        : {}),
       durationMinutes: mergedLessons.reduce((acc, l) => acc + (Number(l.durationMinutes) || 15), 0),
       lessons: mergedLessons,
     };

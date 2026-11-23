@@ -12,8 +12,22 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function isSafeImageSrc(src: string): boolean {
+  const clean = src.trim();
+  return (
+    /^https?:\/\//i.test(clean) ||
+    clean.startsWith('/') ||
+    /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(clean)
+  );
+}
+
 function inline(value: string): string {
   let out = escapeHtml(value);
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt: string, src: string) =>
+    isSafeImageSrc(src)
+      ? `<img src="${src}" alt="${alt}" loading="lazy" referrerPolicy="no-referrer" style="max-width:100%;height:auto;border-radius:0.75rem;margin:0.75rem 0;" />`
+      : alt
+  );
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
   out = out.replace(/`([^`]+)`/g, '<code>$1</code>');

@@ -262,13 +262,16 @@ export async function deleteCourseMaterial(url: string): Promise<void> {
 export function buildExternalMaterial(
   name: string,
   url: string,
-  type: CourseMaterialType = 'other'
+  type: CourseMaterialType = 'other',
+  description?: string
 ): CourseMaterial {
+  const cleanDescription = description?.trim();
   return {
     id: `mat_ext_${Date.now().toString(36)}`,
     name,
     url,
     type,
+    ...(cleanDescription ? { description: cleanDescription } : {}),
     sizeByte: 0,
     uploadedAt: new Date().toISOString(),
   };

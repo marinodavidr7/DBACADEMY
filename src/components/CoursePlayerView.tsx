@@ -1,7 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
-  Calculator,
   Archive,
   ArrowRight,
   Award,
@@ -39,21 +38,30 @@ import {
   Terminal,
   User,
   Video,
+  ZoomIn,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import { EXCEL_CURRICULUM } from '../data/excelCurriculum';
+import { getDownloadablePracticesForLesson } from '../data/excelDownloadablePractices';
 import type { Certificate, CourseMaterial, CourseMaterialType } from '../types';
 import { formatFileSize } from '../services/storageService';
 import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 import { CertificatePreviewModal } from './CertificatePreviewModal';
+import { ImageLightboxModal, TheoryImageGallery } from './TheoryImageGallery';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
 import { ExcelFormulaEditor } from './ExcelFormulaEditor';
+import { ModuleQuizPanel } from './ModuleQuizPanel';
+import { getTopicSimulatorMeta } from './ExcelTopicSimulator';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { CourseProgressBar } from './ui/CourseProgressBar';
+
+const ExcelTopicSimulator = lazy(() =>
+  import('./ExcelTopicSimulator').then((m) => ({ default: m.ExcelTopicSimulator }))
+);
 
 const InteractiveExcelLab = lazy(() =>
   import('./InteractiveExcelLab').then((m) => ({ default: m.InteractiveExcelLab }))
@@ -112,7 +120,13 @@ const InteractiveGuideMaterial: React.FC<{ material: CourseMaterial }> = ({ mate
   </div>
 );
 
-function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
+function MaterialsTab({
+  materials,
+  onPreviewImage,
+}: {
+  materials: CourseMaterial[];
+  onPreviewImage?: (img: CourseMaterial) => void;
+}) {
   if (materials.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-600 dark:text-slate-300">
@@ -136,6 +150,58 @@ function MaterialsTab({ materials }: { materials: CourseMaterial[] }) {
           const isHtml = mat.url.endsWith('.html') || mat.url.endsWith('.htm');
           if (isHtml) {
             return <InteractiveGuideMaterial key={mat.id} material={mat} />;
+          }
+          if (mat.type === 'image') {
+            return (
+              <div
+                key={mat.id}
+                className="group flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3 py-2.5"
+              >
+                <button
+                  type="button"
+                  onClick={() => onPreviewImage?.(mat)}
+                  className="shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  title="Ampliar imagen"
+                >
+                  <img
+                    src={mat.url}
+                    alt={mat.name}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-11 object-cover"
+                  />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    {mat.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {typeLabel[mat.type]}
+                    {mat.sizeByte > 0 && ` · ${formatFileSize(mat.sizeByte)}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {onPreviewImage && (
+                    <button
+                      type="button"
+                      onClick={() => onPreviewImage(mat)}
+                      className="min-h-[38px] inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-blue-500"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Ver</span>
+                    </button>
+                  )}
+                  <a
+                    href={mat.url}
+                    download={mat.name}
+                    title="Descargar imagen"
+                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            );
           }
           return (
           <a
@@ -192,6 +258,7 @@ export const CoursePlayerView: React.FC = () => {
     setZenMode,
     toggleZenMode,
     completeLesson,
+    updateCourse,
     t,
   } = usePlatform();
 
@@ -256,11 +323,13 @@ export const CoursePlayerView: React.FC = () => {
   }, [enrollments, activeCourse, isAdmin, user, viewAsStudent]);
 
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
-  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
-  const [quizFeedback, setQuizFeedback] = useState<Record<string, 'passed' | 'failed'>>({});
   const [saving, setSaving] = useState(false);
   const [newlyIssuedCert, setNewlyIssuedCert] = useState<Certificate | null>(null);
   const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<CourseMaterial | null>(null);
+  const [savingTheoryImg, setSavingTheoryImg] = useState(false);
+  const [theoryImgError, setTheoryImgError] = useState<string | null>(null);
+  const [theoryImgNotice, setTheoryImgNotice] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
   const [externalPreset, setExternalPreset] = useState<SimulatorExternalPreset | null>(null);
   const [activeTab, setActiveTab] = useState<'reader' | 'practice' | 'syntax' | 'lab' | 'materials' | 'screen'>('reader');
@@ -296,6 +365,11 @@ export const CoursePlayerView: React.FC = () => {
       // Ignore storage errors
     }
   }, [activeCourse?.id]);
+
+  useEffect(() => {
+    setTheoryImgError(null);
+    setTheoryImgNotice(null);
+  }, [activeLessonId]);
 
   const isSyntheticPreview = Boolean(activeEnrollment?.id.startsWith('preview_'));
 
@@ -473,22 +547,45 @@ export const CoursePlayerView: React.FC = () => {
       return (enr && enr.progressPercent >= 100) || hasCert;
     });
   }, [prereqCourses, enrollments, certificates, isAdmin, viewAsStudent]);
-  const isSiLesson = currentLesson?.id === 'les-excel-4-13' || currentLesson?.id === 'les-excel-1-13';
+  const isSiLesson =
+    currentLesson?.id === 'les-excel-4-12' ||
+    currentLesson?.id === 'les-excel-4-13' ||
+    currentLesson?.id === 'les-excel-1-13';
   const isGridBasicsLesson =
     currentLesson?.id === 'les-excel-1-1' ||
     currentLesson?.id === 'les-excel-1-2' ||
     currentLesson?.id === 'les-excel-1-3' ||
-    currentLesson?.id === 'les-excel-0-0' ||
-    Boolean(currentLesson?.id?.startsWith('les-excel-0-'));
+    currentLesson?.id === 'les-excel-0-0';
   const isF4Lesson =
     currentLesson?.id === 'les-excel-3-2' ||
     currentLesson?.id === 'les-excel-3-4' ||
     currentLesson?.id === 'les-excel-0-2';
+  const simulatorMeta = useMemo(
+    () => getTopicSimulatorMeta(currentLesson?.id),
+    [currentLesson?.id]
+  );
+  const topicHtmlGuide = useMemo(() => {
+    const id = currentLesson?.id;
+    if (id === 'les-excel-0-0') {
+      return {
+        url: '/excel-basico/00_Conceptos_Basicos.html',
+        title: 'Guía Visual 2D: Columnas, Filas y Celdas',
+      };
+    }
+    if (id === 'les-excel-0-4' || id === 'les-excel-3-5') {
+      return {
+        url: '/excel-basico/0.4 Operadores (aritméticos, comparación, concatenación, referencia.html',
+        title: 'Tutorial Animado 2D: Operadores en Excel',
+      };
+    }
+    return null;
+  }, [currentLesson?.id]);
   const lessonExerciseCount = useMemo(() => {
     if (!isExcelCourse || !currentLesson) return 0;
     const base = (EXCEL_CURRICULUM[currentLesson.id] || EXCEL_CURRICULUM['les-excel-0-1'])?.exercises.length ?? 0;
+    const downloadable = getDownloadablePracticesForLesson(currentLesson.id).length;
     const custom = customExercises.filter((ce) => ce.lessonId === currentLesson.id).length;
-    return base + custom;
+    return base + downloadable + custom;
   }, [isExcelCourse, currentLesson, customExercises]);
 
   const selectLesson = useCallback(
@@ -571,9 +668,14 @@ export const CoursePlayerView: React.FC = () => {
   // Reset tab, clear stale example selection, persist active lesson, and restore saved scroll position
   useEffect(() => {
     setActiveTab('reader');
+    setScreenViewerMode('component');
+    setBasicsViewMode(currentLesson?.id === 'les-excel-1-1' ? 'screen' : 'grid');
     setRequestedExampleId(null);
     setLockWarning(null);
-    const isSi = currentLesson?.id === 'les-excel-4-13' || currentLesson?.id === 'les-excel-1-13';
+    const isSi =
+      currentLesson?.id === 'les-excel-4-12' ||
+      currentLesson?.id === 'les-excel-4-13' ||
+      currentLesson?.id === 'les-excel-1-13';
     setShowSimulator(isSi);
     if (currentLesson?.module?.id) {
       setExpandedModules((prev) => ({
@@ -779,22 +881,6 @@ export const CoursePlayerView: React.FC = () => {
       );
     }
     selectLesson(targetLessonId);
-  };
-
-  const handleCheckQuiz = (moduleId: string, correctIndex: number) => {
-    const picked = quizAnswers[moduleId];
-    const passed = picked === correctIndex;
-    setQuizFeedback((prev) => ({
-      ...prev,
-      [moduleId]: passed ? 'passed' : 'failed',
-    }));
-    if (passed && !isLessonDone) {
-      void markSubModuleComplete(
-        currentLesson.id,
-        currentLesson.title,
-        currentLesson.durationMinutes
-      );
-    }
   };
 
   return (
@@ -1071,19 +1157,9 @@ export const CoursePlayerView: React.FC = () => {
                     <span className="font-mono tabular-nums text-slate-200">
                       {currentLesson.durationMinutes} min
                     </span>
-                    {isSiLesson && (
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-semibold">
-                        Incluye Simulador 3D =SI()
-                      </span>
-                    )}
-                    {isGridBasicsLesson && (
-                      <span className="px-2 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-semibold">
-                        Cuadrícula 2D & Pantalla de Excel
-                      </span>
-                    )}
-                    {isF4Lesson && (
-                      <span className="px-2 py-0.5 rounded bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[11px] font-semibold">
-                        Simulador F4 Interactivo
+                    {isExcelCourse && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[11px] font-semibold">
+                        Simulador: {simulatorMeta.shortBadge}
                       </span>
                     )}
                   </div>
@@ -1156,9 +1232,9 @@ export const CoursePlayerView: React.FC = () => {
                       }`}
                     >
                       <Layers className="w-4 h-4 shrink-0" />
-                      <span>Pantalla Excel</span>
+                      <span>Simulador</span>
                       <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-[#107C41] dark:text-emerald-300 text-[10px] font-bold">
-                        9 Piezas
+                        {simulatorMeta.shortBadge}
                       </span>
                     </button>
                   </>
@@ -1242,10 +1318,129 @@ export const CoursePlayerView: React.FC = () => {
                     </div>
 
                     <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
-                      <p className={zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}>
-                        {currentLesson.content}
-                      </p>
+                      {currentLesson.content
+                        .split(/(!\[[^\]]*\]\([^)\s]+\))/g)
+                        .filter(Boolean)
+                        .map((segment, segIdx) => {
+                          const imgMatch = segment.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+                          if (imgMatch) {
+                            const [, altText, imgSrc] = imgMatch;
+                            const isSafeSrc =
+                              /^https?:\/\//i.test(imgSrc) ||
+                              imgSrc.startsWith('/') ||
+                              /^data:image\//i.test(imgSrc);
+                            if (!isSafeSrc) return null;
+                            return (
+                              <figure
+                                key={`md-img-${segIdx}`}
+                                className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/60 overflow-hidden"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setLightboxImage({
+                                      id: `md-img-${segIdx}`,
+                                      name: altText || 'Imagen de la lección',
+                                      url: imgSrc,
+                                      type: 'image',
+                                      sizeByte: 0,
+                                      uploadedAt: '',
+                                    })
+                                  }
+                                  className="group relative block w-full bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <img
+                                    src={imgSrc}
+                                    alt={altText || 'Imagen de la lección'}
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-auto max-h-[540px] object-contain mx-auto block"
+                                  />
+                                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity absolute bottom-2.5 right-2.5">
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                    Ampliar
+                                  </span>
+                                </button>
+                                {altText && (
+                                  <figcaption className="px-3.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800">
+                                    {altText}
+                                  </figcaption>
+                                )}
+                              </figure>
+                            );
+                          }
+                          return (
+                            <p
+                              key={`md-txt-${segIdx}`}
+                              className={`whitespace-pre-line ${zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}`}
+                            >
+                              {segment}
+                            </p>
+                          );
+                        })}
                     </div>
+
+                    {(() => {
+                      const canManageTheoryImages = isAdmin && !viewAsStudent && Boolean(activeCourse);
+                      const allMaterials = currentLesson.materials ?? [];
+                      const theoryImages = allMaterials.filter((m) => m.type === 'image');
+                      const otherMaterials = allMaterials.filter((m) => m.type !== 'image');
+
+                      const persistLessonMaterials = async (
+                        nextMaterials: CourseMaterial[],
+                        successMsg: string
+                      ) => {
+                        if (!activeCourse) return;
+                        setSavingTheoryImg(true);
+                        setTheoryImgError(null);
+                        setTheoryImgNotice(null);
+                        try {
+                          const nextModules = activeCourse.modules.map((mod) =>
+                            mod.id !== currentLesson.module.id
+                              ? mod
+                              : {
+                                  ...mod,
+                                  lessons: mod.lessons.map((les) =>
+                                    les.id !== currentLesson.id
+                                      ? les
+                                      : { ...les, materials: nextMaterials }
+                                  ),
+                                }
+                          );
+                          await updateCourse(activeCourse.id, { modules: nextModules });
+                          setTheoryImgNotice(successMsg);
+                          setTimeout(() => setTheoryImgNotice(null), 3500);
+                        } catch (err) {
+                          setTheoryImgError(
+                            err instanceof Error
+                              ? err.message
+                              : 'No se pudo actualizar la galería en Firestore.'
+                          );
+                        } finally {
+                          setSavingTheoryImg(false);
+                        }
+                      };
+
+                      return (
+                        <TheoryImageGallery
+                          courseId={activeCourse?.id ?? 'general'}
+                          lessonId={currentLesson.id}
+                          lessonTitle={currentLesson.title}
+                          images={theoryImages}
+                          canManage={canManageTheoryImages}
+                          saving={savingTheoryImg}
+                          notice={theoryImgNotice}
+                          error={theoryImgError}
+                          onAddImages={(added, msg) =>
+                            persistLessonMaterials([...theoryImages, ...added, ...otherMaterials], msg)
+                          }
+                          onUpdateImages={(nextImages, msg) =>
+                            persistLessonMaterials([...nextImages, ...otherMaterials], msg)
+                          }
+                        />
+                      );
+                    })()}
 
                     {!isExcelCourse && (
                       <div className="border-l-2 border-amber-500 bg-amber-50/60 dark:bg-amber-950/20 pl-3.5 pr-3 py-2.5 text-xs text-amber-900 dark:text-amber-100 flex items-start gap-2.5">
@@ -1266,41 +1461,42 @@ export const CoursePlayerView: React.FC = () => {
                 <div className="space-y-5 min-w-0">
                   {isGridBasicsLesson && (
                     <div className="space-y-4">
-                      {/* Alternador de vista: Pantalla de Excel o Cuadrícula 2D */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setBasicsViewMode('screen')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                              basicsViewMode === 'screen'
-                                ? 'bg-[#107C41] text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
-                            }`}
-                          >
-                            🖥️ Pantalla de Excel (9 Piezas & Cinta)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBasicsViewMode('grid')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                              basicsViewMode === 'grid'
-                                ? 'bg-[#107C41] text-white shadow-sm'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
-                            }`}
-                          >
-                            📐 Cuadrícula 2D (Columnas, Filas, Celdas)
-                          </button>
-                        </div>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
-                          Explora los componentes interactivos de la lección
-                        </span>
-                      </div>
-
-                      {basicsViewMode === 'screen' ? (
+                      {currentLesson.id === 'les-excel-1-1' ? (
                         <ExcelScreenInterfaceViewer />
                       ) : (
-                        <ExcelGridBasicsViewer />
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setBasicsViewMode('grid')}
+                                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  basicsViewMode === 'grid'
+                                    ? 'bg-[#107C41] text-white shadow-sm'
+                                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                                }`}
+                              >
+                                📐 Cuadrícula 2D (Columnas, Filas, Celdas)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBasicsViewMode('screen')}
+                                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                  basicsViewMode === 'screen'
+                                    ? 'bg-[#107C41] text-white shadow-sm'
+                                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                                }`}
+                              >
+                                🖥️ Vista de Pantalla
+                              </button>
+                            </div>
+                          </div>
+                          {basicsViewMode === 'screen' ? (
+                            <ExcelScreenInterfaceViewer />
+                          ) : (
+                            <ExcelGridBasicsViewer />
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -1311,19 +1507,19 @@ export const CoursePlayerView: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Banner de acceso rápido a la guía interactiva para lecciones del Módulo 0 */}
-                  {currentLesson?.id?.startsWith('les-excel-0-') && (
+                  {/* Acceso directo al simulador interactivo específico de esta lección */}
+                  {!isGridBasicsLesson && !isF4Lesson && (
                     <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-[#107C41] flex items-center justify-center shrink-0">
                           <FileSpreadsheet className="w-5 h-5 text-white" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                            Guía Interactiva — Fundamentos Previos de Excel
+                            {simulatorMeta.topicLabel}
                           </p>
-                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                            Revisa la guía completa del Módulo 0 con ejemplos visuales y ejercicios paso a paso.
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                            {simulatorMeta.subtitle}
                           </p>
                         </div>
                       </div>
@@ -1331,19 +1527,22 @@ export const CoursePlayerView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setActiveTab('screen')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#107C41] hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"
+                          className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#107C41] hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"
                         >
-                          🖥️ Ver aquí
+                          <span>Abrir simulador</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </button>
-                        <a
-                          href="/excel-basico/FUNDAMENTOSPREVIOS.html"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-50 transition-colors"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          Nueva pestaña
-                        </a>
+                        {topicHtmlGuide && (
+                          <a
+                            href={topicHtmlGuide.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-50 transition-colors"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Guía 2D
+                          </a>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1364,18 +1563,12 @@ export const CoursePlayerView: React.FC = () => {
                     />
                   </Suspense>
 
-                  {/* Práctica interactiva: escríbe fórmulas y haz clic en celdas/rangos (Excel Básico) */}
-                  {activeCourse?.id === 'excel-basico-05' && (
-                    <section className="mt-6 space-y-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-4">
-                      <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                        <Calculator className="w-4 h-4" />
-                        Práctica: Escríbe fórmulas en Excel
-                      </h3>
-                      <p className="text-sm text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                        Escríbe una fórmula que empiece con <code className="font-mono bg-white px-1 border border-emerald-300">=</code> en la barra de fórmulas, por ejemplo <code className="font-mono bg-white px-1 border border-emerald-300">=SUMA(B2:B5)</code> o <code className="font-mono bg-white px-1 border border-emerald-300">=B2*C2</code>. Haz clic en las celdas para introducir referencias y en <code className="font-mono bg-white px-1 border border-emerald-300">B2:</code> para un rango como <code className="font-mono bg-white px-1 border border-emerald-300">B2:B8</code>.
-                      </p>
-                      <ExcelFormulaEditor />
-                    </section>
+                  {/* Práctica interactiva de fórmulas adaptada por lección */}
+                  {activeCourse?.id === 'excel-basico-05' &&
+                    !['les-excel-0-0', 'les-excel-1-1', 'les-excel-1-2', 'les-excel-1-3', 'les-excel-2-1', 'les-excel-2-2', 'les-excel-2-3'].includes(currentLesson.id) && (
+                    <div className="mt-4">
+                      <ExcelFormulaEditor lessonId={currentLesson.id} />
+                    </div>
                   )}
 
                   {/* Simulador 3D interactivo: EXCLUSIVO de 1.13 SI (Función lógica de decisión) */}
@@ -1587,74 +1780,88 @@ export const CoursePlayerView: React.FC = () => {
 
               {/* Tab: Materiales descargables */}
               {activeTab === 'materials' && (
-                <MaterialsTab materials={currentLesson.materials ?? []} />
+                <MaterialsTab
+                  materials={currentLesson.materials ?? []}
+                  onPreviewImage={(img) => setLightboxImage(img)}
+                />
               )}
 
-              {/* Tab: Pantalla de Excel Interactiva */}
+              {/* Tab: Simulador Interactivo del Tema Actual */}
               {activeTab === 'screen' && isExcelCourse && (
                 <div className="space-y-4">
-                  {/* Toggle: Simulador 2D React vs Guía HTML Fundamentos Previos */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setScreenViewerMode('component')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          screenViewerMode === 'component'
-                            ? 'bg-[#107C41] text-white shadow-sm'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
-                        }`}
-                      >
-                        🖥️ Simulador Interactivo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setScreenViewerMode('html-guide')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          screenViewerMode === 'html-guide'
-                            ? 'bg-[#107C41] text-white shadow-sm'
-                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
-                        }`}
-                      >
-                        📘 Guía Fundamentos Previos
-                      </button>
+                  {topicHtmlGuide && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setScreenViewerMode('component')}
+                          className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            screenViewerMode === 'component'
+                              ? 'bg-[#107C41] text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                          }`}
+                        >
+                          Simulador Interactivo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScreenViewerMode('html-guide')}
+                          className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            screenViewerMode === 'html-guide'
+                              ? 'bg-[#107C41] text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-500'
+                          }`}
+                        >
+                          {topicHtmlGuide.title}
+                        </button>
+                      </div>
+                      {screenViewerMode === 'html-guide' && (
+                        <a
+                          href={topicHtmlGuide.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shrink-0"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Abrir en nueva pestaña
+                        </a>
+                      )}
                     </div>
-                    {screenViewerMode === 'html-guide' && (
-                      <a
-                        href="/excel-basico/FUNDAMENTOSPREVIOS.html"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shrink-0"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Abrir en nueva pestaña
-                      </a>
-                    )}
-                  </div>
+                  )}
 
-                  {screenViewerMode === 'component' ? (
-                    <ExcelScreenInterfaceViewer />
-                  ) : (
+                  {screenViewerMode === 'html-guide' && topicHtmlGuide ? (
                     <div className="rounded-xl overflow-hidden border border-emerald-200 dark:border-emerald-800 shadow-md">
                       <div className="bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-800">
                         <div className="flex items-center gap-2">
                           <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                           <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
-                            Guía Interactiva — Fundamentos Previos de Excel
+                            {topicHtmlGuide.title}
                           </span>
                         </div>
-                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium hidden sm:inline">
-                          Módulo 0 · Material completo
-                        </span>
                       </div>
                       <iframe
-                        src="/excel-basico/FUNDAMENTOSPREVIOS.html"
-                        title="Guía interactiva: Fundamentos Previos de Excel"
+                        src={topicHtmlGuide.url}
+                        title={topicHtmlGuide.title}
                         className="w-full border-0"
                         style={{ height: '70vh', minHeight: '500px' }}
                         loading="lazy"
                       />
                     </div>
+                  ) : (
+                    <Suspense fallback={<LabSkeleton />}>
+                      <ExcelTopicSimulator
+                        lessonId={currentLesson.id}
+                        onInteract={() => {
+                          if (!isLessonDone) {
+                            void markSubModuleComplete(
+                              currentLesson.id,
+                              currentLesson.title,
+                              currentLesson.durationMinutes
+                            );
+                          }
+                        }}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}
@@ -1770,59 +1977,22 @@ export const CoursePlayerView: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Module Checkpoint Quiz */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 space-y-3">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t('moduleQuiz')} · {currentLesson.module.title}
-            </h3>
-            <p className="text-sm text-slate-700 dark:text-slate-200">
-              {currentLesson.module.quizQuestion}
-            </p>
-            <div className="space-y-2">
-              {currentLesson.module.quizOptions.map((opt, idx) => (
-                <label
-                  key={opt}
-                  className={`flex items-center gap-3 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
-                    quizAnswers[currentLesson.module.id] === idx
-                      ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/30 text-slate-900 dark:text-slate-100'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`quiz-${currentLesson.module.id}`}
-                    checked={quizAnswers[currentLesson.module.id] === idx}
-                    onChange={() =>
-                      setQuizAnswers((prev) => ({ ...prev, [currentLesson.module.id]: idx }))
-                    }
-                    className="accent-blue-600"
-                  />
-                  <span>{opt}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleCheckQuiz(currentLesson.module.id, currentLesson.module.quizCorrectIndex)
-                }
-                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-medium text-white dark:text-slate-900 hover:opacity-90 transition-opacity min-h-[40px]"
-              >
-                {t('verifyQuiz')}
-              </button>
-              {quizFeedback[currentLesson.module.id] === 'passed' && (
-                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  {t('quizPassed')}
-                </span>
-              )}
-              {quizFeedback[currentLesson.module.id] === 'failed' && (
-                <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                  {t('quizTryAgain')}
-                </span>
-              )}
-            </div>
-          </div>
+          {/* Interactive Module Checkpoint Quiz (10 Mixed Questions) */}
+          <ModuleQuizPanel
+            module={currentLesson.module}
+            courseId={activeCourse.id}
+            userId={user?.uid}
+            sectionTitle={t('moduleQuiz')}
+            onPassed={() => {
+              if (!isLessonDone) {
+                void markSubModuleComplete(
+                  currentLesson.id,
+                  currentLesson.title,
+                  currentLesson.durationMinutes
+                );
+              }
+            }}
+          />
         </div>
 
         {/* Right Syllabus Tree (Module Explorer) */}
@@ -2004,6 +2174,11 @@ export const CoursePlayerView: React.FC = () => {
           onClose={() => setPreviewCert(null)}
         />
       )}
+
+      <ImageLightboxModal
+        singleImage={lightboxImage}
+        onClose={() => setLightboxImage(null)}
+      />
     </div>
   );
 };

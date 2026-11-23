@@ -267,9 +267,18 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
               key={material.id}
               className="group flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
             >
-              <span className="shrink-0 text-blue-600 dark:text-blue-400">
-                <MaterialIcon type={material.type} className="h-4 w-4" />
-              </span>
+              {material.type === 'image' ? (
+                <img
+                  src={material.url}
+                  alt={material.name}
+                  referrerPolicy="no-referrer"
+                  className="h-9 w-12 shrink-0 rounded border border-slate-200 dark:border-slate-700 object-cover bg-white"
+                />
+              ) : (
+                <span className="shrink-0 text-blue-600 dark:text-blue-400">
+                  <MaterialIcon type={material.type} className="h-4 w-4" />
+                </span>
+              )}
               {renamingId === material.id ? (
                 <input
                   value={renameValue}

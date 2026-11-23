@@ -1,7 +1,26 @@
-import React from 'react';
-import { AlertCircle, FileSpreadsheet, HelpCircle, MonitorPlay, Type, Video } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  FileSpreadsheet,
+  HelpCircle,
+  Image as ImageIcon,
+  Link2,
+  Loader2,
+  MonitorPlay,
+  Plus,
+  Trash2,
+  Type,
+  UploadCloud,
+  Video,
+} from 'lucide-react';
 import type { CourseLesson, CourseLessonType, CourseMaterial } from '../../types';
-import { extractYouTubeId } from '../../utils/courseEditor';
+import {
+  buildExternalMaterial,
+  uploadCourseMaterial,
+} from '../../services/storageService';
+import { extractYouTubeId, newId } from '../../utils/courseEditor';
 import { Field } from './Field';
 import { MarkdownEditor } from './MarkdownEditor';
 import { MaterialsPanel } from './MaterialsPanel';
@@ -92,6 +111,77 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
   labels,
 }) => {
   const videoId = extractYouTubeId(lesson.videoUrl ?? '');
+  const theoryImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingTheoryImages, setUploadingTheoryImages] = useState(false);
+  const [theoryImageError, setTheoryImageError] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [imageCaptionInput, setImageCaptionInput] = useState('');
+  const [imageDescriptionInput, setImageDescriptionInput] = useState('');
+
+  const allMaterials = lesson.materials ?? [];
+  const theoryImages = allMaterials.filter((m) => m.type === 'image');
+  const otherMaterials = allMaterials.filter((m) => m.type !== 'image');
+
+  const updateTheoryImages = (nextImages: CourseMaterial[]) => {
+    onChange({ materials: [...nextImages, ...otherMaterials] });
+  };
+
+  const handleTheoryImageUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !canEdit) return;
+    setTheoryImageError(null);
+    setUploadingTheoryImages(true);
+    try {
+      const uploaded: CourseMaterial[] = [];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) {
+          setTheoryImageError(`"${file.name}" no es un archivo de imagen válido (PNG, JPG, WebP, GIF).`);
+          continue;
+        }
+        const mat = await uploadCourseMaterial(courseId || 'general', lesson.id, file);
+        uploaded.push({ ...mat, type: 'image' });
+      }
+      if (uploaded.length > 0) {
+        updateTheoryImages([...theoryImages, ...uploaded]);
+      }
+    } catch (err) {
+      setTheoryImageError(err instanceof Error ? err.message : 'No se pudo subir la imagen.');
+    } finally {
+      setUploadingTheoryImages(false);
+    }
+  };
+
+  const handleAddTheoryImageUrl = () => {
+    const trimmedUrl = imageUrlInput.trim();
+    if (!trimmedUrl) return;
+    const isAllowedUrl =
+      /^https?:\/\//i.test(trimmedUrl) ||
+      trimmedUrl.startsWith('/') ||
+      /^data:image\//i.test(trimmedUrl);
+    if (!isAllowedUrl) {
+      setTheoryImageError('Ingresa una URL válida (https://... o /assets/...).');
+      return;
+    }
+    setTheoryImageError(null);
+    const caption = imageCaptionInput.trim() || `Ilustración de ${lesson.title || 'la lección'}`;
+    const mat: CourseMaterial = {
+      ...buildExternalMaterial(caption, trimmedUrl, 'image', imageDescriptionInput),
+      id: newId('mat_img'),
+    };
+    updateTheoryImages([...theoryImages, mat]);
+    setImageUrlInput('');
+    setImageCaptionInput('');
+    setImageDescriptionInput('');
+  };
+
+  const moveTheoryImage = (idx: number, delta: -1 | 1) => {
+    const target = idx + delta;
+    if (target < 0 || target >= theoryImages.length) return;
+    const copy = [...theoryImages];
+    const [moved] = copy.splice(idx, 1);
+    copy.splice(target, 0, moved);
+    updateTheoryImages(copy);
+  };
+
   const typeLabel = (() => {
     if (lesson.type === 'video') return labels.typeVideo;
     if (lesson.type === 'excel') return labels.typeExcel;
@@ -305,6 +395,9 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
           codeLabel={labels.code}
           formulaLabel={labels.formula}
           linkLabel={labels.link}
+          courseId={courseId || 'general'}
+          lessonId={lesson.id}
+          canEdit={canEdit}
         />
       )}
 
@@ -314,6 +407,198 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
           {labels.contentPlaceholder}
         </div>
       )}
+
+      {/* Imágenes visibles dentro de la pestaña Teoría — estilo Cátedra */}
+      <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] p-5 space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-cyan-400 border border-blue-200/70 dark:border-blue-800/60">
+              <ImageIcon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Ilustraciones de la Teoría
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Diagramas técnicos (columnas, filas, celdas, flujos) visibles directamente en el visor de teoría.
+              </p>
+            </div>
+          </div>
+
+          {canEdit && (
+            <>
+              <input
+                ref={theoryImageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleTheoryImageUpload(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploadingTheoryImages}
+                onClick={() => theoryImageInputRef.current?.click()}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+              >
+                {uploadingTheoryImages ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5" />
+                )}
+                <span>{uploadingTheoryImages ? 'Subiendo...' : 'Subir imagen(es)'}</span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {theoryImageError && (
+          <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            {theoryImageError}
+          </div>
+        )}
+
+        {canEdit && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+              <div className="relative">
+                <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={imageUrlInput}
+                  onChange={(e) => setImageUrlInput(e.target.value)}
+                  placeholder="Vincular URL (https://... o /assets/...)"
+                  className="w-full min-h-[40px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-8 pr-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+              <input
+                type="text"
+                value={imageCaptionInput}
+                onChange={(e) => setImageCaptionInput(e.target.value)}
+                placeholder="Título técnico de la figura"
+                className="w-full min-h-[40px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <button
+                type="button"
+                disabled={!imageUrlInput.trim()}
+                onClick={handleAddTheoryImageUrl}
+                className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-cyan-300 hover:bg-blue-100 dark:hover:bg-blue-950/60 disabled:opacity-40 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Vincular URL</span>
+              </button>
+            </div>
+            <textarea
+              rows={2}
+              value={imageDescriptionInput}
+              onChange={(e) => setImageDescriptionInput(e.target.value)}
+              placeholder="Descripción técnica para el estudiante (opcional)..."
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+          </div>
+        )}
+
+        {theoryImages.length === 0 ? (
+          <div
+            onDragOver={(e) => {
+              if (!canEdit) return;
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              if (!canEdit) return;
+              e.preventDefault();
+              void handleTheoryImageUpload(e.dataTransfer.files);
+            }}
+            className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-3 py-5 text-center text-xs text-slate-500 dark:text-slate-400"
+          >
+            No hay ilustraciones vinculadas. Arrastra una imagen aquí, súbela desde tu equipo o pega una URL arriba.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {theoryImages.map((img, idx) => (
+              <div
+                key={img.id}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900 overflow-hidden flex flex-col"
+              >
+                <div className="aspect-video bg-white dark:bg-slate-950 overflow-hidden border-b border-slate-200 dark:border-slate-800">
+                  <img
+                    src={img.url}
+                    alt={img.name}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="p-2.5 space-y-2">
+                  <input
+                    type="text"
+                    disabled={!canEdit}
+                    value={img.name}
+                    onChange={(e) => {
+                      const next = theoryImages.map((item) =>
+                        item.id === img.id ? { ...item, name: e.target.value } : item
+                      );
+                      updateTheoryImages(next);
+                    }}
+                    aria-label="Título o pie de foto de la imagen"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100"
+                  />
+                  <textarea
+                    rows={2}
+                    disabled={!canEdit}
+                    value={img.description ?? ''}
+                    onChange={(e) => {
+                      const next = theoryImages.map((item) =>
+                        item.id === img.id ? { ...item, description: e.target.value } : item
+                      );
+                      updateTheoryImages(next);
+                    }}
+                    placeholder="Descripción técnica de la figura para la galería del estudiante..."
+                    aria-label="Descripción técnica de la imagen"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-base sm:text-xs text-slate-700 dark:text-slate-200"
+                  />
+                  {canEdit && (
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => moveTheoryImage(idx, -1)}
+                          title="Mover antes"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === theoryImages.length - 1}
+                          onClick={() => moveTheoryImage(idx, 1)}
+                          title="Mover después"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
+                        >
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateTheoryImages(theoryImages.filter((item) => item.id !== img.id))
+                        }
+                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Quitar</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <MaterialsPanel
         courseId={courseId}

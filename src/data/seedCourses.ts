@@ -1,4 +1,5 @@
 import type { Course } from '../types';
+import { EXCEL_MODULE_QUIZZES } from './excelModuleQuizzes';
 
 export const EXCEL_BASICO_COURSE: Course = {
   id: 'excel-basico-05',
@@ -29,6 +30,8 @@ export const EXCEL_BASICO_COURSE: Course = {
         'Únicamente con el número de fila',
       ],
       quizCorrectIndex: 0,
+      quizEnabled: true,
+      questions: EXCEL_MODULE_QUIZZES['mod-excel-0'],
       lessons: [
         {
           id: 'les-excel-0-0',
@@ -45,19 +48,81 @@ export const EXCEL_BASICO_COURSE: Course = {
             'Explora la guía interactiva completa adjunta en los materiales de esta lección para ver la cuadrícula y practicar con la pantalla interactiva.',
           materials: [
             {
+              id: 'mat-partes-pantalla-img',
+              name: 'Partes principales de una hoja de cálculo de Excel',
+              url: '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp',
+              type: 'image',
+              description:
+                'Vista panorámica de la interfaz: Cinta de opciones, Cuadro de nombres (celda B7), Barra de fórmulas (=SUMA(B2:B6)), Columnas (A–K), Filas numeradas, Celda activa, pestañas de Hojas y Barra de zoom.',
+              sizeByte: 107702,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-concepto-columnas-00',
+              name: 'Columnas en Excel: Eje Vertical (A–XFD)',
+              url: '/assets/images/excel_concepto_columnas_1795446880239.jpg',
+              type: 'image',
+              description:
+                'Eje vertical de la hoja de cálculo: 16.384 columnas nombradas con letras (A, B, C... hasta XFD). Hacer clic en la letra de columna la selecciona de arriba hacia abajo.',
+              sizeByte: 437622,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-concepto-filas-00',
+              name: 'Filas en Excel: Eje Horizontal (1–1.048.576)',
+              url: '/assets/images/excel_concepto_filas_1795446901853.jpg',
+              type: 'image',
+              description:
+                'Eje horizontal numerado del 1 al 1.048.576. Pulsar el número en el margen izquierdo selecciona toda la fila completa a lo ancho de la hoja.',
+              sizeByte: 469026,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-concepto-celda-00',
+              name: 'Celda Activa, Coordenadas y Cuadro de Nombres (C4)',
+              url: '/assets/images/excel_concepto_celda_activa_1795446902202.jpg',
+              type: 'image',
+              description:
+                'Intersección única entre columna y fila (ej. Columna C + Fila 4 = Celda C4), reflejada en el Cuadro de nombres junto al contenido real en la Barra de fórmulas y el controlador de relleno.',
+              sizeByte: 510611,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-concepto-rangos-00',
+              name: 'Rangos de Celdas Continuos (B2:D5)',
+              url: '/assets/images/excel_concepto_rangos_1795446902863.jpg',
+              type: 'image',
+              description:
+                'Bloque rectangular definido por celda inicial y celda final unidas con dos puntos (:). El ejemplo B2:D5 abarca exactamente 12 celdas contiguas.',
+              sizeByte: 440221,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-cuadricula-basica-00',
+              name: 'Cuadrícula bidimensional: Columnas, Filas, Celda B3 y Rango D2:E4',
+              url: '/assets/images/excel_columnas_filas_celdas_1795446159490.jpg',
+              type: 'image',
+              description:
+                'Síntesis visual de coordenadas: columnas verticales, filas horizontales, celda activa B3 y rango continuo D2:E4 en un mismo plano.',
+              sizeByte: 333205,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-estructura-grid-00',
+              name: 'Estructura completa de la cuadrícula: Columnas, Filas y Celda B3',
+              url: '/assets/images/excel_estructura_grid_completa_1795447779102.jpg',
+              type: 'image',
+              description:
+                'Infografía unificada de conceptos básicos: encabezados alfabéticos de columna, encabezados numéricos de fila, barra de fórmulas y celda activa B3 en intersección.',
+              sizeByte: 453911,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-fundamentos-previos-html-00',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
               url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
               type: 'doc',
               sizeByte: 111419,
-              uploadedAt: '2026-11-22T00:00:00.000Z',
-            },
-            {
-              id: 'mat-partes-pantalla-img',
-              name: 'Infografía: Partes principales de la hoja de Excel',
-              url: '/excel-basico/partes-principales-hoja-excel.webp',
-              type: 'image',
-              sizeByte: 107702,
               uploadedAt: '2026-11-22T00:00:00.000Z',
             },
           ],
@@ -76,6 +141,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             '4. Argumentos separados por comas o punto y coma.\n' +
             '5. Paréntesis de cierre ).',
           materials: [
+            {
+              id: 'mat-img-anatomia-funcion-01',
+              name: 'Anatomía universal de una función en Excel (=SUMA)',
+              url: '/assets/images/excel_anatomia_funcion_1795445064862.jpg',
+              type: 'image',
+              description:
+                'Desglose sintáctico de toda función: signo igual (=) inicial para activar el cálculo, nombre oficial en mayúsculas, paréntesis delimitadores y argumentos separados por punto y coma (;).',
+              sizeByte: 465650,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
             {
               id: 'mat-fundamentos-previos-html-01',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
@@ -100,6 +175,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• $A1: Mixta (columna fija, fila libre)',
           materials: [
             {
+              id: 'mat-img-referencias-f4-02',
+              name: 'Referencias Relativas, Absolutas ($A$1) y Mixtas (F4)',
+              url: '/assets/images/excel_referencias_f4_1795445064452.jpg',
+              type: 'image',
+              description:
+                'Comparación del desplazamiento de coordenadas al copiar fórmulas hacia abajo o derecha y uso de la tecla F4 para alternar entre A1, $A$1, A$1 y $A1.',
+              sizeByte: 429923,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-fundamentos-previos-html-02',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
               url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
@@ -121,6 +206,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Hoja con espacios: =\'Ventas 2026\'!B5\n' +
             '• Libro externo: =\'[Presupuesto.xlsx]Hoja1\'!A1',
           materials: [
+            {
+              id: 'mat-img-referencias-hojas-03',
+              name: 'Referencias entre hojas y libros externos (! y [Libro.xlsx])',
+              url: '/assets/images/excel_referencias_hojas_externas_1795447779076.jpg',
+              type: 'image',
+              description:
+                'Sintaxis visual para enlazar datos de otras pestañas (=Hoja2!A1, =\'Ventas 2026\'!B5) y archivos externos (=[Presupuesto.xlsx]Resumen!$B$4).',
+              sizeByte: 311888,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
             {
               id: 'mat-03-referencias-animado-html',
               name: 'Tutorial Animado 2D: Referencias a hojas y libros externos (HTML)',
@@ -152,6 +247,26 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Referencia: : (rango), , o ; (unión), espacio (intersección)',
           materials: [
             {
+              id: 'mat-img-jerarquia-operadores-04',
+              name: 'Jerarquía de evaluación de operadores en fórmulas de Excel',
+              url: '/assets/images/excel_jerarquia_formulas_1795446160425.jpg',
+              type: 'image',
+              description:
+                'Prioridad de ejecución: 1) Paréntesis (), 2) Potencia ^ y porcentaje %, 3) Multiplicación * y división /, 4) Suma + y resta -. Muestra la diferencia entre =(2+3)*4 = 20 y =2+3*4 = 14.',
+              sizeByte: 426537,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-tipos-operadores-04',
+              name: 'Tipos de operadores en Excel: aritméticos, comparación y texto (&)',
+              url: '/assets/images/excel_tipos_operadores_1795447919466.jpg',
+              type: 'image',
+              description:
+                'Resumen visual de los cuatro niveles de precedencia aritmética junto al operador de concatenación (&) y operadores lógicos de comparación (=, >, <, <>).',
+              sizeByte: 459683,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-04-operadores-animado-html',
               name: 'Tutorial Animado 2D: Operadores en Excel (HTML)',
               url: '/excel-basico/0.4 Operadores (aritméticos, comparación, concatenación, referencia.html',
@@ -178,6 +293,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             'Al escribir =PRO, Excel despliega las coincidencias; pulsa Tabulador para completar y abrir el paréntesis. El botón fx (Insertar función) muestra la descripción de cada argumento y el resultado preliminar en vivo antes de confirmar.',
           materials: [
             {
+              id: 'mat-img-asistente-autocompletado-05',
+              name: 'Asistente de funciones (fx), autocompletado y tecla Tab',
+              url: '/assets/images/excel_asistente_autocompletado_1795447781173.jpg',
+              type: 'image',
+              description:
+                'Cómo aprovechar el menú emergente al escribir =PRO, pulsar Tab para autocompletar, distinguir argumentos obligatorios de [opcionales] y abrir el cuadro fx.',
+              sizeByte: 480070,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-fundamentos-previos-html-05',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
               url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
@@ -196,6 +321,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             '#DIV/0! ocurre al dividir entre cero o celda vacía; #¡VALOR! indica tipo de dato incompatible (sumar texto); #REF! aparece cuando se eliminó una celda referenciada; #N/A señala que una búsqueda no halló coincidencia. Combina la auditoría de fórmulas con SI.ERROR cuando corresponda.',
           materials: [
             {
+              id: 'mat-img-errores-comunes-06',
+              name: 'Guía visual de errores frecuentes en Excel (#¡DIV/0!, #¿NOMBRE?, #¡VALOR!, #REF!)',
+              url: '/assets/images/excel_errores_comunes_1795445065276.jpg',
+              type: 'image',
+              description:
+                'Tabla de diagnóstico para identificar por código la causa exacta del error en una fórmula (división por cero, texto en operación numérica, referencia eliminada o nombre mal escrito) y cómo corregirlo.',
+              sizeByte: 667178,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-fundamentos-previos-html-06',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
               url: '/excel-basico/FUNDAMENTOSPREVIOS.html',
@@ -213,6 +348,16 @@ export const EXCEL_BASICO_COURSE: Course = {
           content:
             'Anidar consiste en colocar una función dentro de un argumento de otra, por ejemplo: =REDONDEAR(PROMEDIO(B2:B20); 2). Cuida que cada paréntesis de apertura tenga su cierre del mismo color y valida primero la función interna antes de envolverla.',
           materials: [
+            {
+              id: 'mat-img-anidar-funciones-07',
+              name: 'Anidación de funciones: evaluación de adentro hacia afuera',
+              url: '/assets/images/excel_anidar_funciones_1795447781695.jpg',
+              type: 'image',
+              description:
+                'Ejemplo paso a paso de =REDONDEAR(PROMEDIO(B2:B20); 2): primero se resuelve la función interna PROMEDIO y su resultado alimenta a la función externa REDONDEAR.',
+              sizeByte: 424406,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
             {
               id: 'mat-fundamentos-previos-html-07',
               name: 'Guía Interactiva: Fundamentos Previos y Pantalla de Excel (HTML)',
@@ -236,6 +381,8 @@ export const EXCEL_BASICO_COURSE: Course = {
         'La Cinta de opciones',
       ],
       quizCorrectIndex: 0,
+      quizEnabled: true,
+      questions: EXCEL_MODULE_QUIZZES['mod-excel-1'],
       lessons: [
         {
           id: 'les-excel-1-1',
@@ -253,6 +400,28 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Barra de fórmulas: Muestra y te deja editar el contenido real de la celda activa.\n' +
             '• Cinta de opciones: Las pestañas de arriba (Inicio, Insertar, Fórmulas, Datos, Vista…) con todos los comandos.\n\n' +
             'Usa el simulador interactivo disponible en esta lección para explorar cada una de las 9 piezas clave y familiarizarte con el entorno real de Microsoft Excel.',
+          materials: [
+            {
+              id: 'mat-img-pantalla-excel-11',
+              name: 'Partes principales de una hoja de cálculo de Excel',
+              url: '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp',
+              type: 'image',
+              description:
+                'Mapa de navegación de la ventana de Excel: ubicación de la Cinta de opciones, Cuadro de nombres, Barra de fórmulas, Celda activa y pestañas de hojas del libro.',
+              sizeByte: 107702,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-cuadricula-excel-11',
+              name: 'Sistema de coordenadas: Columnas, Filas, Celda B3 y Rango D2:E4',
+              url: '/assets/images/excel_columnas_filas_celdas_1795446159490.jpg',
+              type: 'image',
+              description:
+                'Referencia espacial dentro de la cuadrícula de Excel para distinguir encabezados de columna, números de fila, celda activa individual y selección rectangular de rango.',
+              sizeByte: 333205,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-1-2',
@@ -266,6 +435,28 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Usa las flechas del teclado, o Tab (avanza hacia la derecha) y Enter (avanza hacia abajo).\n' +
             '• Arrastra con el ratón para seleccionar un rango continuo de celdas, por ejemplo A1:C5.\n' +
             '• Haz clic en la letra de una columna o en el número de una fila para seleccionarla completa de extremo a extremo.',
+          materials: [
+            {
+              id: 'mat-img-concepto-rangos-12',
+              name: 'Selección de rangos continuos con dos puntos (B2:D5)',
+              url: '/assets/images/excel_concepto_rangos_1795446902863.jpg',
+              type: 'image',
+              description:
+                'Define un rango continuo arrastrando desde la celda inicial superior izquierda (B2) hasta la esquina opuesta inferior derecha (D5).',
+              sizeByte: 440221,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-rangos-seleccion-12',
+              name: 'Visualización de celda única (B3) vs rango continuo (D2:E4)',
+              url: '/assets/images/excel_columnas_filas_celdas_1795446159490.jpg',
+              type: 'image',
+              description:
+                'Identifica la diferencia entre seleccionar una celda puntual (B3) y arrastrar desde la esquina superior izquierda (D2) hasta la inferior derecha (E4) para formar el rango D2:E4.',
+              sizeByte: 333205,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-1-3',
@@ -280,6 +471,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '3. Selecciona el rango A1:D4 arrastrando el ratón y fíjate cómo lo muestra el Cuadro de nombres.\n' +
             '4. Haz doble clic en el nombre de la pestaña, cámbialo por «Práctica» y presiona Enter.\n' +
             '5. Pulsa el signo + junto a la pestaña para añadir una segunda hoja de cálculo.',
+          materials: [
+            {
+              id: 'mat-img-navegacion-hojas-13',
+              name: 'Navegación rápida en libros: hojas, saltos con Ctrl, F5 y selección',
+              url: '/assets/images/excel_navegacion_hojas_1795447920960.jpg',
+              type: 'image',
+              description:
+                'Atajos visuales para desplazarte entre pestañas (Ctrl+AvPág), saltar al borde de datos (Ctrl+Flechas), ir directo a una celda con F5 o seleccionar tablas completas (Ctrl+E).',
+              sizeByte: 372279,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
       ],
     },
@@ -294,6 +497,8 @@ export const EXCEL_BASICO_COURSE: Course = {
         'Al centro',
       ],
       quizCorrectIndex: 0,
+      quizEnabled: true,
+      questions: EXCEL_MODULE_QUIZZES['mod-excel-2'],
       lessons: [
         {
           id: 'les-excel-2-1',
@@ -308,6 +513,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Presiona F2 (o haz doble clic) para editar lo que ya está escrito dentro de la celda.\n' +
             '• Presiona Supr (Delete) para borrar el contenido de las celdas seleccionadas.\n' +
             '• Arrastra el cuadrito de la esquina inferior derecha de una celda (controlador de relleno) para repetir o continuar series: escribe Lunes y arrastra, y Excel completa automáticamente Martes, Miércoles, Jueves...',
+          materials: [
+            {
+              id: 'mat-img-datos-relleno-21',
+              name: 'Alineación de tipos de datos, edición con F2 y controlador de relleno',
+              url: '/assets/images/excel_datos_relleno_1795447885234.jpg',
+              type: 'image',
+              description:
+                'Diferencia visual entre texto alineado a la izquierda y números a la derecha, teclas F2/Enter/Esc y uso del controlador de relleno para completar series como días de la semana.',
+              sizeByte: 350039,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-2-2',
@@ -325,6 +542,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Mostrar $, % o decimales: Grupo Número.\n' +
             '• Ajustar el ancho de columna: Doble clic en el borde derecho de la letra de la columna.\n\n' +
             'Formatos de número más usados: General, Número, Moneda, Porcentaje, Fecha corta y Fecha larga. Recuerda que el formato cambia cómo se ve el valor, no el valor guardado: 0.15 con formato Porcentaje se ve como 15 %.',
+          materials: [
+            {
+              id: 'mat-img-formato-inicio-22',
+              name: 'Grupos de formato en Inicio: Fuente, Número ($, %) y Bordes',
+              url: '/assets/images/excel_formato_inicio_1795447921508.jpg',
+              type: 'image',
+              description:
+                'Guía visual de formato en celdas: estilos de fuente y alineación, transformación visual de números (1500 → $1,500.00, 0.15 → 15%, 45 → 45.00) y diseño con rellenos y bordes.',
+              sizeByte: 439922,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-2-3',
@@ -339,6 +568,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '3. Pon los encabezados en negrita, con fondo de color y texto centrado.\n' +
             '4. Aplica formato Moneda a la columna Precio.\n' +
             '5. Ajusta el ancho de las columnas haciendo doble clic en el borde derecho de cada letra.',
+          materials: [
+            {
+              id: 'mat-img-tabla-productos-23',
+              name: 'Resultado modelo: Lista de productos con formato profesional y Moneda',
+              url: '/assets/images/excel_tabla_productos_1795447786171.jpg',
+              type: 'image',
+              description:
+                'Ejemplo estructurado con encabezados destacados, formato Moneda en precios, alineación ordenada y ajuste automático de ancho de columnas.',
+              sizeByte: 478124,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
       ],
     },
@@ -353,6 +594,8 @@ export const EXCEL_BASICO_COURSE: Course = {
         'Referencia Mixta ($B2)',
       ],
       quizCorrectIndex: 0,
+      quizEnabled: true,
+      questions: EXCEL_MODULE_QUIZZES['mod-excel-3'],
       lessons: [
         {
           id: 'les-excel-3-1',
@@ -370,6 +613,28 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Potencia (^): Ejemplo =B2^2\n\n' +
             'Jerarquía matemática: Excel respeta el orden algebraico: primero paréntesis, luego potencias (^), después multiplicación y división (*, /), y al final suma y resta (+, -). Usa paréntesis para controlar el orden: =(A1+A2)*3.\n\n' +
             'Por qué usar referencias y no números fijos: Si escribes =B2*C2 en lugar de =65*10, el resultado se actualiza solo cuando cambias el precio o la cantidad.',
+          materials: [
+            {
+              id: 'mat-img-jerarquia-formulas-31',
+              name: 'Orden de evaluación matemática en fórmulas de Excel',
+              url: '/assets/images/excel_jerarquia_formulas_1795446160425.jpg',
+              type: 'image',
+              description:
+                'Regla de precedencia paso a paso: primero paréntesis, luego potencias (^), después multiplicación/división y al final suma/resta. Evita resultados inesperados al agrupar con ().',
+              sizeByte: 426537,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-anatomia-formula-31',
+              name: 'Estructura de fórmula y argumentos en Excel',
+              url: '/assets/images/excel_anatomia_funcion_1795445064862.jpg',
+              type: 'image',
+              description:
+                'Recordatorio visual de la sintaxis obligatoria con = inicial y referencias a rangos en lugar de valores fijos escritos manualmente.',
+              sizeByte: 465650,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-3-2',
@@ -384,6 +649,28 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• Mixta ($B2 o B$2): Fija solo la columna ($B2) o solo la fila (B$2).\n\n' +
             'Presiona F4 mientras editas una referencia para alternar entre estos tipos.\n\n' +
             'Ejemplo típico: calcular el ITBIS del 18% guardando la tasa en la celda E1 y usando =D2*$E$1 para que la tasa no se mueva al copiar la fórmula hacia las demás filas.',
+          materials: [
+            {
+              id: 'mat-img-referencias-itbis-32',
+              name: 'Esquema práctico: Referencia absoluta ($E$1) para ITBIS 18% con F4',
+              url: '/assets/images/excel_referencias_f4_1795445064452.jpg',
+              type: 'image',
+              description:
+                'Muestra por qué al fijar fila y columna con $ ($E$1) mediante F4, la tasa del 18% se mantiene anclada en todas las filas de la factura.',
+              sizeByte: 429923,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
+              id: 'mat-img-itbis-factura-32',
+              name: 'Caso aplicado: Tabla de factura con Subtotal e ITBIS (18%) fijo',
+              url: '/assets/images/excel_itbis_factura_1795447883578.jpg',
+              type: 'image',
+              description:
+                'Ejemplo numérico completo de factura: cálculo de Subtotal por línea (=B3*C3) multiplicado por la tasa fija en $F$1 (=D3*$F$1) sin desplazarse al arrastrar.',
+              sizeByte: 446648,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-3-3',
@@ -397,6 +684,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '• #¿NOMBRE?: escribiste mal el nombre de una función o referencia inexistente.\n' +
             '• #¡VALOR!: intentaste operar matemáticamente con texto donde hacía falta un número.\n' +
             '• #####: la columna es muy angosta; ensánchala haciendo doble clic en el borde derecho.',
+          materials: [
+            {
+              id: 'mat-img-errores-comunes-33',
+              name: 'Tabla visual de diagnóstico: Errores comunes en Excel y su solución',
+              url: '/assets/images/excel_errores_comunes_1795445065276.jpg',
+              type: 'image',
+              description:
+                'Referencia rápida de errores de cálculo y visualización en hoja de cálculo con su causa inmediata y corrección recomendada.',
+              sizeByte: 667178,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-3-4',
@@ -411,6 +710,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '3. Arrastra el controlador de relleno hasta el último producto.\n' +
             '4. En E1 escribe 18% y, en la columna E, calcula el ITBIS de cada producto con =D2*$E$1.\n' +
             '5. Cambia un precio y comprueba que los totales se actualizan solos.',
+          materials: [
+            {
+              id: 'mat-img-itbis-factura-34',
+              name: 'Modelo de factura reactiva con Total e ITBIS del 18% ($F$1)',
+              url: '/assets/images/excel_itbis_factura_1795447883578.jpg',
+              type: 'image',
+              description:
+                'Referencia visual del cálculo en cadena: cantidad × precio para obtener el subtotal de cada producto y multiplicación por la tasa fija del 18% para el ITBIS.',
+              sizeByte: 446648,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-3-5',
@@ -473,6 +784,18 @@ export const EXCEL_BASICO_COURSE: Course = {
             '4. Con Hoja2 existente y =Hoja2!A1 → lee el valor de otra hoja\n' +
             '5. =SUMA(B2:B10 B4:B8) → SUMA con intersección de rango B4:B8\n' +
             '6. =A1&Hoja2!A1 → concatena valor de A1 y celda de Hoja2',
+          materials: [
+            {
+              id: 'mat-img-tipos-operadores-35',
+              name: 'Operadores aritméticos, comparación y concatenación (&) con jerarquía',
+              url: '/assets/images/excel_tipos_operadores_1795447919466.jpg',
+              type: 'image',
+              description:
+                'Tabla visual de prioridad de evaluación: 1) Paréntesis (), 2) Potencia ^, 3) Multiplicación/División (* /), 4) Suma/Resta (+ -), junto a concatenación (&) y comparadores.',
+              sizeByte: 459683,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
       ],
     },
@@ -483,6 +806,8 @@ export const EXCEL_BASICO_COURSE: Course = {
       quizQuestion: '¿Qué función suma celdas únicamente cuando cumplen múltiples condiciones simultáneas?',
       quizOptions: ['SUMAR.SI.CONJUNTO', 'CONTAR.BLANCO', 'SUBTOTALES'],
       quizCorrectIndex: 0,
+      quizEnabled: true,
+      questions: EXCEL_MODULE_QUIZZES['mod-excel-4'],
       lessons: [
         {
           id: 'les-excel-4-1',
@@ -534,6 +859,16 @@ export const EXCEL_BASICO_COURSE: Course = {
             '10. A1=2, A2=2, A3=5, A4=2 → =PRODUCTO(A1:A4)',
           materials: [
             {
+              id: 'mat-img-suma-resta-producto-41',
+              name: 'Operaciones aritméticas en rango: =SUMA, Resta (-) y =PRODUCTO',
+              url: '/assets/images/excel_suma_resta_producto_1795447920118.jpg',
+              type: 'image',
+              description:
+                'Comparación directa sobre la tabla B2:B4 (10, 5, 2): suma total con =SUMA(B2:B4) = 17, diferencia con =B2-B3 = 5 y multiplicación acumulada con =PRODUCTO(B2:B4) = 100.',
+              sizeByte: 348179,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-excel-basico-fichas-rapidas',
               name: 'Fichas rápidas SUMA/RESTA/PRODUCTO/ANÁLITICAS',
               url: '/excel-basico/fichas-rapidas.txt',
@@ -550,6 +885,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Redondeo preciso de decimales con =REDONDEAR, =REDONDEAR.MAS, =REDONDEAR.MENOS.",
           content:
             "=== REDONDEAR, REDONDEAR.MAS, REDONDEAR.MENOS ===\nUsa ; como separador en Excel B\u00e1sico.\n=REDONDEAR(n\u00famero; n\u00fam_decimales): cambia el valor real almacenado.\n=REDONDEAR.MAS(n\u00famero; n\u00fam_decimales): redondea hacia arriba (alej\u00e1ndose de cero).\n=REDONDEAR.MENOS(n\u00famero; n\u00fam_decimales): redondea hacia cero.\n\nPR\u00c1CTICAS \u2014 REDONDEAR (3):\n1. A1=10.567 \u2192 =REDONDEAR(A1; 0)  (11)\n2. A1=10.567 \u2192 =REDONDEAR(A1; 2)  (10.57)\n3. A1=-10.567 \u2192 =REDONDEAR(A1; 0)  (-11)\n\nPR\u00c1CTICAS \u2014 REDONDEAR.MAS (2):\n1. A1=10.1 \u2192 =REDONDEAR.MAS(A1; 0)  (11)\n2. A1=-10.1 \u2192 =REDONDEAR.MAS(A1; 0)  (-11)\n\nPR\u00c1CTICAS \u2014 REDONDEAR.MENOS (2):\n1. A1=10.9 \u2192 =REDONDEAR.MENOS(A1; 0)  (10)\n2. A1=-10.9 \u2192 =REDONDEAR.MENOS(A1; 0)  (-10)",
+          materials: [
+            {
+              id: 'mat-img-redondeo-funciones-42',
+              name: 'Comparativa visual de funciones de redondeo y precisión decimal',
+              url: '/assets/images/excel_redondeo_funciones_1795447920696.jpg',
+              type: 'image',
+              description:
+                'Efecto sobre un mismo número decimal (15.678): redondeo estándar (=REDONDEAR → 15.7), hacia arriba (=REDONDEAR.MAS → 16), corte sin redondear (=TRUNCAR → 15.6) y entero (=ENTERO → 15).',
+              sizeByte: 396883,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-3',
@@ -558,6 +905,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Funciones para extraer partes enteras, restos y potencias: =ENTERO, =TRUNCAR, =RESIDUO, =POTENCIA, =RAIZ, =ABS.",
           content:
             "=== ENTERO, TRUNCAR, RESIDUO ===\n=ENTERO(n\u00famero): entero inferior m\u00e1s cercano.\n=TRUNCAR(n\u00famero; [n\u00fam_decimales]): quita decimales sin redondear.\n=RESIDUO(n\u00famero; divisor): resto de la divisi\u00f3n.\n\nPR\u00c1CTICAS \u2014 ENTERO (3):\n1. A1=2.7 \u2192 =ENTERO(A1)  (2)\n2. A1=-2.7 \u2192 =ENTERO(A1)  (-3)\n3. A1=7.9 \u2192 =ENTERO(A1)  (7)\n\nPR\u00c1CTICAS \u2014 TRUNCAR (3):\n1. A1=-2.7 \u2192 =TRUNCAR(A1)  (-2)\n2. A1=9.99 \u2192 =TRUNCAR(A1)  (9)\n3. A1=7 \u2192 =TRUNCAR(A1)  (7)\n\nPR\u00c1CTICAS \u2014 RESIDUO (3):\n1. A1=7 \u2192 =RESIDUO(A1; 3)  (1)\n2. A1=100 \u2192 =RESIDUO(A1; 30)  (10)\n3. A1=15 \u2192 =RESIDUO(A1; 4)  (3)\n\n=== POTENCIA, RAIZ, ABS ===\n=POTENCIA(base; exponente) equivale al operador ^.\n=RAIZ(n\u00famero): ra\u00edz cuadrada.\n=ABS(n\u00famero): magnitud absoluta sin signo negativo.\n\nPR\u00c1CTICAS \u2014 POTENCIA (2):\n1. A1=2, A2=3 \u2192 =POTENCIA(A1; A2)  (8)\n2. A1=9 \u2192 =POTENCIA(A1; 2)  (81)\n\nPR\u00c1CTICAS \u2014 RAIZ (2):\n1. A1=16 \u2192 =RAIZ(A1)  (4)\n2. A1=25 \u2192 =RAIZ(A1)  (5)\n\nPR\u00c1CTICAS \u2014 ABS (2):\n1. A1=-5 \u2192 =ABS(A1)  (5)\n2. A1=-7.2 \u2192 =ABS(A1)  (7.2)",
+          materials: [
+            {
+              id: 'mat-img-matematicas-exactas-43',
+              name: 'Funciones matemáticas exactas: POTENCIA, RAIZ, RESIDUO y ABS',
+              url: '/assets/images/excel_matematicas_exactas_1795447950908.jpg',
+              type: 'image',
+              description:
+                'Cuatro fichas técnicas visuales: elevación con =POTENCIA(5; 2) = 25, raíz cuadrada con =RAIZ(25) = 5, resto entero de división con =RESIDUO(10; 3) = 1 y magnitud positiva con =ABS(-45) = 45.',
+              sizeByte: 354588,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-4',
@@ -566,6 +925,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Medidas de tendencia central: =PROMEDIO, =MEDIANA, =MODA.UNO.",
           content:
             "=== PROMEDIO, MEDIANA, MODA ===\nPROMEDIO: suma / cantidad.\nMEDIANA: valor central del conjunto.\nMODA.UNO: valor m\u00e1s frecuente.\n\nPR\u00c1CTICAS \u2014 PROMEDIO (3):\n1. A1:A4 = 2,4,6,8 \u2192 =PROMEDIO(A1:A4)  (5)\n2. A1:A3 = 1,2,3 \u2192 =PROMEDIO(A1:A3)  (2)\n3. A1:A5 = 10,20,30,40,50 \u2192 =PROMEDIO(A1:A5)  (30)\n\nPR\u00c1CTICAS \u2014 MEDIANA (3):\n1. A1:A4 = 2,4,6,8 \u2192 =MEDIANA(A1:A4)  (5)\n2. A1:A5 = 1,2,3,4,5 \u2192 =MEDIANA(A1:A5)  (3)\n3. A1:A6 = 2,2,5,5,8,8 \u2192 =MEDIANA(A1:A6)  (5)\n\nPR\u00c1CTICAS \u2014 MODA.UNO (3):\n1. A1:A4 = 2,2,3,3 \u2192 =MODA.UNO(A1:A4)  (2)\n2. A1:A5 = 7,7,7,1,2 \u2192 =MODA.UNO(A1:A5)  (7)\n3. A1:A3 = 4,4,4 \u2192 =MODA.UNO(A1:A3)  (4)",
+          materials: [
+            {
+              id: 'mat-img-tendencia-central-44',
+              name: 'Medidas de tendencia central: PROMEDIO, MEDIANA y MODA.UNO',
+              url: '/assets/images/excel_tendencia_central_1795447950900.jpg',
+              type: 'image',
+              description:
+                'Sobre la serie ordenada A1:E1 (10, 10, 20, 40, 70): la media aritmética es 30, el valor central o mediana es 20 y el valor más repetido o moda es 10.',
+              sizeByte: 366240,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-5',
@@ -574,6 +945,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Extremos globales y filtrados por criterios: =MAX/=MIN, =MAX.SI.CONJUNTO/=MAXIFS, =MIN.SI.CONJUNTO/=MINIFS.",
           content:
             "=== MAX, MIN ===\n=MAX(rango): valor mayor num\u00e9rico.\n=MIN(rango): valor menor num\u00e9rico.\n\n=== MAX.SI.CONJUNTO / MIN.SI.CONJUNTO (espa\u00f1ol) y MAXIFS / MINIFS (ingl\u00e9s) ===\nFormato: =MAXIFS(rango_max; rango_criterio; criterio). En Excel B\u00e1sico usamos ;.\n\nPR\u00c1CTICAS \u2014 MAX (2):\n1. A1:A5 = 5,2,9,3,7 \u2192 =MAX(A1:A5)  (9)\n2. A1:A3 = 10,20,30 \u2192 =MAX(A1:A3)  (30)\n\nPR\u00c1CTICAS \u2014 MIN (2):\n1. A1:A5 = 5,2,9,3,7 \u2192 =MIN(A1:A5)  (2)\n2. A1:A3 = 10,20,30 \u2192 =MIN(A1:A3)  (10)\n\nPR\u00c1CTICAS \u2014 MAXIFS (3):\n1. B1:B5 = 100,50,200,20,80; A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d \u2192 =MAXIFS(B1:B5; A1:A5; \u201cVenta\u201d)  (200)\n2. C1:C4 = 5,5,8,8; D1:D4 = \u201cA\u201d,\u201cA\u201d,\u201cB\u201d,\u201cB\u201d \u2192 =MAXIFS(C1:C4; D1:D4; \u201cA\u201d)  (5)\n3. A1:A5 = 1,1,2,2,3 \u2192 =MAXIFS(A1:A5; A1:A5; \u201c>1\u201d)  (3)\n\nPR\u00c1CTICAS \u2014 MINIFS (3):\n1. B1:B5 = 100,50,200,20,80; A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d \u2192 =MINIFS(B1:B5; A1:A5; \u201cVenta\u201d)  (20)\n2. A1:A4 = 4,2,6,8; B1:B4 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cB\u201d \u2192 =MINIFS(A1:A4; B1:B4; \u201cA\u201d)  (2)\n3. A1:A3 = 5,5,8 \u2192 =MINIFS(A1:A3; A1:A3; \u201c>0\u201d)  (5)",
+          materials: [
+            {
+              id: 'mat-img-max-min-ifs-45',
+              name: 'Extremos globales y condicionales: MAX, MIN, K.ESIMO y MAX.SI.CONJUNTO',
+              url: '/assets/images/excel_max_min_ifs_1795447951483.jpg',
+              type: 'image',
+              description:
+                'Contraste sobre ventas por sucursal: máximo global (450), mínimo global (100), segundo mayor (=K.ESIMO.MAYOR = 300) y máximo filtrado por sucursal Norte (=MAX.SI.CONJUNTO = 300).',
+              sizeByte: 428681,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-6',
@@ -582,6 +965,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Conteo de celdas num\u00e9ricas, no vac\u00edas y espacios en blanco.",
           content:
             "=== CONTAR, CONTARA, CONTAR.BLANCO ===\nCONTAR: solo n\u00fameros o fechas.\nCONTARA: cualquier celda no vac\u00eda (texto, n\u00fameros, f\u00f3rmulas).\nCONTAR.BLANCO: celdas vac\u00edas.\n\nPR\u00c1CTICAS \u2014 CONTAR (3):\n1. A1:A5 = 2,3,,4, \u2192 =CONTAR(A1:A5)  (3)\n2. A1:A5 = \u201ca\u201d,\u201cb\u201d,5,6,\u201c\u201d \u2192 =CONTAR(A1:A5)  (2)\n3. A1:A4 = 1,2,3,4 \u2192 =CONTAR(A1:A4)  (4)\n\nPR\u00c1CTICAS \u2014 CONTARA (3):\n1. A1:A4 = 2,3,,4 \u2192 =CONTARA(A1:A4)  (3)\n2. A1:A3 = \u201ca\u201d,\u201c\u201d,\u201cb\u201d \u2192 =CONTARA(A1:A3)  (3)\n3. A1:A3 = 1,2,3 \u2192 =CONTARA(A1:A3)  (3)\n\nPR\u00c1CTICAS \u2014 CONTAR.BLANCO (3):\n1. A1:A4 = 2,3,,4 \u2192 =CONTAR.BLANCO(A1:A4)  (1)\n2. A1:A3 = \u201ca\u201d,\u201c\u201d,\u201cb\u201d \u2192 =CONTAR.BLANCO(A1:A3)  (1)\n3. A1:A4 = 1,2,3,4 \u2192 =CONTAR.BLANCO(A1:A4)  (0)",
+          materials: [
+            {
+              id: 'mat-img-conteo-basico-46',
+              name: 'Diferencia visual entre CONTAR, CONTARA y CONTAR.BLANCO',
+              url: '/assets/images/excel_conteo_basico_1795447884246.jpg',
+              type: 'image',
+              description:
+                'Sobre la columna A1:A5 con dos números, dos textos y una celda vacía: =CONTAR devuelve 2 (solo números), =CONTARA devuelve 4 (todas las ocupadas) y =CONTAR.BLANCO devuelve 1.',
+              sizeByte: 441130,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-7',
@@ -590,10 +985,32 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Conteo condicional simple y multicriterio con ;, comodines * y ?.",
           content:
             "=== CONTAR.SI, CONTAR.SI.CONJUNTO ===\nCONTAR.SI(rango; criterio).\nCONTAR.SI.CONJUNTO permite pares de rango/criterio.\n\nPR\u00c1CTICAS \u2014 CONTAR.SI (5):\n1. A1:A5 = 10,20,30,5,40 \u2192 =CONTAR.SI(A1:A5; \u201c>=20\u201d)  (3)\n2. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d \u2192 =CONTAR.SI(A1:A5; \u201cA\u201d)  (3)\n3. A1:A5 = 10,20,30,5,40 \u2192 =CONTAR.SI(A1:A5; \u201c<10\u201d)  (1)\n4. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d \u2192 =CONTAR.SI(A1:A5; \u201cR*\u201d)  (5)\n5. A1:A5 = 2,2,2,2,2 \u2192 =CONTAR.SI(A1:A5; 2)  (5)\n\nPR\u00c1CTICAS \u2014 CONTAR.SI.CONJUNTO (5):\n1. A1:A6 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cOtra\u201d,\u201cVenta\u201d; B1:B6 = 10,20,30,40,50,60 \u2192 =CONTAR.SI.CONJUNTO(A1:A6; B1:B6; \u201c>40\u201d)  (3)\n2. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d; B1:B5 = 1,2,3,4,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; \u201cA\u201d)  (3)\n3. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cOtro\u201d,\u201cOtro\u201d,\u201cOtro\u201d; B1:B5 = 5,5,5,5,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; \u201cOtro\u201d)  (3)\n4. A1:A5 = 2,2,2,2,2; B1:B5 = 1,2,3,4,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; 1)  (2)\n5. A1:A6 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d; B1:B6 = 10,10,10,10,10,10 \u2192 =CONTAR.SI.CONJUNTO(A1:A6; B1:B6; 10)  (6)",
+          materials: [
+            {
+              id: 'mat-img-contar-si-47',
+              name: 'Conteo condicional simple y multicriterio: CONTAR.SI y CONTAR.SI.CONJUNTO',
+              url: '/assets/images/excel_contar_si_1795447885491.jpg',
+              type: 'image',
+              description:
+                'Muestra cómo =CONTAR.SI cuenta las filas que cumplen 1 criterio (Área="Norte" → 3) y =CONTAR.SI.CONJUNTO exige simultáneamente varios criterios (Norte + Activo → 2).',
+              sizeByte: 427872,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-8',
           materials: [
+            {
+              id: 'mat-img-sumar-si-48',
+              name: 'Suma condicional: =SUMAR.SI y =SUMAR.SI.CONJUNTO',
+              url: '/assets/images/excel_sumar_si_1795447949802.jpg',
+              type: 'image',
+              description:
+                'Filtrado de sumas sobre tabla Área/Venta: =SUMAR.SI(A2:A5; "Norte"; B2:B5) suma únicamente las filas de Norte (100 + 200 = 300), extensible a múltiples condiciones con .CONJUNTO.',
+              sizeByte: 427266,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
             {
               id: 'mat-excel-basico-fichas-rapidas',
               name: 'Fichas rápidas SUMA/RESTA/PRODUCTO/ANÁLITICAS',
@@ -602,7 +1019,8 @@ export const EXCEL_BASICO_COURSE: Course = {
               sizeByte: 1033,
               uploadedAt: '2026-11-22T00:00:00.000Z',
             },
-          ],          title: "4.8 SUMAR.SI, SUMAR.SI.CONJUNTO",
+          ],
+          title: "4.8 SUMAR.SI, SUMAR.SI.CONJUNTO",
           durationMinutes: 20,
           summary: "Suma segmentada con criterios; usa ; en Excel B\u00e1sico.",
           content:
@@ -612,6 +1030,16 @@ export const EXCEL_BASICO_COURSE: Course = {
           id: 'les-excel-4-9',
           materials: [
             {
+              id: 'mat-img-promedio-si-49',
+              name: 'Promedio condicional con =PROMEDIO.SI y =PROMEDIO.SI.CONJUNTO',
+              url: '/assets/images/excel_promedio_si_1795447883774.jpg',
+              type: 'image',
+              description:
+                'Calcula el promedio únicamente de las filas coincidentes: =PROMEDIO.SI(A2:A5; "Ventas"; B2:B5) promedia 100 y 80 entre 2 elementos devolviendo 90.',
+              sizeByte: 378859,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+            {
               id: 'mat-excel-basico-fichas-rapidas',
               name: 'Fichas rápidas SUMA/RESTA/PRODUCTO/ANÁLITICAS',
               url: '/excel-basico/fichas-rapidas.txt',
@@ -619,7 +1047,8 @@ export const EXCEL_BASICO_COURSE: Course = {
               sizeByte: 1033,
               uploadedAt: '2026-11-22T00:00:00.000Z',
             },
-          ],          title: "4.9 PROMEDIO.SI, PROMEDIO.SI.CONJUNTO",
+          ],
+          title: "4.9 PROMEDIO.SI, PROMEDIO.SI.CONJUNTO",
           durationMinutes: 15,
           summary: "Promedios segmentados con =PROMEDIO.SI y =PROMEDIO.SI.CONJUNTO.",
           content:
@@ -632,6 +1061,18 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Agregaciones din\u00e1micas respetando filtros AutoFiltro (SUBTOTAL / SUBTOTALES).",
           content:
             "=== SUBTOTALES (SUBTOTAL) ===\nSUBTOTALES(n\u00fam_funci\u00f3n; ref1).\n\nPR\u00c1CTICAS \u2014 SUBTOTALES (3):\n1. A1:A5 = 10,20,30,40,50; AutoFiltro filtra 30 \u2192 =SUBTOTALES(9; A1:A5) \n2. A1:A5 = 2,4,6,8,10; AutoFiltro filtra 10 \u2192 =SUBTOTALES(2; A1:A5)\n3. A1:A5 = 100,200,300,400,500; AutoFiltro filtra 300,400 \u2192 =SUBTOTALES(9; A1:A5)",
+          materials: [
+            {
+              id: 'mat-img-subtotales-filtro-410',
+              name: 'Comparación SUMA vs =SUBTOTALES(9; ...) con AutoFiltro activo',
+              url: '/assets/images/excel_subtotales_filtro_1795447884019.jpg',
+              type: 'image',
+              description:
+                'Demuestra por qué =SUMA sigue sumando filas ocultas al filtrar (200), mientras que =SUBTOTALES(9; rango) suma exclusivamente las filas visibles (150).',
+              sizeByte: 368400,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-11',
@@ -640,10 +1081,32 @@ export const EXCEL_BASICO_COURSE: Course = {
           summary: "Generaci\u00f3n de n\u00fameros aleatorios y enteros en intervalo.",
           content:
             "=== ALEATORIO, ALEATORIO.ENTRE ===\nALEATORIO(): decimales entre 0 y 1.\nALEATORIO.ENTRE(inferior; superior): enteros en intervalo cerrado.\n\nPR\u00c1CTICAS (3):\n1. A1=ALEATORIO() \u2192 decimales entre 0 y 1.\n2. A1=ALEATORIO.ENTRE(1; 6) \u2192 1, 2, 3, 4, 5 o 6 (dado).\n3. B1:B10 con 10 celdas \u2192 =ALEATORIO.ENTRE(1; 3) refleja din\u00e1micamente.",
+          materials: [
+            {
+              id: 'mat-img-aleatorio-funciones-411',
+              name: 'Generación aleatoria con =ALEATORIO() y =ALEATORIO.ENTRE()',
+              url: '/assets/images/excel_aleatorio_funciones_1795447952500.jpg',
+              type: 'image',
+              description:
+                'Diferencia entre decimales uniformes entre 0 y 1 (=ALEATORIO()) y números enteros acotados en un rango (=ALEATORIO.ENTRE(10; 50)), recalculados automáticamente con F9.',
+              sizeByte: 352640,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
+          ],
         },
         {
           id: 'les-excel-4-12',
           materials: [
+            {
+              id: 'mat-img-funcion-si-412',
+              name: 'Diagrama de flujo: Toma de decisiones con =SI(prueba_lógica; verdadero; falso)',
+              url: '/assets/images/excel_funcion_si_flujo_1795445065167.jpg',
+              type: 'image',
+              description:
+                'Árbol lógico de bifurcación: evalúa la condición booleana del primer argumento y devuelve la rama Verdadero (segundo argumento) o Falso (tercer argumento).',
+              sizeByte: 401570,
+              uploadedAt: '2026-11-23T00:00:00.000Z',
+            },
             {
               id: 'mat-excel-basico-fichas-rapidas',
               name: 'Fichas rápidas SUMA/RESTA/PRODUCTO/ANÁLITICAS',

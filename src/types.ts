@@ -23,6 +23,7 @@ export interface CourseMaterial {
   name: string;        // nombre de archivo original
   url: string;         // URL de descarga (Firebase Storage o enlace externo)
   type: CourseMaterialType;
+  description?: string; // descripción técnica o pie explicativo para galería
   sizeByte: number;    // tamaño en bytes, 0 si es enlace externo
   uploadedAt: string;  // ISO 8601
 }

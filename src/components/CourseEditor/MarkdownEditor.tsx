@@ -1,9 +1,96 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bold, Code, Eye, Italic, Link2, List, Sigma } from 'lucide-react';
+import {
+  Bold,
+  Code,
+  Eye,
+  Image as ImageIcon,
+  Italic,
+  Link2,
+  List,
+  Loader2,
+  Plus,
+  Sigma,
+  UploadCloud,
+  X,
+} from 'lucide-react';
+import { uploadCourseMaterial } from '../../services/storageService';
 import { renderMarkdown } from '../../utils/markdown';
 import { Field } from './Field';
 
 export type MarkdownTab = 'edit' | 'preview';
+
+const CATEDRA_DIAGRAM_PRESETS = [
+  {
+    label: 'Hoja de Excel (Partes)',
+    alt: 'Infografía: Partes principales de una hoja de cálculo de Excel',
+    url: '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp',
+  },
+  {
+    label: 'Concepto: Columnas',
+    alt: 'Esquema técnico: Columnas en Excel (Eje Vertical A–XFD)',
+    url: '/assets/images/excel_concepto_columnas_1795446880239.jpg',
+  },
+  {
+    label: 'Concepto: Filas',
+    alt: 'Esquema técnico: Filas en Excel (Eje Horizontal 1–1.048.576)',
+    url: '/assets/images/excel_concepto_filas_1795446901853.jpg',
+  },
+  {
+    label: 'Concepto: Celda Activa',
+    alt: 'Esquema técnico: Celda Activa, Cuadro de Nombres y Coordenadas (C4)',
+    url: '/assets/images/excel_concepto_celda_activa_1795446902202.jpg',
+  },
+  {
+    label: 'Concepto: Rangos',
+    alt: 'Esquema técnico: Rangos continuos en Excel (B2:D5)',
+    url: '/assets/images/excel_concepto_rangos_1795446902863.jpg',
+  },
+  {
+    label: 'Columnas, Filas y Celdas',
+    alt: 'Esquema: Cuadrícula bidimensional de Columnas, Filas, Celda B3 y Rango D2:E4',
+    url: '/assets/images/excel_columnas_filas_celdas_1795446159490.jpg',
+  },
+  {
+    label: 'Estructura Completa (Grid)',
+    alt: 'Infografía unificada: Estructura completa de Columnas, Filas y Celda B3 en Excel',
+    url: '/assets/images/excel_estructura_grid_completa_1795447779102.jpg',
+  },
+  {
+    label: 'Jerarquía de Operadores',
+    alt: 'Diagrama: Jerarquía de operadores en fórmulas de Excel',
+    url: '/assets/images/excel_jerarquia_formulas_1795446160425.jpg',
+  },
+  {
+    label: 'Tipos de Operadores',
+    alt: 'Esquema: Operadores aritméticos, comparación y concatenación (&) en Excel',
+    url: '/assets/images/excel_tipos_operadores_1795447919466.jpg',
+  },
+  {
+    label: 'Anatomía de Función',
+    alt: 'Infografía: Anatomía de una función en Excel (=SUMA)',
+    url: '/assets/images/excel_anatomia_funcion_1795445064862.jpg',
+  },
+  {
+    label: 'Referencias F4 ($A$1)',
+    alt: 'Diagrama: Referencias Relativas, Absolutas ($A$1) y Mixtas (F4)',
+    url: '/assets/images/excel_referencias_f4_1795445064452.jpg',
+  },
+  {
+    label: 'Factura ITBIS (18%)',
+    alt: 'Diagrama aplicado: Factura con Subtotal e ITBIS del 18% ($F$1)',
+    url: '/assets/images/excel_itbis_factura_1795447883578.jpg',
+  },
+  {
+    label: 'Errores Comunes',
+    alt: 'Guía visual: Errores comunes en Excel y su corrección',
+    url: '/assets/images/excel_errores_comunes_1795445065276.jpg',
+  },
+  {
+    label: 'Flujo =SI()',
+    alt: 'Diagrama de flujo: Función lógica =SI()',
+    url: '/assets/images/excel_funcion_si_flujo_1795445065167.jpg',
+  },
+];
 
 interface MarkdownEditorProps {
   id: string;
@@ -20,6 +107,9 @@ interface MarkdownEditorProps {
   codeLabel: string;
   formulaLabel: string;
   linkLabel: string;
+  courseId?: string;
+  lessonId?: string;
+  canEdit?: boolean;
   help?: string;
   error?: string;
 }
@@ -39,12 +129,21 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   codeLabel,
   formulaLabel,
   linkLabel,
+  courseId = 'general',
+  lessonId = 'lesson',
+  canEdit = true,
   help,
   error,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<MarkdownTab>('edit');
   const [split, setSplit] = useState(false);
+  const [showImagePanel, setShowImagePanel] = useState(false);
+  const [imgUrl, setImgUrl] = useState('');
+  const [imgAlt, setImgAlt] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePanelError, setImagePanelError] = useState<string | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1536px)');
@@ -83,13 +182,54 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   const insertBlock = (block: string) => {
     const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
+    const start = el ? el.selectionStart : value.length;
+    const end = el ? el.selectionEnd : value.length;
     const selected = value.slice(start, end) || 'Texto';
     const next = `${value.slice(0, start)}${block.replace('{text}', selected)}${value.slice(end)}`;
     onChange(next);
-    requestAnimationFrame(() => el.focus());
+    if (el) {
+      requestAnimationFrame(() => el.focus());
+    }
+  };
+
+  const insertImageMarkdown = (src: string, altText: string) => {
+    const cleanAlt = (altText || 'Diagrama técnico de la lección').replace(/[\[\]]/g, '').trim();
+    insertBlock(`\n![${cleanAlt}](${src.trim()})\n`);
+    setImgUrl('');
+    setImgAlt('');
+    setImagePanelError(null);
+    setShowImagePanel(false);
+  };
+
+  const handleUploadInlineImage = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setImagePanelError('Selecciona un archivo de imagen válido (PNG, JPG, WebP o GIF).');
+      return;
+    }
+    setImagePanelError(null);
+    setUploadingImage(true);
+    try {
+      const material = await uploadCourseMaterial(courseId, lessonId, file);
+      const caption = imgAlt.trim() || file.name.replace(/\.[^.]+$/, '');
+      insertImageMarkdown(material.url, caption);
+    } catch (err) {
+      setImagePanelError(err instanceof Error ? err.message : 'No se pudo cargar la imagen.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleInsertUrlImage = () => {
+    const trimmed = imgUrl.trim();
+    if (!trimmed) return;
+    const isValid =
+      /^https?:\/\//i.test(trimmed) || trimmed.startsWith('/') || /^data:image\//i.test(trimmed);
+    if (!isValid) {
+      setImagePanelError('Ingresa una URL válida (https://... o /assets/...).');
+      return;
+    }
+    insertImageMarkdown(trimmed, imgAlt.trim() || 'Ilustración técnica');
   };
 
   const toolbarButton =
@@ -124,6 +264,20 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             >
               <Link2 className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              aria-expanded={showImagePanel}
+              className={`${toolbarButton} ${
+                showImagePanel
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-cyan-300'
+                  : ''
+              }`}
+              title="Cargar o vincular imagen en el contenido"
+              aria-label="Cargar o vincular imagen en el contenido"
+              onClick={() => setShowImagePanel((prev) => !prev)}
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
@@ -146,6 +300,100 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             </button>
           </div>
         </div>
+
+        {showImagePanel && (
+          <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <ImageIcon className="h-3.5 w-3.5 text-blue-600 dark:text-cyan-400" />
+                <span>Insertar imagen técnica en el cuerpo de la teoría</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImagePanel(false)}
+                aria-label="Cerrar panel de imagen"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {imagePanelError && (
+              <p className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">
+                {imagePanelError}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+              <input
+                type="text"
+                value={imgUrl}
+                onChange={(e) => setImgUrl(e.target.value)}
+                placeholder="URL de imagen (https://... o /assets/...)"
+                className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100"
+              />
+              <input
+                type="text"
+                value={imgAlt}
+                onChange={(e) => setImgAlt(e.target.value)}
+                placeholder="Descripción o concepto (ej. Columnas, Filas y Celdas)"
+                className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                disabled={!imgUrl.trim()}
+                onClick={handleInsertUrlImage}
+                className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Vincular</span>
+              </button>
+              {canEdit && (
+                <>
+                  <input
+                    ref={imageFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      void handleUploadInlineImage(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingImage}
+                    onClick={() => imageFileInputRef.current?.click()}
+                    className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-blue-500 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors whitespace-nowrap"
+                  >
+                    {uploadingImage ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                    ) : (
+                      <UploadCloud className="h-3.5 w-3.5 text-blue-600 dark:text-cyan-400" />
+                    )}
+                    <span>{uploadingImage ? 'Subiendo...' : 'Subir archivo'}</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">
+                Biblioteca rápida:
+              </span>
+              {CATEDRA_DIAGRAM_PRESETS.map((preset) => (
+                <button
+                  key={preset.url}
+                  type="button"
+                  onClick={() => insertImageMarkdown(preset.url, preset.alt)}
+                  className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 dark:hover:text-cyan-300 transition-colors"
+                >
+                  + {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className={`grid gap-0 ${split ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {split || tab === 'edit' ? (

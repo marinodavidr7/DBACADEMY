@@ -6,9 +6,12 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Download,
+  FileSpreadsheet,
   Filter,
   HelpCircle,
   Lightbulb,
+  Monitor,
   Play,
   Plus,
   RefreshCw,
@@ -43,6 +46,8 @@ import {
   type CellPrimitive,
   type SheetCells,
 } from '../utils/excelEngine';
+import { getDownloadablePracticesForLesson } from '../data/excelDownloadablePractices';
+import { buildLessonWorkbookBlob, downloadWorkbook } from '../utils/xlsxGenerator';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 
 export { evaluateExcelFormula };
@@ -60,6 +65,7 @@ interface InteractiveExcelLabProps {
 }
 
 const SOLVED_STORAGE_PREFIX = 'dbacademy_excel_solved_v1_';
+const XLSX_SOLVED_STORAGE_PREFIX = 'dbacademy_excel_xlsx_done_v1_';
 
 function loadSolvedSet(lessonId: string): string[] {
   try {
@@ -75,6 +81,25 @@ function loadSolvedSet(lessonId: string): string[] {
 function saveSolvedSet(lessonId: string, ids: string[]) {
   try {
     localStorage.setItem(`${SOLVED_STORAGE_PREFIX}${lessonId}`, JSON.stringify(ids));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function loadXlsxDoneSet(lessonId: string): string[] {
+  try {
+    const raw = localStorage.getItem(`${XLSX_SOLVED_STORAGE_PREFIX}${lessonId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveXlsxDoneSet(lessonId: string, ids: string[]) {
+  try {
+    localStorage.setItem(`${XLSX_SOLVED_STORAGE_PREFIX}${lessonId}`, JSON.stringify(ids));
   } catch {
     // Ignore storage quota errors
   }
@@ -170,8 +195,17 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     return [...curriculum.exercises, ...mappedCustom];
   }, [curriculum.exercises, customExercises, lessonId]);
 
+  const downloadablePractices = useMemo(
+    () => getDownloadablePracticesForLesson(lessonId),
+    [lessonId]
+  );
+
   const [exerciseIdx, setExerciseIdx] = useState(0);
   const [solvedIds, setSolvedIds] = useState<string[]>(() => loadSolvedSet(lessonId));
+  const [xlsxDoneIds, setXlsxDoneIds] = useState<string[]>(() => loadXlsxDoneSet(lessonId));
+  const [practiceChannel, setPracticeChannel] = useState<'platform' | 'excel'>('platform');
+  const [expandedXlsxHintIds, setExpandedXlsxHintIds] = useState<Record<string, boolean>>({});
+  const [downloadedNotice, setDownloadedNotice] = useState<string | null>(null);
   const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -242,6 +276,10 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   useEffect(() => {
     setExerciseIdx(0);
     setSolvedIds(loadSolvedSet(lessonId));
+    setXlsxDoneIds(loadXlsxDoneSet(lessonId));
+    setPracticeChannel('platform');
+    setExpandedXlsxHintIds({});
+    setDownloadedNotice(null);
     setLoadedExampleId(requestedExampleId ?? null);
     setShowHint(false);
   }, [lessonId, requestedExampleId]);
@@ -671,6 +709,19 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     setRecalcTick((t) => t + 1);
   }, [activeSheetTab, selectedCell, formulaDraft, sheet, activeRows, activeCols]);
 
+  const solvedCount = useMemo(
+    () => allExercises.filter((ex) => solvedIds.includes(ex.id)).length,
+    [allExercises, solvedIds]
+  );
+
+  const xlsxDoneCount = useMemo(
+    () => downloadablePractices.filter((p) => xlsxDoneIds.includes(p.id)).length,
+    [downloadablePractices, xlsxDoneIds]
+  );
+
+  const totalPracticeCount = allExercises.length + downloadablePractices.length;
+  const totalPracticeDone = solvedCount + xlsxDoneCount;
+
   const markExerciseSolved = useCallback(
     (exId: string) => {
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -684,14 +735,56 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
         if (prev.includes(exId)) return prev;
         const next = [...prev, exId];
         saveSolvedSet(lessonId, next);
-        if (next.length >= allExercises.length) {
+        const nextPlatformDone = allExercises.filter((ex) => next.includes(ex.id)).length;
+        if (nextPlatformDone + xlsxDoneCount >= totalPracticeCount) {
           onSolved?.();
         }
         return next;
       });
     },
-    [lessonId, allExercises.length, onSolved]
+    [lessonId, allExercises, xlsxDoneCount, totalPracticeCount, onSolved]
   );
+
+  const toggleXlsxPracticeDone = useCallback(
+    (practiceId: string) => {
+      setXlsxDoneIds((prev) => {
+        const exists = prev.includes(practiceId);
+        const next = exists ? prev.filter((id) => id !== practiceId) : [...prev, practiceId];
+        saveXlsxDoneSet(lessonId, next);
+        if (!exists) {
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            try {
+              navigator.vibrate(18);
+            } catch {
+              // Ignore vibrate errors on restricted browsers
+            }
+          }
+          const nextXlsxDone = downloadablePractices.filter((p) => next.includes(p.id)).length;
+          if (solvedCount + nextXlsxDone >= totalPracticeCount) {
+            onSolved?.();
+          }
+        }
+        return next;
+      });
+    },
+    [lessonId, downloadablePractices, solvedCount, totalPracticeCount, onSolved]
+  );
+
+  const handleDownloadWorkbook = useCallback(() => {
+    const blob = buildLessonWorkbookBlob(lessonTitle, downloadablePractices);
+    const slug = lessonTitle
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+    const filename = `practicas-${lessonId}-${slug || 'excel'}.xlsx`;
+    downloadWorkbook(filename, blob);
+    setDownloadedNotice(
+      `Archivo "${filename}" descargado con ${downloadablePractices.length} pestañas de práctica (11–15) e instrucciones.`
+    );
+  }, [lessonId, lessonTitle, downloadablePractices]);
 
   const handleVerifyChallenge = () => {
     if (activeExample) {
@@ -739,13 +832,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
 
   const handleLoadExample = (example: ExcelPracticalExample) => {
     setLoadedExampleId(example.id);
+    setPracticeChannel('platform');
     gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
-
-  const solvedCount = useMemo(
-    () => allExercises.filter((ex) => solvedIds.includes(ex.id)).length,
-    [allExercises, solvedIds]
-  );
 
   // Mode 2: Tab "Sintaxis & Troubleshooting"
   if (mode === 'syntax') {
@@ -990,10 +1079,11 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
           <div className="pt-4 pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
               <p className="text-sm font-bold text-slate-900 dark:text-slate-50">
-                ¿Listo para practicar en la hoja de cálculo?
+                ¿Listo para las {totalPracticeCount} prácticas del capítulo?
               </p>
               <p className="text-xs text-slate-600 dark:text-slate-300">
-                Tienes {allExercises.length} ejercicios interactivos listos ({solvedCount} resueltos).
+                Tienes {allExercises.length} interactivas en plataforma ({solvedCount} resueltas) y{' '}
+                {downloadablePractices.length} descargables en archivo .xlsx ({xlsxDoneCount} completadas).
               </p>
             </div>
             <button
@@ -1001,7 +1091,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               onClick={onGoToPractice}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[44px] shrink-0"
             >
-              <span>Ir a los ejercicios en Excel</span>
+              <span>Ir a las {totalPracticeCount} prácticas</span>
               <ChevronRight className="w-4 h-4 shrink-0" />
             </button>
           </div>
@@ -1009,7 +1099,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
       </div>
       )}
 
-      {/* 4. MÍNIMO 10 EJERCICIOS INTERACTIVOS EN EXCEL */}
+      {/* 4. 15 PRÁCTICAS POR CAPÍTULO (10 EN PLATAFORMA + 5 DESCARGABLES EN EXCEL .XLSX) */}
       {showPractice && (
       <>
       <section
@@ -1025,7 +1115,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               </span>
               <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 min-w-0">
                 <ClipboardList className="w-4 h-4 text-[#107C41] shrink-0" />
-                <span className="min-w-0">4. Ejercicios prácticos en Excel ({allExercises.length} retos)</span>
+                <span className="min-w-0">
+                  4. Prácticas del capítulo ({totalPracticeCount} en total)
+                </span>
               </h4>
             </div>
 
@@ -1040,20 +1132,59 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                   <span>Crear ejercicio</span>
                 </button>
               )}
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
-                Resueltos: {solvedCount}/{allExercises.length}
-              </span>
+              <div className="text-right">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums block">
+                  Resueltas: {totalPracticeDone}/{totalPracticeCount}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                  {solvedCount}/{allExercises.length} plataforma · {xlsxDoneCount}/{downloadablePractices.length} Excel
+                </span>
+              </div>
               <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div
                   className="h-full bg-[#107C41] transition-all duration-300"
                   style={{
-                    width: `${Math.round((solvedCount / (allExercises.length || 1)) * 100)}%`,
+                    width: `${Math.round((totalPracticeDone / (totalPracticeCount || 1)) * 100)}%`,
                   }}
                 />
               </div>
             </div>
           </div>
 
+          {/* Switcher: 10 En plataforma vs 5 Descargables en Excel (.xlsx) */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setPracticeChannel('platform')}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] min-w-0 ${
+                practiceChannel === 'platform'
+                  ? 'bg-white dark:bg-[#111827] text-[#107C41] dark:text-emerald-300 shadow-xs border border-emerald-200 dark:border-emerald-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Monitor className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                En plataforma ({solvedCount}/{allExercises.length})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPracticeChannel('excel')}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] min-w-0 ${
+                practiceChannel === 'excel'
+                  ? 'bg-white dark:bg-[#111827] text-[#107C41] dark:text-emerald-300 shadow-xs border border-emerald-200 dark:border-emerald-800'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                Archivo Excel .xlsx ({xlsxDoneCount}/{downloadablePractices.length})
+              </span>
+            </button>
+          </div>
+
+          {practiceChannel === 'platform' ? (
+          <>
           {/* Numbered Exercise Selector Strip */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:flex-wrap">
             {allExercises.map((ex, idx) => {
@@ -1271,9 +1402,133 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
               )}
             </div>
           )}
+          </>
+          ) : (
+            <div className="space-y-3 min-w-0">
+              <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                    Libro de trabajo descargable (.xlsx) — Prácticas 11 a 15
+                  </p>
+                  <p className="text-xs text-emerald-900/80 dark:text-emerald-200/90 leading-relaxed">
+                    Descarga el libro multi-hoja para resolver estas {downloadablePractices.length}{' '}
+                    prácticas directamente en Microsoft Excel o LibreOffice Calc (incluye pestaña{' '}
+                    <span className="font-mono font-semibold">Instrucciones</span> + 5 hojas de
+                    datos con celda objetivo resaltada).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadWorkbook}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#107C41] hover:bg-[#0d6535] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[44px] shrink-0"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>Descargar libro Excel (.xlsx)</span>
+                </button>
+              </div>
+
+              {downloadedNotice && (
+                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs font-medium text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#107C41] dark:text-emerald-400" />
+                  <span>{downloadedNotice}</span>
+                </div>
+              )}
+
+              <div className="divide-y divide-slate-200 dark:divide-slate-800 border-t border-b border-slate-200 dark:border-slate-800">
+                {downloadablePractices.map((practice) => {
+                  const isDone = xlsxDoneIds.includes(practice.id);
+                  const hintOpen = Boolean(expandedXlsxHintIds[practice.id]);
+                  return (
+                    <div key={practice.id} className="py-3.5 space-y-2.5 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold shrink-0 ${
+                              isDone
+                                ? 'bg-emerald-100 dark:bg-emerald-950 text-[#107C41] dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                : 'bg-slate-900 dark:bg-slate-800 text-white'
+                            }`}
+                          >
+                            Práctica {practice.number}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                            {practice.functionTag}
+                          </span>
+                          <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 min-w-0">
+                            {practice.title}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-slate-600 dark:text-slate-300 shrink-0">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                            Pestaña: {practice.sheetName}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+                            Celda meta: {practice.targetCell}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                        {practice.prompt}
+                      </p>
+
+                      {hintOpen && (
+                        <div className="rounded-md bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2">
+                          <Lightbulb className="w-4 h-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                          <span>{practice.hint}</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedXlsxHintIds((prev) => ({
+                                ...prev,
+                                [practice.id]: !prev[practice.id],
+                              }))
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-blue-700 dark:text-cyan-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 min-h-[44px]"
+                          >
+                            <Lightbulb className="w-3.5 h-3.5 shrink-0" />
+                            <span>{hintOpen ? 'Ocultar pista' : 'Ver pista'}</span>
+                          </button>
+                          <span className="text-xs font-mono text-slate-600 dark:text-slate-300 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                            Esperado:{' '}
+                            <strong className="text-slate-900 dark:text-white">
+                              {practice.expectedResult}
+                            </strong>
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleXlsxPracticeDone(practice.id)}
+                          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
+                            isDone
+                              ? 'bg-[#107C41] text-white hover:bg-[#0d6535]'
+                              : 'border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 hover:border-[#107C41]'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>
+                            {isDone ? 'Completada en Excel' : 'Marcar completada en Excel'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Formula Bar ─────────────────────────────────────────────────── */}
+        {practiceChannel === 'platform' && (
+        <>
         <div className="px-3 py-2 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2 min-w-0">
           {/* Cell address indicator */}
           <span className="px-2.5 py-1.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold text-slate-800 dark:text-slate-100 min-w-[48px] min-h-[38px] flex items-center justify-center shrink-0">
@@ -1524,6 +1779,8 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
             Clic para seleccionar · Escribe para editar · Enter confirma · Esc cancela · F2 edita · ↑↓←→ navega
           </span>
         </div>
+        </>
+        )}
       </section>
 
       {isAdmin && (
