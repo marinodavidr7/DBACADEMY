@@ -528,10 +528,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
           const existingIds = new Set(existingCourses.docs.map((d) => d.id));
           const missingCourses = SEED_COURSES.filter((c) => !existingIds.has(c.id));
-          const coursesToDelete = existingCourses.docs.filter((d) => {
-            if (SEED_COURSES.some((s) => s.id === d.id)) return false;
-            return REMOVED_SEED_COURSE_IDS.includes(d.id) || !alreadyCleaned;
-          });
+          const coursesToDelete = existingCourses.docs.filter((d) =>
+            REMOVED_SEED_COURSE_IDS.includes(d.id)
+          );
 
           const existingExcelSnap = existingCourses.docs.find(
             (d) => d.id === EXCEL_BASICO_COURSE.id
