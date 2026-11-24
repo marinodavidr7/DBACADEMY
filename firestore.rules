@@ -124,7 +124,7 @@ service cloud.firestore {
           'progressPercent', 'studyMinutes', 'status', 'enrolledAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'id', 'courseId', 'courseTitle', 'studentId', 'studentName',
+          'id', 'courseId', 'courseTitle', 'studentId', 'studentName', 'studentEmail',
           'instructorId', 'completedModuleIds', 'completedLessonIds',
           'progressPercent', 'studyMinutes', 'status', 'enrolledAt', 'updatedAt'
         ])
@@ -133,6 +133,7 @@ service cloud.firestore {
         && data.courseTitle is string && data.courseTitle.size() >= 1 && data.courseTitle.size() <= 140
         && isValidId(data.studentId)
         && data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100
+        && (!('studentEmail' in data) || (data.studentEmail is string && data.studentEmail.size() <= 200))
         && isValidId(data.instructorId)
         && data.completedModuleIds is list && data.completedModuleIds.size() <= 12
         && (data.completedModuleIds.size() == 0 || data.completedModuleIds[0] is string)
@@ -494,14 +495,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create: if isValidId(userId) && isVerified()
+      allow create: if isValidId(userId) && isSignedIn()
         && request.auth.uid == userId
         && isValidUserProfile(incoming())
         && incoming().uid == userId
         && (incoming().role == 'student' || isAdmin())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isValidId(userId) && isVerified()
+      allow update: if isValidId(userId) && isSignedIn()
         && isValidUserProfile(incoming())
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
@@ -522,12 +523,12 @@ service cloud.firestore {
       match /private/info {
         allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isAdmin());
         allow list: if false;
-        allow create: if isValidId(userId) && isVerified()
+        allow create: if isValidId(userId) && isSignedIn()
           && request.auth.uid == userId
           && isValidUserPrivateInfo(incoming())
           && incoming().uid == userId
           && incoming().updatedAt == request.time;
-        allow update: if isValidId(userId) && isVerified()
+        allow update: if isValidId(userId) && isSignedIn()
           && (request.auth.uid == userId || isAdmin())
           && isValidUserPrivateInfo(incoming())
           && incoming().uid == existing().uid
@@ -593,7 +594,7 @@ service cloud.firestore {
             && (incoming().status != 'completed' || incoming().progressPercent == 100)
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'completedModuleIds', 'completedLessonIds', 'progressPercent',
-              'studyMinutes', 'status', 'updatedAt'
+              'studyMinutes', 'status', 'studentEmail', 'updatedAt'
             ])
           )
         );

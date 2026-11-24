@@ -154,6 +154,7 @@ export interface Enrollment {
   courseTitle: string;
   studentId: string;
   studentName: string;
+  studentEmail?: string;
   instructorId: string;
   completedModuleIds: string[];
   completedLessonIds: string[];

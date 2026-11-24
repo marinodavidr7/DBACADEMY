@@ -30,6 +30,7 @@ import { AuthGateNotice } from './AuthGateNotice';
 import { CertificateDocumentCard, CertificatePreviewModal } from './CertificatePreviewModal';
 import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { GiftCardsAdminPanel } from './GiftCardsAdminPanel';
+import { StudentsAdminPanel } from './StudentsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
 import { AssignmentInbox } from './AssignmentInbox';
@@ -221,9 +222,10 @@ export const InstructorDashboard: React.FC = () => {
     t,
     assignmentSubmissions,
     giftCards,
+    studentEmailsMap,
   } = usePlatform();
 
-  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'giftcards' | 'coupons' | 'referrals' | 'submissions'>('courses');
+  const [adminTab, setAdminTab] = useState<'courses' | 'students' | 'certificates' | 'giftcards' | 'coupons' | 'referrals' | 'submissions'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
@@ -280,15 +282,23 @@ export const InstructorDashboard: React.FC = () => {
     [instructorEnrollments]
   );
 
+  const uniqueStudentsCount = useMemo(
+    () => new Set(instructorEnrollments.map((e) => e.studentId)).size,
+    [instructorEnrollments]
+  );
+
   const filteredEnrollments = useMemo(() => {
     const q = searchStudent.trim().toLowerCase();
     if (!q) return instructorEnrollments;
-    return instructorEnrollments.filter(
-      (e) =>
+    return instructorEnrollments.filter((e) => {
+      const email = (e.studentEmail || studentEmailsMap[e.studentId] || '').toLowerCase();
+      return (
         e.studentName.toLowerCase().includes(q) ||
+        email.includes(q) ||
         e.courseTitle.toLowerCase().includes(q)
-    );
-  }, [instructorEnrollments, searchStudent]);
+      );
+    });
+  }, [instructorEnrollments, searchStudent, studentEmailsMap]);
 
   const sampleCourse = useMemo(
     () => courses.find((c) => c.id === sampleCourseId) || courses[0] || null,
@@ -436,9 +446,10 @@ export const InstructorDashboard: React.FC = () => {
   const handleExportProgressCsv = () => {
     exportToCsv(
       'db-academy-progreso-alumnos',
-      ['Alumno', 'Curso', 'Progreso (%)', 'Minutos', 'Estado'],
+      ['Alumno', 'Correo', 'Curso', 'Progreso (%)', 'Minutos', 'Estado'],
       filteredEnrollments.map((e) => [
         e.studentName,
+        e.studentEmail || studentEmailsMap[e.studentId] || '—',
         e.courseTitle,
         e.progressPercent,
         e.studyMinutes,
@@ -452,9 +463,10 @@ export const InstructorDashboard: React.FC = () => {
       'db-academy-progreso-alumnos',
       t('liveProgressTable'),
       `Generado: ${new Date().toLocaleDateString('es-ES')}`,
-      ['Alumno', 'Curso', 'Progreso (%)', 'Estudio (min)', 'Estado'],
+      ['Alumno', 'Correo', 'Curso', 'Progreso (%)', 'Estudio (min)', 'Estado'],
       filteredEnrollments.map((e) => [
         e.studentName,
+        e.studentEmail || studentEmailsMap[e.studentId] || '—',
         e.courseTitle,
         `${e.progressPercent}%`,
         e.studyMinutes,
@@ -531,6 +543,7 @@ export const InstructorDashboard: React.FC = () => {
       <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
         {([
           { id: 'courses', label: 'Cursos' },
+          { id: 'students', label: `Estudiantes (${uniqueStudentsCount})` },
           { id: 'giftcards', label: `Gift Cards (${giftCards.length})` },
           { id: 'certificates', label: `Certificados (${instructorCertificates.length})` },
           { id: 'coupons', label: t('couponsTitle') },
@@ -677,6 +690,11 @@ export const InstructorDashboard: React.FC = () => {
         </div>
       )}
 
+      {adminTab === 'students' && (
+        <StudentsAdminPanel
+          onPreviewCertificate={(cert) => setPreviewCert({ cert, isSample: false })}
+        />
+      )}
       {adminTab === 'giftcards' && <GiftCardsAdminPanel />}
       {adminTab === 'coupons' && <CouponsAdminPanel />}
       {adminTab === 'referrals' && (
@@ -706,12 +724,19 @@ export const InstructorDashboard: React.FC = () => {
 
       {/* 4-Column KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
-          <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiStudents')}</p>
+        <button
+          type="button"
+          onClick={() => setAdminTab('students')}
+          className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 hover:border-blue-400/70 transition-colors"
+        >
+          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>{t('kpiStudents')}</span>
+            <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Ver todos →</span>
+          </p>
           <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
             {instructorEnrollments.length}
           </p>
-        </div>
+        </button>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiRevenue')}</p>
           <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
@@ -917,6 +942,7 @@ export const InstructorDashboard: React.FC = () => {
             <thead className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
               <tr>
                 <th className="py-3 px-5 font-medium">Estudiante</th>
+                <th className="py-3 px-5 font-medium">Correo</th>
                 <th className="py-3 px-5 font-medium">Curso</th>
                 <th className="py-3 px-5 font-medium text-right">Estudio</th>
                 <th className="py-3 px-5 font-medium text-right">Progreso</th>
@@ -926,41 +952,48 @@ export const InstructorDashboard: React.FC = () => {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredEnrollments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
                     Sin inscripciones registradas todavía. Inscríbete en un curso para visualizar el seguimiento en tiempo real.
                   </td>
                 </tr>
               ) : (
-                filteredEnrollments.map((enr) => (
-                  <tr
-                    key={enr.id}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                  >
-                    <td className="py-3 px-5 font-medium text-slate-900 dark:text-slate-100">
-                      {enr.studentName}
-                    </td>
-                    <td className="py-3 px-5 text-slate-600 dark:text-slate-300 max-w-xs truncate">
-                      {enr.courseTitle}
-                    </td>
-                    <td className="py-3 px-5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                      {enr.studyMinutes} min
-                    </td>
-                    <td className="py-3 px-5 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-slate-100">
-                      {enr.progressPercent}%
-                    </td>
-                    <td className="py-3 px-5 text-right">
-                      <span
-                        className={
-                          enr.status === 'completed'
-                            ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                            : 'text-blue-600 dark:text-blue-400 font-medium'
-                        }
-                      >
-                        {enr.status === 'completed' ? t('completedBadge') : 'Activo'}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                filteredEnrollments.map((enr) => {
+                  const email = enr.studentEmail || studentEmailsMap[enr.studentId] || '';
+                  return (
+                    <tr
+                      key={enr.id}
+                      onClick={() => setAdminTab('students')}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                    >
+                      <td className="py-3 px-5 font-medium text-slate-900 dark:text-slate-100">
+                        {enr.studentName}
+                      </td>
+                      <td className="py-3 px-5 text-slate-600 dark:text-slate-300">
+                        {email || '—'}
+                      </td>
+                      <td className="py-3 px-5 text-slate-600 dark:text-slate-300 max-w-xs truncate">
+                        {enr.courseTitle}
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                        {enr.studyMinutes} min
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+                        {enr.progressPercent}%
+                      </td>
+                      <td className="py-3 px-5 text-right">
+                        <span
+                          className={
+                            enr.status === 'completed'
+                              ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                              : 'text-blue-600 dark:text-blue-400 font-medium'
+                          }
+                        >
+                          {enr.status === 'completed' ? t('completedBadge') : 'Activo'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

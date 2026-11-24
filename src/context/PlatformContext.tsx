@@ -340,6 +340,8 @@ interface PlatformContextValue {
   customExercises: CustomExcelExercise[];
   enrollments: Enrollment[];
   instructorEnrollments: Enrollment[];
+  studentProfilesMap: Record<string, UserProfile>;
+  studentEmailsMap: Record<string, string>;
   payments: PaymentRecord[];
   instructorPayments: PaymentRecord[];
   certificates: Certificate[];
@@ -598,6 +600,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [instructorEnrollments, setInstructorEnrollments] = useState<Enrollment[]>([]);
+  const [studentProfilesMap, setStudentProfilesMap] = useState<Record<string, UserProfile>>({});
+  const [privateEmailsByUid, setPrivateEmailsByUid] = useState<Record<string, string>>({});
+  const fetchedPrivateEmailUidsRef = useRef<Set<string>>(new Set());
+  const backfilledEnrollmentIdsRef = useRef<Set<string>>(new Set());
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [instructorPayments, setInstructorPayments] = useState<PaymentRecord[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -756,23 +762,6 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
           throw lastError;
         };
-
-        if (!firebaseUser.emailVerified) {
-          setProfile({
-            uid: firebaseUser.uid,
-            displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
-            photoURL: (firebaseUser.photoURL || '').slice(0, 500),
-            role: 'student',
-            preferredLanguage: language,
-            preferredTheme: theme,
-            e2eeKeyFingerprint: fingerprint,
-            activeDevicesCount: 1,
-          });
-          if (activeUid === firebaseUser.uid) {
-            bootstrapCompletedForUid = firebaseUser.uid;
-          }
-          return;
-        }
 
         const userRef = doc(db, 'users', firebaseUser.uid);
         let snap;
@@ -1206,7 +1195,24 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     unsubs.push(
       onSnapshot(
         query(collection(db, 'enrollments'), where('studentId', '==', user.uid)),
-        (snap) => setEnrollments(snap.docs.map((d) => d.data() as Enrollment)),
+        (snap) => {
+          const list = snap.docs.map((d) => d.data() as Enrollment);
+          setEnrollments(list);
+          if (user.email) {
+            const cleanEmail = user.email.slice(0, 200);
+            for (const enr of list) {
+              if (!enr.studentEmail && !backfilledEnrollmentIdsRef.current.has(enr.id)) {
+                backfilledEnrollmentIdsRef.current.add(enr.id);
+                void updateDoc(doc(db, 'enrollments', enr.id), {
+                  studentEmail: cleanEmail,
+                  updatedAt: serverTimestamp(),
+                }).catch(() => {
+                  backfilledEnrollmentIdsRef.current.delete(enr.id);
+                });
+              }
+            }
+          }
+        },
         (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
       )
     );
@@ -1219,8 +1225,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments/instructor')
         )
       );
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'users'),
+          (snap) => {
+            const nextMap: Record<string, UserProfile> = {};
+            for (const d of snap.docs) {
+              const prof = d.data() as UserProfile;
+              nextMap[prof.uid || d.id] = prof;
+            }
+            setStudentProfilesMap(nextMap);
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'users/admin')
+        )
+      );
     } else {
       setInstructorEnrollments([]);
+      setStudentProfilesMap({});
+      setPrivateEmailsByUid({});
+      fetchedPrivateEmailUidsRef.current.clear();
     }
 
     unsubs.push(
@@ -1389,6 +1412,80 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return () => unsubs.forEach((u) => u());
   }, [authReady, user, isAdmin]);
+
+  // Admin: resolver correos de estudiantes inscritos desde users/{uid}/private/info
+  useEffect(() => {
+    if (!authReady || !user || !isAdmin) return;
+    const candidateUids = new Set<string>();
+    for (const enr of instructorEnrollments) {
+      if (enr.studentId && !enr.studentEmail) {
+        candidateUids.add(enr.studentId);
+      }
+    }
+    for (const uid of Object.keys(studentProfilesMap)) {
+      candidateUids.add(uid);
+    }
+    const toFetch = Array.from(candidateUids).filter(
+      (uid) => !fetchedPrivateEmailUidsRef.current.has(uid)
+    );
+    if (toFetch.length === 0) return;
+
+    let cancelled = false;
+    for (const uid of toFetch) {
+      fetchedPrivateEmailUidsRef.current.add(uid);
+    }
+
+    void Promise.all(
+      toFetch.map(async (uid) => {
+        try {
+          const privSnap = await getDoc(doc(db, 'users', uid, 'private', 'info'));
+          if (privSnap.exists()) {
+            const data = privSnap.data() as Partial<UserPrivateInfo>;
+            if (typeof data.email === 'string' && data.email.trim()) {
+              return [uid, data.email.trim()] as const;
+            }
+          }
+        } catch {
+          // Allow retry later if transient error occurred
+          fetchedPrivateEmailUidsRef.current.delete(uid);
+        }
+        return null;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const updates: Record<string, string> = {};
+      for (const entry of results) {
+        if (entry) updates[entry[0]] = entry[1];
+      }
+      if (Object.keys(updates).length > 0) {
+        setPrivateEmailsByUid((prev) => ({ ...prev, ...updates }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user, isAdmin, instructorEnrollments, studentProfilesMap]);
+
+  const studentEmailsMap = useMemo(() => {
+    const merged: Record<string, string> = { ...privateEmailsByUid };
+    for (const sub of assignmentSubmissions) {
+      if (sub.studentId && sub.studentEmail && !merged[sub.studentId]) {
+        merged[sub.studentId] = sub.studentEmail;
+      }
+    }
+    for (const red of giftCardRedemptions) {
+      if (red.studentId && red.studentEmail && !merged[red.studentId]) {
+        merged[red.studentId] = red.studentEmail;
+      }
+    }
+    for (const enr of instructorEnrollments) {
+      if (enr.studentId && enr.studentEmail) {
+        merged[enr.studentId] = enr.studentEmail;
+      }
+    }
+    return merged;
+  }, [privateEmailsByUid, assignmentSubmissions, giftCardRedemptions, instructorEnrollments]);
 
   // Real-time Calendar Deadline & Push Notification Engine
   useEffect(() => {
@@ -1959,6 +2056,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         courseTitle: course.title.slice(0, 140),
         studentId: user.uid,
         studentName: (user.displayName || user.email || 'Estudiante').slice(0, 100),
+        ...(user.email ? { studentEmail: user.email.slice(0, 200) } : {}),
         instructorId: resolvedInstructorId,
         completedModuleIds: [],
         completedLessonIds: [],
@@ -3500,6 +3598,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           courseTitle: course.title.slice(0, 140),
           studentId: user.uid,
           studentName,
+          ...(studentEmail ? { studentEmail } : {}),
           instructorId: resolvedInstructorId,
           completedModuleIds: [],
           completedLessonIds: [],
@@ -3876,6 +3975,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       customExercises,
       enrollments,
       instructorEnrollments,
+      studentProfilesMap,
+      studentEmailsMap,
       payments,
       instructorPayments,
       certificates,
@@ -3969,6 +4070,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       customExercises,
       enrollments,
       instructorEnrollments,
+      studentProfilesMap,
+      studentEmailsMap,
       payments,
       instructorPayments,
       certificates,

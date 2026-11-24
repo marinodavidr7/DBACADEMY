@@ -78,6 +78,7 @@
         "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
         "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "studentName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "studentEmail": { "type": "string", "maxLength": 200 },
         "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "completedModuleIds": { "type": "array" },
         "completedLessonIds": { "type": "array" },
