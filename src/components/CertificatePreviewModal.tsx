@@ -81,7 +81,7 @@ export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
             fill="none"
             role="img"
             aria-label={`Firma de ${DAVID_SIGNER_NAME}`}
-            className="h-11 sm:h-12 w-auto -mb-1 pointer-events-none"
+            className="h-12 sm:h-14 w-auto mb-0.5 pointer-events-none"
           >
             {DAVID_SIGNATURE_STROKES.map((s, idx) => (
               <path
@@ -101,9 +101,6 @@ export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
               fill={DAVID_SIGNATURE_DOT.fill}
             />
           </svg>
-          <p className="text-sm sm:text-base font-semibold text-[#0F172A] truncate max-w-full">
-            {DAVID_SIGNER_NAME}
-          </p>
           <div className="mt-1.5 w-full max-w-[240px] border-t border-slate-400" />
           <p className="mt-1.5 text-xs text-slate-600 truncate max-w-full">
             {DAVID_SIGNER_TITLE}

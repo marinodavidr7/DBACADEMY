@@ -2,7 +2,7 @@ export type Language = 'es' | 'en' | 'fr' | 'pt';
 export type ThemeMode = 'light' | 'dark';
 export type UserRole = 'student' | 'instructor';
 export type CurrencyCode = 'DOP' | 'USD' | 'EUR' | 'MXN';
-export type PaymentGateway = 'stripe' | 'mercadopago' | 'paypal' | 'free' | 'gift_card';
+export type PaymentGateway = 'lemonsqueezy' | 'stripe' | 'mercadopago' | 'paypal' | 'free' | 'gift_card';
 export type CloudProvider = 'none' | 'google_drive' | 'dropbox' | 'aws_s3' | 'gcs';
 
 export type AppView =
@@ -104,6 +104,17 @@ export interface Course {
   technologies?: string[];
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+export type CourseSyncStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error';
+
+export interface CourseSyncState {
+  courseId: string | null;
+  status: CourseSyncStatus;
+  dirtyRevision: number;
+  savedRevision: number;
+  lastSavedAt: number | null;
+  error: string | null;
 }
 
 export interface UserProfile {
@@ -439,3 +450,47 @@ export interface GiftCardValidationResult {
   reason?: string;
   errorCode?: GiftCardValidationErrorCode;
 }
+
+export interface LemonSqueezyStatus {
+  configured: boolean;
+  webhookConfigured: boolean;
+  testMode: boolean;
+  providerUrl: string;
+  storeCurrency: string;
+  missingKeys: string[];
+}
+
+export interface LemonSqueezyCheckoutSession {
+  freeBypass?: boolean;
+  checkoutUrl?: string;
+  checkoutId?: string;
+  paymentId: string;
+  courseId: string;
+  amountCents: number;
+  originalAmountCents: number;
+  discountCents: number;
+  currency: CurrencyCode;
+  couponCode?: string;
+  giftCardCode?: string;
+  testMode?: boolean;
+}
+
+export interface LemonSqueezyVerificationResult {
+  verified: boolean;
+  status: 'paid' | 'pending' | 'refunded';
+  paymentId: string;
+  courseId: string;
+  courseTitle?: string;
+  instructorId?: string;
+  transactionRef?: string;
+  amountCents?: number;
+  originalAmountCents?: number;
+  discountCents?: number;
+  discountSource?: 'none' | 'coupon' | 'gift_card';
+  couponCode?: string;
+  giftCardCode?: string;
+  currency?: CurrencyCode;
+  receiptUrl?: string;
+  message?: string;
+}
+

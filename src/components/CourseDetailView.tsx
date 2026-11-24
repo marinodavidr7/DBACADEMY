@@ -120,7 +120,7 @@ export const CourseDetailView: React.FC = () => {
     if (course.priceCents === 0) {
       setEnrolling(true);
       try {
-        await enrollWithPayment(course, 'stripe');
+        await enrollWithPayment(course, 'free');
         setSelectedCourseId(course.id);
         setActiveView('learning');
       } finally {

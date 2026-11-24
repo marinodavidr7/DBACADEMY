@@ -1,10 +1,11 @@
 import React from 'react';
-import { Undo2, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Undo2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export interface ToastItem {
   id: string;
   message: string;
+  variant?: 'success' | 'error' | 'info';
   actionLabel?: string;
   onAction?: () => void;
 }
@@ -26,9 +27,21 @@ export const ToastStack: React.FC<ToastStackProps> = ({ items, onDismiss }) => {
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8 }}
-          className="pointer-events-auto flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] px-4 py-3 shadow-xl"
+          className={`pointer-events-auto flex items-center gap-3 rounded-xl border bg-white dark:bg-[#111827] px-4 py-3 shadow-xl ${
+            item.variant === 'error'
+              ? 'border-red-200 dark:border-red-900/70'
+              : item.variant === 'success'
+                ? 'border-emerald-200 dark:border-emerald-900/70'
+                : 'border-slate-200 dark:border-slate-700'
+          }`}
           role="status"
         >
+          {item.variant === 'success' && (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          )}
+          {item.variant === 'error' && (
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          )}
           <span className="flex-1 text-sm text-slate-800 dark:text-slate-100">{item.message}</span>
           {item.actionLabel && item.onAction && (
             <button

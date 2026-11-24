@@ -575,7 +575,7 @@ export const CatalogView: React.FC = () => {
                             type="button"
                             onClick={async () => {
                               if (course.priceCents === 0) {
-                                await enrollWithPayment(course, 'stripe');
+                                await enrollWithPayment(course, 'free');
                                 setSelectedCourseId(course.id);
                                 setActiveView('learning');
                               } else {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -16,10 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { Course, CourseLesson, CourseModule } from '../../types';
+import type { Course, CourseLesson, CourseModule, CourseSyncStatus } from '../../types';
 import { usePlatform } from '../../context/PlatformContext';
-import { uploadCourseCoverImage } from '../../services/storageService';
 import type { TranslationKeys } from '../../i18n/translations';
+import { uploadCourseCoverImage } from '../../services/storageService';
 import { isAuthorizedAdminEmail } from '../../firebase';
 import {
   cloneModules,
@@ -29,7 +29,6 @@ import {
   newId,
   reorderLessons,
   reorderModules,
-  stripManualPrefix,
 } from '../../utils/courseEditor';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CourseIndex } from './CourseIndex';
@@ -46,15 +45,13 @@ const COVER_PRESETS = [
   { label: 'Seguridad', url: '/assets/images/course_cybersecurity_e2ee_1795146988090.webp' },
 ];
 
-type SaveStatus = 'idle' | 'saved' | 'saving' | 'unsaved' | 'error';
-
 interface CourseEditorProps {
   course: Course | null;
   onCancel: () => void;
-  onCreate: (input: CourseInput) => Promise<Course | void>;
-  onUpdate: (courseId: string, patch: CourseInput) => Promise<void>;
+  onCreate: (input: CourseInput, syncOptions?: { targetRevision?: number }) => Promise<Course | void>;
+  onUpdate: (courseId: string, patch: CourseInput, syncOptions?: { targetRevision?: number }) => Promise<void>;
   labels?: CourseEditorLabels;
-  t?: (key: any) => string;
+  t?: (key: TranslationKeys) => string;
 }
 
 export type CourseEditorInput = CourseInput;
@@ -323,7 +320,7 @@ export const DEFAULT_COURSE_EDITOR_LABELS: CourseEditorLabels = {
     save: 'Guardar cambios',
     saved: 'Cambios guardados',
     savedAgo: 'Guardado hace',
-    saving: 'Guardando...',
+    saving: 'Guardando cambios...',
     unsaved: 'Cambios sin guardar',
     saveError: 'Error al guardar',
     retry: 'Reintentar',
@@ -412,30 +409,332 @@ function buildCourseFromInput(input: CourseInput, base: Course | null): Course {
   };
 }
 
+interface CourseDetailsSectionProps {
+  title: string;
+  subtitle: string;
+  level: Course['level'];
+  priceCents: number;
+  currency: Course['currency'];
+  description: string;
+  coverImage: string;
+  uploadingCover: boolean;
+  generatingCover: boolean;
+  courseDetailsLabel: string;
+  coverSelectorLabel: string;
+  beginnerLabel: string;
+  intermediateLabel: string;
+  advancedLabel: string;
+  onUpdateField: (patch: Partial<CourseInput>) => void;
+  onUploadCoverFile: (file: File) => void;
+  onGenerateCover: () => void;
+}
+
+const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
+  title,
+  subtitle,
+  level,
+  priceCents,
+  currency,
+  description,
+  coverImage,
+  uploadingCover,
+  generatingCover,
+  courseDetailsLabel,
+  coverSelectorLabel,
+  beginnerLabel,
+  intermediateLabel,
+  advancedLabel,
+  onUpdateField,
+  onUploadCoverFile,
+  onGenerateCover,
+}) => {
+  const [coverDragging, setCoverDragging] = useState(false);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{courseDetailsLabel}</h3>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block md:col-span-2">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Título del curso</span>
+          <input
+            value={title}
+            onChange={(event) => onUpdateField({ title: event.target.value })}
+            maxLength={140}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Subtítulo</span>
+          <input
+            value={subtitle}
+            onChange={(event) => onUpdateField({ subtitle: event.target.value })}
+            maxLength={240}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Nivel</span>
+            <select
+              value={level}
+              onChange={(event) => onUpdateField({ level: event.target.value as Course['level'] })}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
+            >
+              <option value="beginner">{beginnerLabel}</option>
+              <option value="intermediate">{intermediateLabel}</option>
+              <option value="advanced">{advancedLabel}</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Precio</span>
+            <input
+              type="number"
+              min={0}
+              value={(priceCents / 100).toString()}
+              onChange={(event) =>
+                onUpdateField({
+                  priceCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)),
+                })
+              }
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm tabular-nums"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Moneda</span>
+            <select
+              value={currency}
+              onChange={(event) => onUpdateField({ currency: event.target.value as Course['currency'] })}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
+            >
+              <option value="DOP">DOP (RD$)</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="MXN">MXN</option>
+            </select>
+          </label>
+        </div>
+        <label className="block md:col-span-2">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Descripción</span>
+          <textarea
+            rows={3}
+            maxLength={2000}
+            value={description}
+            onChange={(event) => onUpdateField({ description: event.target.value })}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+      <input
+        ref={coverFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUploadCoverFile(file);
+          e.target.value = '';
+        }}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="space-y-3">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{coverSelectorLabel}</span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => coverFileInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-60 min-h-[36px]"
+            >
+              {uploadingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              <span>{uploadingCover ? 'Subiendo imagen...' : 'Subir imagen desde equipo'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onGenerateCover}
+              disabled={generatingCover}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors min-h-[36px]"
+            >
+              {generatingCover ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              )}
+              <span>Cambiar portada</span>
+            </button>
+
+            {coverImage && (
+              <button
+                type="button"
+                onClick={() => onUpdateField({ coverImage: '' })}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-2.5 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 min-h-[36px]"
+                title="Quitar imagen actual"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Quitar</span>
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+              <LinkIcon className="h-3.5 w-3.5" />
+            </div>
+            <input
+              type="url"
+              placeholder="O pega aquí el enlace directo a una imagen (https://...)"
+              value={coverImage.startsWith('data:') ? '' : coverImage}
+              onChange={(e) => onUpdateField({ coverImage: e.target.value.trim() })}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="pt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+              O selecciona una de nuestras portadas prediseñadas:
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {COVER_PRESETS.map((preset) => (
+                <button
+                  key={preset.url}
+                  type="button"
+                  onClick={() => onUpdateField({ coverImage: preset.url })}
+                  className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                    coverImage === preset.url
+                      ? 'border-blue-600 ring-2 ring-blue-600/30'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                  }`}
+                >
+                  <img
+                    src={preset.url}
+                    alt={preset.label}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-video w-full object-cover"
+                  />
+                  {coverImage === preset.url && (
+                    <span className="absolute right-1 top-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                      ✓
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setCoverDragging(true);
+          }}
+          onDragLeave={() => setCoverDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setCoverDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) onUploadCoverFile(file);
+          }}
+          onClick={() => coverFileInputRef.current?.click()}
+          className={`aspect-video overflow-hidden rounded-xl border-2 transition-all cursor-pointer relative group flex items-center justify-center bg-slate-900 ${
+            coverDragging
+              ? 'border-blue-500 ring-4 ring-blue-500/20 bg-blue-950/40'
+              : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
+          }`}
+          title="Haz clic o arrastra una imagen aquí para subirla"
+        >
+          {uploadingCover ? (
+            <div className="flex flex-col items-center gap-2 text-white">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+              <span className="text-xs font-semibold">Subiendo imagen...</span>
+            </div>
+          ) : coverImage ? (
+            <>
+              <img src={coverImage} alt={title} decoding="async" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-3 text-center">
+                <Upload className="w-5 h-5 mb-1" />
+                <span className="text-xs font-semibold">Cambiar imagen</span>
+                <span className="text-[10px] text-slate-300">Haz clic o arrastra un archivo</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 text-slate-400 p-4 text-center">
+              <ImageIcon className="h-8 w-8 text-slate-500" />
+              <span className="text-xs font-medium">Haz clic o arrastra una imagen</span>
+              <span className="text-[10px] text-slate-500">PNG, JPG, WebP</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+});
+
+CourseDetailsSection.displayName = 'CourseDetailsSection';
+
+function renderSyncStatusBadge(
+  status: CourseSyncStatus,
+  labels: CourseEditorLabels['actions']
+): { dotClass: string; text: string; icon: React.ReactNode } {
+  if (status === 'saving') {
+    return {
+      dotClass: 'bg-blue-500 animate-pulse',
+      text: labels.saving,
+      icon: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />,
+    };
+  }
+  if (status === 'unsaved') {
+    return {
+      dotClass: 'bg-amber-500',
+      text: labels.unsaved,
+      icon: <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />,
+    };
+  }
+  if (status === 'error') {
+    return {
+      dotClass: 'bg-red-500',
+      text: labels.saveError,
+      icon: <AlertCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400 shrink-0" />,
+    };
+  }
+  return {
+    dotClass: 'bg-emerald-500',
+    text: labels.saved,
+    icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />,
+  };
+}
+
 export const CourseEditor: React.FC<CourseEditorProps> = ({
   course,
   onCancel,
   onCreate,
   onUpdate,
   labels = DEFAULT_COURSE_EDITOR_LABELS,
-  t = (k: any) => k,
+  t = (k: TranslationKeys) => k,
 }) => {
-  const { user, isAdmin } = usePlatform();
+  const {
+    user,
+    isAdmin,
+    courseSyncState,
+    getCourseSyncSnapshot,
+    initCourseSync,
+    markCourseUnsaved,
+    setCourseSyncError,
+    resetCourseSync,
+  } = usePlatform();
   const canEdit = Boolean(isAdmin || isAuthorizedAdminEmail(user?.email));
 
-  const [input, setInput] = useState<CourseInput>(() =>
-    course ? courseToInput(course) : emptyInput()
-  );
-  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(
-    () => input.modules[0]?.id ?? null
-  );
-  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
-    () => input.modules[0]?.lessons[0]?.id ?? null
-  );
+  const [input, setInput] = useState<CourseInput>(() => (course ? courseToInput(course) : emptyInput()));
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(() => input.modules[0]?.id ?? null);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(() => input.modules[0]?.lessons[0]?.id ?? null);
   const [indexOpen, setIndexOpen] = useState(false);
-  const [status, setStatus] = useState<SaveStatus>('saved');
-  const [savedAt, setSavedAt] = useState<number>(Date.now());
-  const [error, setError] = useState('');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirm, setConfirm] = useState<
     | { kind: 'module'; moduleId: string; label: string }
@@ -446,13 +745,21 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   const [publishIssues, setPublishIssues] = useState<boolean>(false);
   const [generatingCover, setGeneratingCover] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [coverDragging, setCoverDragging] = useState(false);
-  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
 
-  const originalRef = useRef<string>(JSON.stringify(input));
+  const courseRef = useRef<Course | null>(course);
+  courseRef.current = course;
+  const onCreateRef = useRef(onCreate);
+  onCreateRef.current = onCreate;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
   const latestInputRef = useRef<CourseInput>(input);
   latestInputRef.current = input;
+  const selectedModuleIdRef = useRef<string | null>(selectedModuleId);
+  selectedModuleIdRef.current = selectedModuleId;
+  const selectedLessonIdRef = useRef<string | null>(selectedLessonId);
+  selectedLessonIdRef.current = selectedLessonId;
+
   const debounceRef = useRef<number | null>(null);
   const inFlightSaveRef = useRef<boolean>(false);
   const pendingSaveOriginRef = useRef<'auto' | 'manual' | null>(null);
@@ -460,27 +767,91 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   const lastSnapshotRef = useRef<CourseModule[]>(input.modules);
   const lastLessonSnapshotRef = useRef<CourseLesson | null>(null);
 
-  const dirty = useMemo(() => JSON.stringify(input) !== originalRef.current, [input]);
-  const selectedModule = input.modules.find((module) => module.id === selectedModuleId) ?? null;
-  const selectedLesson = selectedModule?.lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
-  const issues = useMemo(() => collectPublishIssues(input.modules), [input.modules]);
+  // Initialize centralized Firestore sync status when the editor mounts.
+  useEffect(() => {
+    initCourseSync(courseRef.current?.id ?? null);
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      resetCourseSync();
+    };
+  }, [initCourseSync, resetCourseSync]);
 
-  const pushToast = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
-    const id = newId('toast');
-    setToasts((prev) => [...prev, { id, message, actionLabel, onAction }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
-    }, 8000);
-  }, []);
+  const effectiveStatus: CourseSyncStatus =
+    courseSyncState.status === 'idle' ? 'saved' : courseSyncState.status;
+  const dirty = courseSyncState.dirtyRevision > courseSyncState.savedRevision;
+  const error = courseSyncState.error ?? '';
+
+  const selectedModuleIndex = useMemo(
+    () => input.modules.findIndex((module) => module.id === selectedModuleId),
+    [input.modules, selectedModuleId]
+  );
+  const selectedModule = selectedModuleIndex >= 0 ? input.modules[selectedModuleIndex] : null;
+  const selectedLessonIndex = useMemo(
+    () => (selectedModule ? selectedModule.lessons.findIndex((lesson) => lesson.id === selectedLessonId) : -1),
+    [selectedModule, selectedLessonId]
+  );
+  const selectedLesson =
+    selectedModule && selectedLessonIndex >= 0 ? selectedModule.lessons[selectedLessonIndex] : null;
+  const totalLessonCount = useMemo(
+    () => input.modules.reduce((acc, module) => acc + module.lessons.length, 0),
+    [input.modules]
+  );
+  const issues = useMemo(
+    () => (publishIssues ? collectPublishIssues(input.modules) : []),
+    [publishIssues, input.modules]
+  );
+
+  const pushToast = useCallback(
+    (
+      message: string,
+      options?: { variant?: ToastItem['variant']; actionLabel?: string; onAction?: () => void }
+    ) => {
+      const id = newId('toast');
+      setToasts((prev) => [
+        ...prev,
+        {
+          id,
+          message,
+          variant: options?.variant,
+          actionLabel: options?.actionLabel,
+          onAction: options?.onAction,
+        },
+      ]);
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== id));
+      }, 6000);
+    },
+    []
+  );
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
-  const applyModules = useCallback((updater: (modules: CourseModule[]) => CourseModule[]) => {
-    setInput((prev) => ({ ...prev, modules: updater(prev.modules) }));
-    setStatus('unsaved');
-  }, []);
+  const updateInput = useCallback(
+    (updater: (prev: CourseInput) => CourseInput) => {
+      setInput(updater);
+      markCourseUnsaved(courseRef.current?.id ?? tempCourseIdRef.current);
+    },
+    [markCourseUnsaved]
+  );
+
+  const handleUpdateField = useCallback(
+    (patch: Partial<CourseInput>) => {
+      updateInput((prev) => ({ ...prev, ...patch }));
+    },
+    [updateInput]
+  );
+
+  const applyModules = useCallback(
+    (updater: (modules: CourseModule[]) => CourseModule[]) => {
+      updateInput((prev) => ({ ...prev, modules: updater(prev.modules) }));
+    },
+    [updateInput]
+  );
 
   const updateLesson = useCallback(
     (moduleId: string, lessonId: string, patch: Partial<CourseLesson>) => {
@@ -502,69 +873,131 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
 
   const updateModule = useCallback(
     (moduleId: string, patch: Partial<CourseModule>) => {
-      applyModules((modules) => modules.map((module) => (module.id === moduleId ? { ...module, ...patch } : module)));
+      applyModules((modules) =>
+        modules.map((module) => (module.id === moduleId ? { ...module, ...patch } : module))
+      );
     },
     [applyModules]
   );
 
-  const addModule = () => {
-    if (!canEdit || input.modules.length >= 12) return;
-    const module = createEmptyModule(input.modules.length + 1);
+  const handleSelectedLessonChange = useCallback(
+    (patch: Partial<CourseLesson>) => {
+      const modId = selectedModuleIdRef.current;
+      const lesId = selectedLessonIdRef.current;
+      if (!modId || !lesId) return;
+      updateLesson(modId, lesId, patch);
+    },
+    [updateLesson]
+  );
+
+  const handleSelectedQuizChange = useCallback(
+    (questions: CourseModule['questions']) => {
+      const modId = selectedModuleIdRef.current;
+      if (!modId) return;
+      updateModule(modId, { questions });
+    },
+    [updateModule]
+  );
+
+  const handleSelectedQuizEnabledChange = useCallback(
+    (enabled: boolean) => {
+      const modId = selectedModuleIdRef.current;
+      if (!modId) return;
+      updateModule(modId, { quizEnabled: enabled });
+    },
+    [updateModule]
+  );
+
+  const handleSelectModule = useCallback((id: string) => {
+    setSelectedModuleId(id);
+    const mod = latestInputRef.current.modules.find((m) => m.id === id);
+    setSelectedLessonId(mod?.lessons[0]?.id ?? null);
+    setIndexOpen(false);
+  }, []);
+
+  const handleSelectLesson = useCallback((moduleId: string, lessonId: string) => {
+    setSelectedModuleId(moduleId);
+    setSelectedLessonId(lessonId);
+    setIndexOpen(false);
+  }, []);
+
+  const addModule = useCallback(() => {
+    if (!canEdit || latestInputRef.current.modules.length >= 12) return;
+    const module = createEmptyModule(latestInputRef.current.modules.length + 1);
     applyModules((modules) => [...modules, module]);
     setSelectedModuleId(module.id);
     setSelectedLessonId(module.lessons[0]?.id ?? null);
-  };
+  }, [canEdit, applyModules]);
 
-  const addLesson = (moduleId: string) => {
-    if (!canEdit) return;
-    const module = input.modules.find((m) => m.id === moduleId);
-    const lesson = createEmptyLesson((module?.lessons.length ?? 0) + 1);
-    applyModules((modules) =>
-      modules.map((m) => (m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m))
-    );
-    setSelectedModuleId(moduleId);
-    setSelectedLessonId(lesson.id);
-  };
+  const addLesson = useCallback(
+    (moduleId: string) => {
+      if (!canEdit) return;
+      const module = latestInputRef.current.modules.find((m) => m.id === moduleId);
+      const lesson = createEmptyLesson((module?.lessons.length ?? 0) + 1);
+      applyModules((modules) =>
+        modules.map((m) => (m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m))
+      );
+      setSelectedModuleId(moduleId);
+      setSelectedLessonId(lesson.id);
+    },
+    [canEdit, applyModules]
+  );
 
-  const requestDeleteModule = (moduleId: string) => {
-    const module = input.modules.find((m) => m.id === moduleId);
+  const requestDeleteModule = useCallback((moduleId: string) => {
+    const module = latestInputRef.current.modules.find((m) => m.id === moduleId);
     if (!module) return;
     setConfirm({
       kind: 'module',
       moduleId,
       label: module.title,
     });
-  };
+  }, []);
 
-  const requestDeleteLesson = (moduleId: string, lessonId: string) => {
-    const lesson = input.modules.find((m) => m.id === moduleId)?.lessons.find((l) => l.id === lessonId);
+  const requestDeleteLesson = useCallback((moduleId: string, lessonId: string) => {
+    const lesson = latestInputRef.current.modules
+      .find((m) => m.id === moduleId)
+      ?.lessons.find((l) => l.id === lessonId);
     if (!lesson) return;
     setConfirm({ kind: 'lesson', moduleId, lessonId, label: lesson.title });
-  };
+  }, []);
 
-  const confirmDelete = () => {
+  const handleDeleteSelectedLesson = useCallback(() => {
+    const modId = selectedModuleIdRef.current;
+    const lesId = selectedLessonIdRef.current;
+    if (!modId || !lesId) return;
+    requestDeleteLesson(modId, lesId);
+  }, [requestDeleteLesson]);
+
+  const handleOpenPreview = useCallback(() => {
+    setPreviewCourse(buildCourseFromInput(latestInputRef.current, courseRef.current));
+  }, []);
+
+  const confirmDelete = useCallback(() => {
     if (!confirm) return;
+    const currentModules = latestInputRef.current.modules;
     if (confirm.kind === 'module') {
-      const snapshot = input.modules;
-      const module = input.modules.find((m) => m.id === confirm.moduleId);
+      const module = currentModules.find((m) => m.id === confirm.moduleId);
       const lessonCount = module?.lessons.length ?? 0;
       const materialCount = module?.lessons.reduce((acc, l) => acc + (l.materials?.length ?? 0), 0) ?? 0;
-      lastSnapshotRef.current = snapshot;
-      applyModules((modules) => modules.filter((m) => m.id !== confirm.moduleId));
-      if (selectedModuleId === confirm.moduleId) {
-        setSelectedModuleId(input.modules[0]?.id ?? null);
-        setSelectedLessonId(input.modules[0]?.lessons[0]?.id ?? null);
+      lastSnapshotRef.current = currentModules;
+      const remaining = currentModules.filter((m) => m.id !== confirm.moduleId);
+      applyModules(() => remaining);
+      if (selectedModuleIdRef.current === confirm.moduleId) {
+        setSelectedModuleId(remaining[0]?.id ?? null);
+        setSelectedLessonId(remaining[0]?.lessons[0]?.id ?? null);
       }
       pushToast(
         `${labels.actions.deletedModule} · ${lessonCount} ${labels.index.lessonCount} · ${materialCount} ${labels.index.materialCount}`,
-        labels.actions.undo,
-        () => {
-          applyModules(() => lastSnapshotRef.current);
+        {
+          variant: 'info',
+          actionLabel: labels.actions.undo,
+          onAction: () => {
+            applyModules(() => lastSnapshotRef.current);
+          },
         }
       );
     } else if (confirm.kind === 'lesson') {
-      const snapshot = input.modules;
-      lastSnapshotRef.current = snapshot;
+      lastSnapshotRef.current = currentModules;
       applyModules((modules) =>
         modules.map((module) =>
           module.id === confirm.moduleId
@@ -572,36 +1005,48 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             : module
         )
       );
-      if (selectedLessonId === confirm.lessonId) setSelectedLessonId(null);
-      pushToast(labels.actions.deletedLesson, labels.actions.undo, () => {
-        applyModules(() => lastSnapshotRef.current);
+      if (selectedLessonIdRef.current === confirm.lessonId) setSelectedLessonId(null);
+      pushToast(labels.actions.deletedLesson, {
+        variant: 'info',
+        actionLabel: labels.actions.undo,
+        onAction: () => {
+          applyModules(() => lastSnapshotRef.current);
+        },
       });
     } else {
       const snapshot = lastLessonSnapshotRef.current;
-      if (selectedModule && selectedLesson) {
-        const material = selectedLesson.materials?.find((m) => m.id === confirm.materialId);
-        lastLessonSnapshotRef.current = selectedLesson;
-        updateLesson(selectedModule.id, selectedLesson.id, {
-          materials: (selectedLesson.materials ?? []).filter((m) => m.id !== confirm.materialId),
+      const modId = selectedModuleIdRef.current;
+      const lesId = selectedLessonIdRef.current;
+      const mod = currentModules.find((m) => m.id === modId);
+      const les = mod?.lessons.find((l) => l.id === lesId);
+      if (mod && les) {
+        lastLessonSnapshotRef.current = les;
+        updateLesson(mod.id, les.id, {
+          materials: (les.materials ?? []).filter((m) => m.id !== confirm.materialId),
         });
-        pushToast(labels.actions.deletedMaterial, labels.actions.undo, () => {
-          if (snapshot) updateLesson(selectedModule.id, selectedLesson.id, { materials: snapshot.materials ?? [] });
+        pushToast(labels.actions.deletedMaterial, {
+          variant: 'info',
+          actionLabel: labels.actions.undo,
+          onAction: () => {
+            if (snapshot) updateLesson(mod.id, les.id, { materials: snapshot.materials ?? [] });
+          },
         });
-        void material;
       }
     }
     setConfirm(null);
-  };
+  }, [confirm, applyModules, updateLesson, pushToast, labels]);
 
   const save = useCallback(
     async (origin: 'auto' | 'manual' = 'manual', options?: { silent?: boolean }) => {
       if (!canEdit) return;
       const currentInput = latestInputRef.current;
+      const activeCourse = courseRef.current;
 
-      if (!course && currentInput.title.trim().length < 3) {
+      if (!activeCourse && currentInput.title.trim().length < 3) {
         if (origin === 'manual' && !options?.silent) {
-          setStatus('error');
-          setError('Escribe un título de al menos 3 caracteres antes de guardar el nuevo curso.');
+          const msg = 'Escribe un título de al menos 3 caracteres antes de guardar el nuevo curso.';
+          setCourseSyncError(msg, tempCourseIdRef.current);
+          pushToast(msg, { variant: 'error' });
         }
         return;
       }
@@ -613,10 +1058,8 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       }
 
       inFlightSaveRef.current = true;
-      setStatus('saving');
-      setError('');
+      const targetRevision = getCourseSyncSnapshot().dirtyRevision;
 
-      const snapshotJson = JSON.stringify(currentInput);
       try {
         const normalizedModules = currentInput.modules.map((module) => ({
           ...module,
@@ -635,27 +1078,28 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
           totalLessons: normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0),
         };
 
-        if (course) {
-          await onUpdate(course.id, payload);
+        if (activeCourse) {
+          await onUpdateRef.current(activeCourse.id, payload, { targetRevision });
         } else {
-          await onCreate(payload);
+          await onCreateRef.current(payload, { targetRevision });
         }
 
-        originalRef.current = snapshotJson;
-        const stillMatchesSnapshot = JSON.stringify(latestInputRef.current) === snapshotJson;
-        if (stillMatchesSnapshot) {
-          setStatus('saved');
-          setSavedAt(Date.now());
-        } else {
-          setStatus('unsaved');
-        }
-
-        if (origin === 'manual' && !options?.silent) {
-          pushToast(labels.actions.saved);
+        const syncAfter = getCourseSyncSnapshot();
+        if (syncAfter.dirtyRevision > syncAfter.savedRevision) {
+          // Newer edits arrived while Firestore write was in-flight: queue follow-up save instead of claiming saved.
+          pendingSaveOriginRef.current =
+            pendingSaveOriginRef.current === 'manual' || origin === 'manual' ? 'manual' : 'auto';
+        } else if (syncAfter.status === 'saved' && origin === 'manual' && !options?.silent) {
+          pushToast(labels.actions.saved, { variant: 'success' });
         }
       } catch (err) {
-        setStatus('error');
-        setError(err instanceof Error ? err.message : labels.actions.saveError);
+        const msg = err instanceof Error ? err.message : labels.actions.saveError;
+        if (getCourseSyncSnapshot().status !== 'error') {
+          setCourseSyncError(msg, activeCourse?.id ?? tempCourseIdRef.current);
+        }
+        if (origin === 'manual' && !options?.silent) {
+          pushToast(labels.actions.saveError, { variant: 'error' });
+        }
       } finally {
         inFlightSaveRef.current = false;
         const queuedOrigin = pendingSaveOriginRef.current;
@@ -665,24 +1109,21 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
         }
       }
     },
-    [canEdit, course, onCreate, onUpdate, labels.actions.saved, labels.actions.saveError, pushToast]
+    [canEdit, getCourseSyncSnapshot, setCourseSyncError, labels.actions.saved, labels.actions.saveError, pushToast]
   );
 
-  // Autoguardado con debounce de 5 segundos tras detener la escritura (sin interrumpir interacciones activas).
+  // Autoguardado con debounce tras ediciones sin sobrescribir estados de guardado activos.
   useEffect(() => {
     if (!dirty || !canEdit) return;
-    if (!inFlightSaveRef.current) {
-      setStatus('unsaved');
-    }
     if (uploadingCover || generatingCover || confirm !== null) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
       void save('auto');
-    }, 5000);
+    }, 3500);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [dirty, input, canEdit, uploadingCover, generatingCover, confirm, save]);
+  }, [dirty, courseSyncState.dirtyRevision, canEdit, uploadingCover, generatingCover, confirm, save]);
 
   const handleManualSave = useCallback(() => {
     if (debounceRef.current) {
@@ -710,11 +1151,15 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    if (canEdit && dirty && (course || latestInputRef.current.title.trim().length >= 3)) {
+    if (
+      canEdit &&
+      getCourseSyncSnapshot().dirtyRevision > getCourseSyncSnapshot().savedRevision &&
+      (courseRef.current || latestInputRef.current.title.trim().length >= 3)
+    ) {
       await save('manual', { silent: true });
     }
     onCancel();
-  }, [canEdit, dirty, course, save, onCancel]);
+  }, [canEdit, getCourseSyncSnapshot, save, onCancel]);
 
   // Aviso al salir con cambios pendientes.
   useEffect(() => {
@@ -728,114 +1173,121 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty, labels.actions.unsavedWarning]);
 
-  const moveModule = (from: number, to: number) => {
-    applyModules((modules) => reorderModules(modules, from, to));
-  };
+  const moveModule = useCallback(
+    (from: number, to: number) => {
+      applyModules((modules) => reorderModules(modules, from, to));
+    },
+    [applyModules]
+  );
 
-  const moveLesson = (moduleId: string, from: number, to: number) => {
-    applyModules((modules) => reorderLessons(modules, moduleId, from, to));
-  };
+  const moveLesson = useCallback(
+    (moduleId: string, from: number, to: number) => {
+      applyModules((modules) => reorderLessons(modules, moduleId, from, to));
+    },
+    [applyModules]
+  );
 
-  const moveLessonBetween = (sourceModuleId: string, sourceIndex: number, targetModuleId: string, targetIndex: number) => {
-    applyModules((modules) => {
-      const source = modules.find((m) => m.id === sourceModuleId);
-      const lesson = source?.lessons[sourceIndex];
-      if (!source || !lesson) return modules;
-      const without = modules.map((m) =>
-        m.id === sourceModuleId ? { ...m, lessons: m.lessons.filter((_, i) => i !== sourceIndex) } : m
-      );
-      const target = without.find((m) => m.id === targetModuleId);
-      if (!target) return modules;
-      const lessons = [...target.lessons];
-      lessons.splice(Math.max(0, Math.min(targetIndex, lessons.length)), 0, lesson);
-      return without.map((m) => (m.id === targetModuleId ? { ...m, lessons } : m));
-    });
-  };
+  const moveLessonBetween = useCallback(
+    (sourceModuleId: string, sourceIndex: number, targetModuleId: string, targetIndex: number) => {
+      applyModules((modules) => {
+        const source = modules.find((m) => m.id === sourceModuleId);
+        const lesson = source?.lessons[sourceIndex];
+        if (!source || !lesson) return modules;
+        const without = modules.map((m) =>
+          m.id === sourceModuleId ? { ...m, lessons: m.lessons.filter((_, i) => i !== sourceIndex) } : m
+        );
+        const target = without.find((m) => m.id === targetModuleId);
+        if (!target) return modules;
+        const lessons = [...target.lessons];
+        lessons.splice(Math.max(0, Math.min(targetIndex, lessons.length)), 0, lesson);
+        return without.map((m) => (m.id === targetModuleId ? { ...m, lessons } : m));
+      });
+    },
+    [applyModules]
+  );
 
-  const togglePublished = () => {
-    if (!input.published && issues.length > 0) {
+  const togglePublished = useCallback(() => {
+    const current = latestInputRef.current;
+    if (!current.published && collectPublishIssues(current.modules).length > 0) {
       setPublishIssues(true);
       return;
     }
-    setInput((prev) => ({ ...prev, published: !prev.published }));
-    setStatus('unsaved');
-  };
+    updateInput((prev) => ({ ...prev, published: !prev.published }));
+  }, [updateInput]);
 
-  const handleCoverFileUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('El archivo seleccionado debe ser una imagen (PNG, JPG, WebP o SVG).');
-      return;
-    }
-    setUploadingCover(true);
-    try {
-      const url = await uploadCourseCoverImage(course?.id || 'general', file);
-      setInput((prev) => ({ ...prev, coverImage: url }));
-      setStatus('unsaved');
-      setError('');
-      pushToast('Imagen de portada actualizada');
-    } catch (err) {
-      console.error('Error al subir imagen de portada:', err);
-      setError('Error al procesar la imagen seleccionada.');
-    } finally {
-      setUploadingCover(false);
-    }
-  };
+  const handleCoverFileUpload = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        setCourseSyncError(
+          'El archivo seleccionado debe ser una imagen (PNG, JPG, WebP o SVG).',
+          courseRef.current?.id ?? tempCourseIdRef.current
+        );
+        return;
+      }
+      setUploadingCover(true);
+      try {
+        const url = await uploadCourseCoverImage(courseRef.current?.id || 'general', file);
+        updateInput((prev) => ({ ...prev, coverImage: url }));
+        pushToast('Imagen de portada actualizada', { variant: 'success' });
+      } catch (err) {
+        console.error('Error al subir imagen de portada:', err);
+        setCourseSyncError(
+          'Error al procesar la imagen seleccionada.',
+          courseRef.current?.id ?? tempCourseIdRef.current
+        );
+      } finally {
+        setUploadingCover(false);
+      }
+    },
+    [updateInput, pushToast, setCourseSyncError]
+  );
 
-  const generateCover = async () => {
+  const generateCover = useCallback(async () => {
     setGeneratingCover(true);
     try {
+      const current = latestInputRef.current;
       const idToken = await user?.getIdToken();
       if (idToken) {
         const res = await fetch('/api/v1/courses/generate-cover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-          body: JSON.stringify({ title: input.title || 'Curso DB Academy', category: input.category, level: input.level }),
+          body: JSON.stringify({
+            title: current.title || 'Curso DB Academy',
+            category: current.category,
+            level: current.level,
+          }),
         });
         if (res.ok) {
           const data = (await res.json()) as { coverImage?: string };
           if (data.coverImage) {
-            setInput((prev) => ({ ...prev, coverImage: data.coverImage ?? '' }));
-            setStatus('unsaved');
+            updateInput((prev) => ({ ...prev, coverImage: data.coverImage ?? '' }));
             return;
           }
         }
       }
       throw new Error('Fallback preset');
     } catch {
-      // Rotar entre presets de alta calidad de DB Academy sin fallar
-      const currentIdx = COVER_PRESETS.findIndex((p) => p.url === input.coverImage);
+      const currentCover = latestInputRef.current.coverImage;
+      const currentIdx = COVER_PRESETS.findIndex((p) => p.url === currentCover);
       const nextIdx = (currentIdx + 1) % COVER_PRESETS.length;
-      setInput((prev) => ({ ...prev, coverImage: COVER_PRESETS[nextIdx].url }));
-      setStatus('unsaved');
+      updateInput((prev) => ({ ...prev, coverImage: COVER_PRESETS[nextIdx].url }));
     } finally {
       setGeneratingCover(false);
     }
-  };
+  }, [user, updateInput]);
 
-  const statusLabel = (() => {
-    if (status === 'saving') return labels.actions.saving;
-    if (status === 'unsaved') return labels.actions.unsaved;
-    if (status === 'error') return labels.actions.saveError;
-    const seconds = Math.max(0, Math.round((Date.now() - savedAt) / 1000));
-    return `${labels.actions.savedAgo} ${seconds} s`;
-  })();
+  const syncVisual = useMemo(
+    () => renderSyncStatusBadge(effectiveStatus, labels.actions),
+    [effectiveStatus, labels.actions]
+  );
 
-  const index = (
+  const indexNode = (
     <CourseIndex
       modules={input.modules}
       selectedModuleId={selectedModuleId}
       selectedLessonId={selectedLessonId}
-      onSelectModule={(id) => {
-        setSelectedModuleId(id);
-        const module = input.modules.find((m) => m.id === id);
-        setSelectedLessonId(module?.lessons[0]?.id ?? null);
-        setIndexOpen(false);
-      }}
-      onSelectLesson={(moduleId, lessonId) => {
-        setSelectedModuleId(moduleId);
-        setSelectedLessonId(lessonId);
-        setIndexOpen(false);
-      }}
+      onSelectModule={handleSelectModule}
+      onSelectLesson={handleSelectLesson}
       onAddModule={addModule}
       onAddLesson={addLesson}
       onDeleteModule={requestDeleteModule}
@@ -867,37 +1319,38 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
               {labels.actions.courseHeader}
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {input.modules.length} {labels.index.moduleCount} · {input.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {labels.index.lessonCount}
+              {input.modules.length} {labels.index.moduleCount} · {totalLessonCount} {labels.index.lessonCount}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-            {status === 'saving' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
-            ) : status === 'error' ? (
-              <AlertCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-            ) : status === 'unsaved' ? (
-              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-            ) : (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            )}
-            <span>{statusLabel}</span>
+          <div
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200"
+            role="status"
+            aria-live="polite"
+          >
+            <span className={`h-2 w-2 rounded-full shrink-0 ${syncVisual.dotClass}`} />
+            {syncVisual.icon}
+            <span className="font-medium">{syncVisual.text}</span>
           </div>
           <button
             type="button"
             onClick={handleManualSave}
-            disabled={!canEdit || status === 'saving'}
+            disabled={!canEdit || effectiveStatus === 'saving'}
             title="Guardar cambios ahora (Ctrl+S)"
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {effectiveStatus === 'saving' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
             <span>{labels.actions.save}</span>
           </button>
           <button
             type="button"
             onClick={() => setIndexOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 lg:hidden"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 xl:hidden"
           >
             {indexOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
             {labels.index.title}
@@ -906,7 +1359,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100dvh-7rem)]">{index}</div>
+        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100dvh-7rem)]">{indexNode}</div>
 
         <AnimatePresence>
           {indexOpen && (
@@ -914,277 +1367,49 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -12 }}
-              className="fixed inset-0 z-50 bg-slate-950/50 lg:hidden"
+              className="fixed inset-0 z-50 bg-slate-950/50 xl:hidden"
               onClick={() => setIndexOpen(false)}
             >
               <div
                 className="h-full w-[85vw] max-w-[340px] bg-white dark:bg-[#111827]"
                 onClick={(event) => event.stopPropagation()}
               >
-                {index}
+                {indexNode}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
         <div className="min-w-0 space-y-4">
-          <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{labels.actions.courseDetails}</h3>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block md:col-span-2">
-                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Título del curso</span>
-                <input
-                  value={input.title}
-                  onChange={(event) => {
-                    setInput((prev) => ({ ...prev, title: event.target.value }));
-                    setStatus('unsaved');
-                  }}
-                  maxLength={140}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Subtítulo</span>
-                <input
-                  value={input.subtitle}
-                  onChange={(event) => {
-                    setInput((prev) => ({ ...prev, subtitle: event.target.value }));
-                    setStatus('unsaved');
-                  }}
-                  maxLength={240}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-                />
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Nivel</span>
-                  <select
-                    value={input.level}
-                    onChange={(event) => {
-                      setInput((prev) => ({ ...prev, level: event.target.value as Course['level'] }));
-                      setStatus('unsaved');
-                    }}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
-                  >
-                    <option value="beginner">{t('beginner')}</option>
-                    <option value="intermediate">{t('intermediate')}</option>
-                    <option value="advanced">{t('advanced')}</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Precio</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={(input.priceCents / 100).toString()}
-                    onChange={(event) => {
-                      setInput((prev) => ({
-                        ...prev,
-                        priceCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)),
-                      }));
-                      setStatus('unsaved');
-                    }}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm tabular-nums"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Moneda</span>
-                  <select
-                    value={input.currency}
-                    onChange={(event) => {
-                      setInput((prev) => ({ ...prev, currency: event.target.value as Course['currency'] }));
-                      setStatus('unsaved');
-                    }}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
-                  >
-                    <option value="DOP">DOP (RD$)</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="MXN">MXN</option>
-                  </select>
-                </label>
-              </div>
-              <label className="block md:col-span-2">
-                <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Descripción</span>
-                <textarea
-                  rows={3}
-                  maxLength={2000}
-                  value={input.description}
-                  onChange={(event) => {
-                    setInput((prev) => ({ ...prev, description: event.target.value }));
-                    setStatus('unsaved');
-                  }}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
-
-            <input
-              ref={coverFileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleCoverFileUpload(file);
-                e.target.value = '';
-              }}
-            />
-
-            <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-              <div className="space-y-3">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {labels.actions.coverSelector}
-                </span>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => coverFileInputRef.current?.click()}
-                    disabled={uploadingCover}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-60 min-h-[36px]"
-                  >
-                    {uploadingCover ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="h-3.5 w-3.5" />
-                    )}
-                    <span>{uploadingCover ? 'Subiendo imagen...' : 'Subir imagen desde equipo'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void generateCover()}
-                    disabled={generatingCover}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors min-h-[36px]"
-                  >
-                    {generatingCover ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                    )}
-                    <span>Cambiar portada</span>
-                  </button>
-
-                  {input.coverImage && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInput((prev) => ({ ...prev, coverImage: '' }));
-                        setStatus('unsaved');
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-2.5 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 min-h-[36px]"
-                      title="Quitar imagen actual"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Quitar</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                    <LinkIcon className="h-3.5 w-3.5" />
-                  </div>
-                  <input
-                    type="url"
-                    placeholder="O pega aquí el enlace directo a una imagen (https://...)"
-                    value={input.coverImage.startsWith('data:') ? '' : input.coverImage}
-                    onChange={(e) => {
-                      setInput((prev) => ({ ...prev, coverImage: e.target.value.trim() }));
-                      setStatus('unsaved');
-                    }}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="pt-1">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">
-                    O selecciona una de nuestras portadas prediseñadas:
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {COVER_PRESETS.map((preset) => (
-                      <button
-                        key={preset.url}
-                        type="button"
-                        onClick={() => {
-                          setInput((prev) => ({ ...prev, coverImage: preset.url }));
-                          setStatus('unsaved');
-                        }}
-                        className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                          input.coverImage === preset.url
-                            ? 'border-blue-600 ring-2 ring-blue-600/30'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="aspect-video w-full object-cover" />
-                        {input.coverImage === preset.url && (
-                          <span className="absolute right-1 top-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                            ✓
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setCoverDragging(true);
-                }}
-                onDragLeave={() => setCoverDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setCoverDragging(false);
-                  const file = e.dataTransfer.files?.[0];
-                  if (file) void handleCoverFileUpload(file);
-                }}
-                onClick={() => coverFileInputRef.current?.click()}
-                className={`aspect-video overflow-hidden rounded-xl border-2 transition-all cursor-pointer relative group flex items-center justify-center bg-slate-900 ${
-                  coverDragging
-                    ? 'border-blue-500 ring-4 ring-blue-500/20 bg-blue-950/40'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-400'
-                }`}
-                title="Haz clic o arrastra una imagen aquí para subirla"
-              >
-                {uploadingCover ? (
-                  <div className="flex flex-col items-center gap-2 text-white">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-                    <span className="text-xs font-semibold">Subiendo imagen...</span>
-                  </div>
-                ) : input.coverImage ? (
-                  <>
-                    <img src={input.coverImage} alt={input.title} className="h-full w-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-3 text-center">
-                      <Upload className="w-5 h-5 mb-1" />
-                      <span className="text-xs font-semibold">Cambiar imagen</span>
-                      <span className="text-[10px] text-slate-300">Haz clic o arrastra un archivo</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-1.5 text-slate-400 p-4 text-center">
-                    <ImageIcon className="h-8 w-8 text-slate-500" />
-                    <span className="text-xs font-medium">Haz clic o arrastra una imagen</span>
-                    <span className="text-[10px] text-slate-500">PNG, JPG, WebP</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
+          <CourseDetailsSection
+            title={input.title}
+            subtitle={input.subtitle}
+            level={input.level}
+            priceCents={input.priceCents}
+            currency={input.currency}
+            description={input.description}
+            coverImage={input.coverImage}
+            uploadingCover={uploadingCover}
+            generatingCover={generatingCover}
+            courseDetailsLabel={labels.actions.courseDetails}
+            coverSelectorLabel={labels.actions.coverSelector}
+            beginnerLabel={t('beginner')}
+            intermediateLabel={t('intermediate')}
+            advancedLabel={t('advanced')}
+            onUpdateField={handleUpdateField}
+            onUploadCoverFile={handleCoverFileUpload}
+            onGenerateCover={generateCover}
+          />
 
           {selectedModule && selectedLesson ? (
             <LessonEditor
+              key={selectedLesson.id}
               lesson={selectedLesson}
               moduleTitle={selectedModule.title}
-              lessonLabel={`${input.modules.indexOf(selectedModule) + 1}.${selectedModule.lessons.indexOf(selectedLesson) + 1}`}
-              onChange={(patch) => updateLesson(selectedModule.id, selectedLesson.id, patch)}
-              onDelete={() => requestDeleteLesson(selectedModule.id, selectedLesson.id)}
-              onPreview={() => setPreviewCourse(buildCourseFromInput(input, course))}
+              lessonLabel={`${selectedModuleIndex + 1}.${selectedLessonIndex + 1}`}
+              onChange={handleSelectedLessonChange}
+              onDelete={handleDeleteSelectedLesson}
+              onPreview={handleOpenPreview}
               courseId={course?.id ?? tempCourseIdRef.current}
               canEdit={canEdit}
               labels={labels.lesson}
@@ -1201,10 +1426,11 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
 
           {selectedModule && (
             <QuizBuilder
+              key={selectedModule.id}
               questions={selectedModule.questions ?? []}
               enabled={selectedModule.quizEnabled ?? true}
-              onChange={(questions) => updateModule(selectedModule.id, { questions })}
-              onEnabledChange={(enabled) => updateModule(selectedModule.id, { quizEnabled: enabled })}
+              onChange={handleSelectedQuizChange}
+              onEnabledChange={handleSelectedQuizEnabledChange}
               labels={labels.quiz}
             />
           )}
@@ -1213,19 +1439,16 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
 
       <div className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 dark:border-slate-700 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 dark:bg-[#0F1624]/95">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 text-sm">
-            {status === 'saving' ? (
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-            ) : status === 'error' ? (
-              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            ) : status === 'unsaved' ? (
-              <AlertCircle className="h-4 w-4 text-amber-500" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            )}
-            <span className="text-slate-700 dark:text-slate-200">{statusLabel}</span>
-            {status === 'error' && (
-              <button type="button" onClick={handleManualSave} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+          <div className="flex min-w-0 items-center gap-2 text-sm" role="status" aria-live="polite">
+            <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${syncVisual.dotClass}`} />
+            {syncVisual.icon}
+            <span className="font-medium text-slate-700 dark:text-slate-200">{syncVisual.text}</span>
+            {effectiveStatus === 'error' && (
+              <button
+                type="button"
+                onClick={handleManualSave}
+                className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
                 {labels.actions.retry}
               </button>
             )}
@@ -1233,7 +1456,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setPreviewCourse(buildCourseFromInput(input, course))}
+              onClick={handleOpenPreview}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <Eye className="h-4 w-4" />
@@ -1243,7 +1466,9 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
               type="button"
               onClick={togglePublished}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white ${
-                input.published ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900' : 'bg-emerald-600 hover:bg-emerald-700'
+                input.published
+                  ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
               }`}
             >
               {input.published ? labels.actions.unpublish : labels.actions.publish}
@@ -1251,10 +1476,14 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             <button
               type="button"
               onClick={handleManualSave}
-              disabled={!canEdit || status === 'saving'}
+              disabled={!canEdit || effectiveStatus === 'saving'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {effectiveStatus === 'saving' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               {labels.actions.save}
             </button>
           </div>

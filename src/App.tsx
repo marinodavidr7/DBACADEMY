@@ -94,6 +94,8 @@ const AppShell: React.FC = () => {
     logout,
     authError,
     clearAuthError,
+    lemonSqueezyBanner,
+    clearLemonSqueezyBanner,
     t,
   } = usePlatform();
 
@@ -368,7 +370,7 @@ const AppShell: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 lg:h-[100dvh] lg:overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 lg:h-[100dvh] lg:overflow-y-auto overflow-x-clip">
         {/* Clean 3-Zone Top Bar (hidden in Zen Mode) */}
         {!isZenActive && (
           <header className="sticky top-0 z-30 border-b border-[var(--dba-border)] bg-[var(--dba-bg-surface)]/95 backdrop-blur-xs safe-pt px-4 sm:px-5 flex items-center justify-between gap-3 min-h-[54px]">
@@ -518,6 +520,28 @@ const AppShell: React.FC = () => {
                   onClick={clearAuthError}
                   aria-label="Cerrar aviso"
                   className="min-w-[36px] min-h-[36px] rounded hover:bg-red-100 dark:hover:bg-red-900/40 shrink-0 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {lemonSqueezyBanner && (
+              <div
+                className={`mb-5 rounded-xl border p-3.5 text-xs flex items-center justify-between gap-3 ${
+                  lemonSqueezyBanner.status === 'success'
+                    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+                    : lemonSqueezyBanner.status === 'error'
+                      ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200'
+                      : 'border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200'
+                }`}
+              >
+                <span className="font-medium">{lemonSqueezyBanner.message}</span>
+                <button
+                  type="button"
+                  onClick={clearLemonSqueezyBanner}
+                  aria-label="Cerrar notificación de pago"
+                  className="min-w-[32px] min-h-[32px] rounded hover:bg-black/5 dark:hover:bg-white/10 shrink-0 flex items-center justify-center"
                 >
                   <X className="w-4 h-4" />
                 </button>

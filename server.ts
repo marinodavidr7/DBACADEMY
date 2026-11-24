@@ -92,18 +92,30 @@ setInterval(() => {
 const FIREBASE_CERT_URL =
   'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
-function loadFirebaseProjectId(): string {
+function loadFirebaseConfig(): { projectId: string; firestoreDatabaseId: string; apiKey: string } {
   try {
     const raw = fs.readFileSync(path.resolve(__dirname, 'firebase-applet-config.json'), 'utf8');
-    const parsed = JSON.parse(raw) as { projectId?: string };
-    if (parsed.projectId) return parsed.projectId;
+    const parsed = JSON.parse(raw) as {
+      projectId?: string;
+      firestoreDatabaseId?: string;
+      apiKey?: string;
+    };
+    return {
+      projectId: parsed.projectId || process.env.FIREBASE_PROJECT_ID || 'river-pipe-m6tvw',
+      firestoreDatabaseId: parsed.firestoreDatabaseId || '(default)',
+      apiKey: parsed.apiKey || '',
+    };
   } catch {
-    // Fallback handled below
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID || 'river-pipe-m6tvw',
+      firestoreDatabaseId: '(default)',
+      apiKey: '',
+    };
   }
-  return process.env.FIREBASE_PROJECT_ID || 'river-pipe-m6tvw';
 }
 
-const FIREBASE_PROJECT_ID = loadFirebaseProjectId();
+const FIREBASE_APP_CONFIG = loadFirebaseConfig();
+const FIREBASE_PROJECT_ID = FIREBASE_APP_CONFIG.projectId;
 let cachedGoogleCerts: { certs: Record<string, string>; expiresAt: number } = {
   certs: {},
   expiresAt: 0,
@@ -422,9 +434,202 @@ async function dispatchWebhooks(ownerId: string, event: string, data: Record<str
   }
 }
 
+interface PendingLemonCheckout {
+  paymentId: string;
+  checkoutId: string;
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  userEmail: string | null;
+  instructorId: string;
+  amountCents: number;
+  originalAmountCents: number;
+  discountCents: number;
+  discountSource: 'none' | 'coupon' | 'gift_card';
+  couponCode?: string;
+  giftCardCode?: string;
+  currency: 'DOP' | 'USD' | 'EUR' | 'MXN';
+  chargedCents: number;
+  variantId: string;
+  testMode: boolean;
+  createdAtMs: number;
+}
+
+interface VerifiedLemonOrder {
+  paymentId: string;
+  orderId: string;
+  orderNumber: string;
+  identifier: string;
+  courseId: string;
+  userId: string;
+  status: 'paid' | 'refunded';
+  receiptUrl?: string;
+  totalCents: number;
+  currency: string;
+  verifiedAt: string;
+}
+
+const pendingLemonCheckouts = new Map<string, PendingLemonCheckout>();
+const verifiedLemonOrders = new Map<string, VerifiedLemonOrder>();
+
+function parseFirestoreValue(val: Record<string, unknown>): unknown {
+  if ('stringValue' in val) return String(val.stringValue);
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return Boolean(val.booleanValue);
+  if ('timestampValue' in val) return String(val.timestampValue);
+  if ('nullValue' in val) return null;
+  if ('arrayValue' in val && val.arrayValue && typeof val.arrayValue === 'object') {
+    const values = (val.arrayValue as { values?: Array<Record<string, unknown>> }).values ?? [];
+    return values.map((item) => parseFirestoreValue(item));
+  }
+  if ('mapValue' in val && val.mapValue && typeof val.mapValue === 'object') {
+    const fields = (val.mapValue as { fields?: Record<string, Record<string, unknown>> }).fields ?? {};
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      out[k] = parseFirestoreValue(v);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+async function readFirestoreDoc(
+  collectionName: 'courses' | 'coupons' | 'giftCards',
+  docId: string,
+  bearerHeader?: string
+): Promise<Record<string, unknown> | null> {
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(docId)) {
+    return null;
+  }
+  const db = initFirebaseAdmin();
+  if (db) {
+    const snap = await db.collection(collectionName).doc(docId).get();
+    return snap.exists ? (snap.data() as Record<string, unknown>) : null;
+  }
+
+  const databaseId = encodeURIComponent(FIREBASE_APP_CONFIG.firestoreDatabaseId || '(default)');
+  const url = new URL(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/${databaseId}/documents/${collectionName}/${encodeURIComponent(docId)}`
+  );
+  if (FIREBASE_APP_CONFIG.apiKey) {
+    url.searchParams.set('key', FIREBASE_APP_CONFIG.apiKey);
+  }
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (bearerHeader?.startsWith('Bearer ')) {
+    headers.Authorization = bearerHeader;
+  }
+  const resp = await fetch(url.toString(), { headers });
+  if (resp.status === 404) return null;
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`No se pudo consultar ${collectionName}/${docId} (${resp.status}): ${text.slice(0, 120)}`);
+  }
+  const json = (await resp.json()) as { fields?: Record<string, Record<string, unknown>> };
+  if (!json.fields) return null;
+  const parsed: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(json.fields)) {
+    parsed[k] = parseFirestoreValue(v);
+  }
+  return parsed;
+}
+
+function getLemonSqueezyConfig() {
+  const apiKey = (process.env.LEMONSQUEEZY_API_KEY || '').trim();
+  const storeId = (process.env.LEMONSQUEEZY_STORE_ID || '').trim();
+  const defaultVariantId = (process.env.LEMONSQUEEZY_DEFAULT_VARIANT_ID || '').trim();
+  const webhookSecret = (process.env.LEMONSQUEEZY_WEBHOOK_SECRET || '').trim();
+  const testMode = process.env.LEMONSQUEEZY_TEST_MODE === 'true';
+  const storeCurrency = (process.env.LEMONSQUEEZY_STORE_CURRENCY || 'USD').trim().toUpperCase();
+  const dopPerUsd = Math.max(1, Number(process.env.LEMONSQUEEZY_DOP_PER_USD || 60));
+  const mxnPerUsd = Math.max(1, Number(process.env.LEMONSQUEEZY_MXN_PER_USD || 18));
+
+  let variantMap: Record<string, string> = {};
+  const rawMap = (process.env.LEMONSQUEEZY_VARIANT_MAP || '').trim();
+  if (rawMap) {
+    try {
+      const parsed = JSON.parse(rawMap) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === 'string' || typeof v === 'number') {
+          variantMap[k] = String(v).trim();
+        }
+      }
+    } catch {
+      // Ignore invalid JSON variant map; fallback to defaultVariantId
+    }
+  }
+
+  const missingKeys: string[] = [];
+  if (!apiKey) missingKeys.push('LEMONSQUEEZY_API_KEY');
+  if (!storeId) missingKeys.push('LEMONSQUEEZY_STORE_ID');
+  if (!defaultVariantId && Object.keys(variantMap).length === 0) {
+    missingKeys.push('LEMONSQUEEZY_DEFAULT_VARIANT_ID');
+  }
+
+  return {
+    apiKey,
+    storeId,
+    defaultVariantId,
+    variantMap,
+    webhookSecret,
+    testMode,
+    storeCurrency,
+    dopPerUsd,
+    mxnPerUsd,
+    configured: Boolean(apiKey && storeId && (defaultVariantId || Object.keys(variantMap).length > 0)),
+    webhookConfigured: Boolean(webhookSecret),
+    missingKeys,
+  };
+}
+
+function resolveAppBaseUrl(req: express.Request): string {
+  const configured = (process.env.APP_URL || '').trim();
+  if (configured && configured !== 'MY_APP_URL') {
+    try {
+      const u = new URL(configured);
+      if (u.protocol === 'https:' || u.protocol === 'http:') {
+        return u.origin;
+      }
+    } catch {
+      // Fallback to request host
+    }
+  }
+  const protoHeader = req.headers['x-forwarded-proto'];
+  const proto = typeof protoHeader === 'string' ? protoHeader.split(',')[0].trim() : req.protocol || 'http';
+  const host = req.get('host') || `localhost:${PORT}`;
+  return `${proto === 'https' ? 'https' : 'http'}://${host}`;
+}
+
+function convertCourseCentsToStoreCents(
+  amountCents: number,
+  courseCurrency: string,
+  config: ReturnType<typeof getLemonSqueezyConfig>
+): number {
+  if (amountCents <= 0) return 0;
+  if (courseCurrency === config.storeCurrency) {
+    return Math.max(50, Math.round(amountCents));
+  }
+  if (config.storeCurrency === 'USD') {
+    if (courseCurrency === 'DOP') {
+      return Math.max(50, Math.round(amountCents / config.dopPerUsd));
+    }
+    if (courseCurrency === 'MXN') {
+      return Math.max(50, Math.round(amountCents / config.mxnPerUsd));
+    }
+  }
+  return Math.max(50, Math.round(amountCents));
+}
+
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '2mb' }));
+  app.use(
+    express.json({
+      limit: '2mb',
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    })
+  );
 
   // REST API v1 for third-party integrations, payment gateways, cloud storage & webhooks
   app.get('/api/v1/health', (_req, res) => {
@@ -444,16 +649,569 @@ async function startServer() {
       info: {
         title: 'Cátedra Virtual Learning API',
         version: '1.0.0',
-        description: 'REST API for course sync, real-time progress webhooks, payment gateway verification, and certificate validation.',
+        description: 'REST API for course sync, real-time progress webhooks, Lemon Squeezy & multi-gateway payment verification, and certificate validation.',
       },
       servers: [{ url: `${baseUrl}/api/v1` }],
       paths: {
         '/health': { get: { summary: 'API and WebSocket Gateway Health' } },
-        '/payments/checkout': { post: { summary: 'Authorize Stripe, Mercado Pago, or PayPal course purchase' } },
+        '/payments/checkout': { post: { summary: 'Authorize Lemon Squeezy, Stripe, Mercado Pago, or PayPal course purchase' } },
+        '/payments/lemonsqueezy/status': { get: { summary: 'Inspect Lemon Squeezy server configuration status' } },
+        '/payments/lemonsqueezy/checkout': { post: { summary: 'Create hosted Lemon Squeezy checkout session (app.lemonsqueezy.com)' } },
+        '/payments/lemonsqueezy/webhook': { post: { summary: 'Receive HMAC-SHA256 signed Lemon Squeezy order webhooks' } },
+        '/payments/lemonsqueezy/verify': { get: { summary: 'Verify Lemon Squeezy order completion for authenticated student' } },
         '/webhooks/register': { post: { summary: 'Register API key hash and webhook endpoint' } },
         '/webhooks/test': { post: { summary: 'Dispatch signed HMAC-SHA256 webhook event' } },
         '/cloud-storage/sync': { post: { summary: 'Upload client-encrypted E2EE backup manifest' } },
       },
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Lemon Squeezy (https://app.lemonsqueezy.com) Payment Gateway Integration
+  // -------------------------------------------------------------------------
+  app.get('/api/v1/payments/lemonsqueezy/status', (_req, res) => {
+    const cfg = getLemonSqueezyConfig();
+    res.json({
+      configured: cfg.configured,
+      webhookConfigured: cfg.webhookConfigured,
+      testMode: cfg.testMode,
+      providerUrl: 'https://app.lemonsqueezy.com',
+      storeCurrency: cfg.storeCurrency,
+      missingKeys: cfg.missingKeys,
+    });
+  });
+
+  app.post('/api/v1/payments/lemonsqueezy/checkout', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    const { courseId, couponCode, giftCardCode, customerName } = req.body ?? {};
+    const safeCourseId = typeof courseId === 'string' ? courseId.trim() : '';
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(safeCourseId)) {
+      res.status(400).json({ error: 'Identificador de curso inválido.' });
+      return;
+    }
+
+    try {
+      const course = await readFirestoreDoc('courses', safeCourseId, req.headers.authorization);
+      if (!course) {
+        res.status(404).json({ error: 'Curso no encontrado en Firestore.' });
+        return;
+      }
+
+      const courseTitle = String(course.title || 'Curso DB Academy').slice(0, 140);
+      const instructorId = String(course.instructorId || '');
+      const originalAmountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
+      const rawCurr = String(course.currency || 'DOP');
+      const currency = (
+        rawCurr === 'EUR' || rawCurr === 'MXN' || rawCurr === 'USD' ? rawCurr : 'DOP'
+      ) as 'DOP' | 'USD' | 'EUR' | 'MXN';
+
+      let discountCents = 0;
+      let discountSource: 'none' | 'coupon' | 'gift_card' = 'none';
+      let appliedCouponCode: string | undefined;
+      let appliedGiftCardCode: string | undefined;
+
+      const normalizedGiftCard =
+        typeof giftCardCode === 'string' && giftCardCode.trim()
+          ? normalizeCode(giftCardCode)
+          : '';
+      const normalizedCoupon =
+        typeof couponCode === 'string' && couponCode.trim()
+          ? normalizeCode(couponCode)
+          : '';
+
+      if (normalizedGiftCard && originalAmountCents > 0) {
+        if (!/^[A-Z0-9_-]{6,64}$/.test(normalizedGiftCard)) {
+          res.status(400).json({ error: 'Formato de Gift Card inválido.' });
+          return;
+        }
+        const card = await readFirestoreDoc('giftCards', normalizedGiftCard, req.headers.authorization);
+        if (!card || card.active !== true || card.status !== 'active') {
+          res.status(400).json({ error: 'La Gift Card no está activa o no existe.' });
+          return;
+        }
+        if (card.courseId && String(card.courseId) !== safeCourseId) {
+          res.status(400).json({ error: 'Esta Gift Card no aplica a este curso.' });
+          return;
+        }
+        if (String(card.currency) !== currency) {
+          res.status(400).json({ error: 'La moneda de la Gift Card no coincide con el curso.' });
+          return;
+        }
+        const remaining = Math.max(0, Math.round(Number(card.remainingAmountCents ?? 0)));
+        if (remaining <= 0) {
+          res.status(400).json({ error: 'La Gift Card no tiene saldo disponible.' });
+          return;
+        }
+        discountCents = Math.min(originalAmountCents, remaining);
+        discountSource = 'gift_card';
+        appliedGiftCardCode = normalizedGiftCard;
+      } else if (normalizedCoupon && originalAmountCents > 0) {
+        if (!/^[A-Z0-9_-]{3,64}$/.test(normalizedCoupon)) {
+          res.status(400).json({ error: 'Formato de cupón inválido.' });
+          return;
+        }
+        const couponDoc = await readFirestoreDoc('coupons', normalizedCoupon, req.headers.authorization);
+        if (!couponDoc) {
+          res.status(400).json({ error: 'Código de cupón no encontrado.' });
+          return;
+        }
+        const coupon = couponDoc as unknown as Coupon;
+        if (!isCouponActive(coupon)) {
+          res.status(400).json({ error: 'El cupón no está activo, expiró o agotó sus usos.' });
+          return;
+        }
+        if (coupon.appliesTo === 'courses' && !coupon.courseIds?.includes(safeCourseId)) {
+          res.status(400).json({ error: 'Este cupón no aplica a este curso.' });
+          return;
+        }
+        if (coupon.minPurchaseCents && originalAmountCents < coupon.minPurchaseCents) {
+          res.status(400).json({ error: 'El monto del curso no alcanza el mínimo requerido por el cupón.' });
+          return;
+        }
+        discountCents = calculateDiscount(coupon, originalAmountCents).discountCents;
+        discountSource = 'coupon';
+        appliedCouponCode = normalizedCoupon;
+      }
+
+      const finalAmountCents = Math.max(0, originalAmountCents - discountCents);
+      const paymentId = `pay_ls_${crypto.randomBytes(8).toString('hex')}`;
+
+      if (finalAmountCents === 0) {
+        res.json({
+          freeBypass: true,
+          paymentId,
+          courseId: safeCourseId,
+          amountCents: 0,
+          originalAmountCents,
+          discountCents,
+          currency,
+          couponCode: appliedCouponCode,
+          giftCardCode: appliedGiftCardCode,
+        });
+        return;
+      }
+
+      const lsConfig = getLemonSqueezyConfig();
+      const resolvedVariantId = lsConfig.variantMap[safeCourseId] || lsConfig.defaultVariantId;
+
+      if (!lsConfig.apiKey || !lsConfig.storeId || !resolvedVariantId) {
+        res.status(503).json({
+          code: 'LEMONSQUEEZY_NOT_CONFIGURED',
+          error:
+            'Falta configurar las credenciales de Lemon Squeezy en Secrets del servidor (LEMONSQUEEZY_API_KEY, LEMONSQUEEZY_STORE_ID y LEMONSQUEEZY_DEFAULT_VARIANT_ID).',
+          missingKeys: lsConfig.missingKeys,
+        });
+        return;
+      }
+
+      const appBaseUrl = resolveAppBaseUrl(req);
+      const redirectUrl =
+        `${appBaseUrl}/?ls_checkout=success` +
+        `&course_id=${encodeURIComponent(safeCourseId)}` +
+        `&payment_id=${encodeURIComponent(paymentId)}`;
+
+      const chargedCents = convertCourseCentsToStoreCents(finalAmountCents, currency, lsConfig);
+
+      const checkoutPayload = {
+        data: {
+          type: 'checkouts',
+          attributes: {
+            custom_price: chargedCents,
+            product_options: {
+              name: courseTitle,
+              description: `Acceso completo en DB Academy · ${currency} ${(finalAmountCents / 100).toFixed(2)}`,
+              redirect_url: redirectUrl,
+              receipt_button_text: 'Volver al curso en DB Academy',
+              receipt_link_url: redirectUrl,
+            },
+            checkout_options: {
+              embed: false,
+              media: true,
+              logo: true,
+            },
+            checkout_data: {
+              ...(auth.email ? { email: auth.email } : {}),
+              ...(typeof customerName === 'string' && customerName.trim()
+                ? { name: customerName.trim().slice(0, 100) }
+                : {}),
+              custom: {
+                payment_id: paymentId,
+                course_id: safeCourseId,
+                user_id: auth.uid,
+                coupon_code: appliedCouponCode || '',
+                gift_card_code: appliedGiftCardCode || '',
+              },
+            },
+            test_mode: lsConfig.testMode,
+          },
+          relationships: {
+            store: {
+              data: {
+                type: 'stores',
+                id: lsConfig.storeId,
+              },
+            },
+            variant: {
+              data: {
+                type: 'variants',
+                id: resolvedVariantId,
+              },
+            },
+          },
+        },
+      };
+
+      const lsResp = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${lsConfig.apiKey}`,
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+        },
+        body: JSON.stringify(checkoutPayload),
+      });
+
+      const lsBody = (await lsResp.json().catch(() => ({}))) as {
+        data?: { id?: string; attributes?: { url?: string } };
+        errors?: Array<{ detail?: string; title?: string }>;
+      };
+
+      const checkoutUrl = lsBody.data?.attributes?.url;
+      const checkoutId = lsBody.data?.id;
+
+      if (!lsResp.ok || !checkoutUrl || !checkoutId) {
+        const detail =
+          lsBody.errors?.map((e) => e.detail || e.title).filter(Boolean).join('; ') ||
+          `HTTP ${lsResp.status}`;
+        res.status(502).json({
+          error: `Lemon Squeezy rechazó la creación del checkout: ${detail}`,
+        });
+        return;
+      }
+
+      pendingLemonCheckouts.set(paymentId, {
+        paymentId,
+        checkoutId,
+        courseId: safeCourseId,
+        courseTitle,
+        userId: auth.uid,
+        userEmail: auth.email,
+        instructorId,
+        amountCents: finalAmountCents,
+        originalAmountCents,
+        discountCents,
+        discountSource,
+        couponCode: appliedCouponCode,
+        giftCardCode: appliedGiftCardCode,
+        currency,
+        chargedCents,
+        variantId: resolvedVariantId,
+        testMode: lsConfig.testMode,
+        createdAtMs: Date.now(),
+      });
+
+      res.json({
+        freeBypass: false,
+        checkoutUrl,
+        checkoutId,
+        paymentId,
+        courseId: safeCourseId,
+        amountCents: finalAmountCents,
+        originalAmountCents,
+        discountCents,
+        currency,
+        couponCode: appliedCouponCode,
+        giftCardCode: appliedGiftCardCode,
+        testMode: lsConfig.testMode,
+      });
+    } catch (err) {
+      console.error('Lemon Squeezy checkout error:', err);
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Error creando el checkout en Lemon Squeezy.',
+      });
+    }
+  });
+
+  app.post('/api/v1/payments/lemonsqueezy/webhook', (req, res) => {
+    const lsConfig = getLemonSqueezyConfig();
+    if (!lsConfig.webhookSecret) {
+      res.status(503).json({ error: 'LEMONSQUEEZY_WEBHOOK_SECRET not configured' });
+      return;
+    }
+
+    const signatureHeader = req.headers['x-signature'];
+    const signatureHex = typeof signatureHeader === 'string' ? signatureHeader.trim() : '';
+    const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody;
+
+    if (!signatureHex || !rawBody || rawBody.length === 0) {
+      res.status(401).json({ error: 'Missing webhook signature or payload' });
+      return;
+    }
+
+    const expectedHex = crypto
+      .createHmac('sha256', lsConfig.webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const sigBuf = Buffer.from(signatureHex, 'utf8');
+    const expBuf = Buffer.from(expectedHex, 'utf8');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      res.status(401).json({ error: 'Invalid Lemon Squeezy webhook signature' });
+      return;
+    }
+
+    const payload = (req.body ?? {}) as {
+      meta?: {
+        event_name?: string;
+        custom_data?: {
+          payment_id?: string;
+          course_id?: string;
+          user_id?: string;
+        };
+      };
+      data?: {
+        id?: string;
+        attributes?: {
+          order_number?: number;
+          identifier?: string;
+          status?: string;
+          total?: number;
+          currency?: string;
+          urls?: { receipt?: string };
+        };
+      };
+    };
+
+    const eventName = payload.meta?.event_name || '';
+    const customData = payload.meta?.custom_data || {};
+    const paymentId = typeof customData.payment_id === 'string' ? customData.payment_id : '';
+    const courseId = typeof customData.course_id === 'string' ? customData.course_id : '';
+    const userId = typeof customData.user_id === 'string' ? customData.user_id : '';
+    const orderId = String(payload.data?.id || '');
+    const attrs = payload.data?.attributes || {};
+
+    if (paymentId && (eventName === 'order_created' || eventName === 'order_refunded')) {
+      const orderStatus: 'paid' | 'refunded' =
+        eventName === 'order_refunded' || attrs.status === 'refunded' ? 'refunded' : 'paid';
+
+      if (orderStatus === 'paid' && attrs.status && attrs.status !== 'paid') {
+        res.json({ received: true, ignoredStatus: attrs.status });
+        return;
+      }
+
+      const verifiedRecord: VerifiedLemonOrder = {
+        paymentId,
+        orderId,
+        orderNumber: String(attrs.order_number || orderId),
+        identifier: String(attrs.identifier || orderId),
+        courseId,
+        userId,
+        status: orderStatus,
+        receiptUrl: attrs.urls?.receipt,
+        totalCents: Number(attrs.total ?? 0),
+        currency: String(attrs.currency || 'USD'),
+        verifiedAt: new Date().toISOString(),
+      };
+      verifiedLemonOrders.set(paymentId, verifiedRecord);
+
+      if (orderStatus === 'paid' && userId) {
+        const pending = pendingLemonCheckouts.get(paymentId);
+        const eventPayload = {
+          paymentId,
+          courseId: courseId || pending?.courseId || '',
+          courseTitle: pending?.courseTitle || '',
+          studentId: userId,
+          instructorId: pending?.instructorId || '',
+          amountCents: pending?.amountCents ?? verifiedRecord.totalCents,
+          currency: pending?.currency || verifiedRecord.currency,
+          gateway: 'lemonsqueezy',
+          status: 'succeeded',
+          transactionRef: `LS-${verifiedRecord.orderNumber}`,
+          authorizedAt: verifiedRecord.verifiedAt,
+        };
+        broadcastEvent({ type: 'PAYMENT_COMPLETED', scope: 'user', ...eventPayload }, userId);
+        if (pending?.instructorId) {
+          broadcastEvent({ type: 'INSTRUCTOR_SALE', scope: 'user', ...eventPayload }, pending.instructorId);
+          void dispatchWebhooks(pending.instructorId, 'payment.succeeded', eventPayload);
+        }
+      }
+    }
+
+    res.json({ received: true });
+  });
+
+  app.get('/api/v1/payments/lemonsqueezy/verify', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    const paymentId = typeof req.query.paymentId === 'string' ? req.query.paymentId.trim() : '';
+    const courseId = typeof req.query.courseId === 'string' ? req.query.courseId.trim() : '';
+    const orderIdQuery = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : '';
+
+    if (!paymentId || !/^[a-zA-Z0-9_-]{4,128}$/.test(paymentId)) {
+      res.status(400).json({ error: 'paymentId inválido.' });
+      return;
+    }
+
+    const pending = pendingLemonCheckouts.get(paymentId);
+    if (pending && pending.userId !== auth.uid) {
+      res.status(403).json({ error: 'Esta sesión de pago pertenece a otro usuario.' });
+      return;
+    }
+    if (pending && courseId && pending.courseId !== courseId) {
+      res.status(400).json({ error: 'El curso no coincide con la sesión de pago.' });
+      return;
+    }
+
+    // 1) Check webhook-confirmed order first
+    let verified = verifiedLemonOrders.get(paymentId);
+    if (verified && verified.userId && verified.userId !== auth.uid) {
+      res.status(403).json({ error: 'La orden verificada pertenece a otro usuario.' });
+      return;
+    }
+
+    // 2) Fallback: Query Lemon Squeezy Orders API directly using server API key
+    const lsConfig = getLemonSqueezyConfig();
+    if (!verified && lsConfig.apiKey && lsConfig.storeId && (pending || orderIdQuery)) {
+      try {
+        if (orderIdQuery && /^[0-9]+$/.test(orderIdQuery)) {
+          const orderResp = await fetch(`https://api.lemonsqueezy.com/v1/orders/${orderIdQuery}`, {
+            headers: {
+              Authorization: `Bearer ${lsConfig.apiKey}`,
+              Accept: 'application/vnd.api+json',
+            },
+          });
+          if (orderResp.ok) {
+            const orderJson = (await orderResp.json()) as {
+              data?: {
+                id?: string;
+                attributes?: {
+                  status?: string;
+                  order_number?: number;
+                  identifier?: string;
+                  user_email?: string;
+                  total?: number;
+                  currency?: string;
+                  urls?: { receipt?: string };
+                };
+              };
+            };
+            const attrs = orderJson.data?.attributes;
+            const emailMatches =
+              !auth.email ||
+              !attrs?.user_email ||
+              attrs.user_email.trim().toLowerCase() === auth.email.toLowerCase();
+            if (orderJson.data?.id && attrs?.status === 'paid' && emailMatches) {
+              verified = {
+                paymentId,
+                orderId: String(orderJson.data.id),
+                orderNumber: String(attrs.order_number || orderJson.data.id),
+                identifier: String(attrs.identifier || orderJson.data.id),
+                courseId: pending?.courseId || courseId,
+                userId: auth.uid,
+                status: 'paid',
+                receiptUrl: attrs.urls?.receipt,
+                totalCents: Number(attrs.total ?? 0),
+                currency: String(attrs.currency || 'USD'),
+                verifiedAt: new Date().toISOString(),
+              };
+              verifiedLemonOrders.set(paymentId, verified);
+            }
+          }
+        } else if (pending && auth.email) {
+          const ordersUrl = new URL('https://api.lemonsqueezy.com/v1/orders');
+          ordersUrl.searchParams.set('filter[store_id]', lsConfig.storeId);
+          ordersUrl.searchParams.set('filter[user_email]', auth.email);
+          ordersUrl.searchParams.set('sort', '-createdAt');
+          ordersUrl.searchParams.set('page[size]', '10');
+
+          const ordersResp = await fetch(ordersUrl.toString(), {
+            headers: {
+              Authorization: `Bearer ${lsConfig.apiKey}`,
+              Accept: 'application/vnd.api+json',
+            },
+          });
+          if (ordersResp.ok) {
+            const ordersJson = (await ordersResp.json()) as {
+              data?: Array<{
+                id?: string;
+                attributes?: {
+                  status?: string;
+                  order_number?: number;
+                  identifier?: string;
+                  created_at?: string;
+                  total?: number;
+                  currency?: string;
+                  urls?: { receipt?: string };
+                  first_order_item?: { variant_id?: number | string };
+                };
+              }>;
+            };
+            const matched = (ordersJson.data ?? []).find((ord) => {
+              const a = ord.attributes;
+              if (!a || a.status !== 'paid') return false;
+              const createdMs = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const afterCheckout = createdMs >= pending.createdAtMs - 60_000;
+              const variantOk =
+                !a.first_order_item?.variant_id ||
+                String(a.first_order_item.variant_id) === String(pending.variantId);
+              return afterCheckout && variantOk;
+            });
+            if (matched?.id && matched.attributes) {
+              verified = {
+                paymentId,
+                orderId: String(matched.id),
+                orderNumber: String(matched.attributes.order_number || matched.id),
+                identifier: String(matched.attributes.identifier || matched.id),
+                courseId: pending.courseId,
+                userId: auth.uid,
+                status: 'paid',
+                receiptUrl: matched.attributes.urls?.receipt,
+                totalCents: Number(matched.attributes.total ?? 0),
+                currency: String(matched.attributes.currency || 'USD'),
+                verifiedAt: new Date().toISOString(),
+              };
+              verifiedLemonOrders.set(paymentId, verified);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Lemon Squeezy verify lookup error:', err);
+      }
+    }
+
+    if (!verified || verified.status !== 'paid') {
+      res.json({
+        verified: false,
+        status: verified?.status === 'refunded' ? 'refunded' : 'pending',
+        paymentId,
+        courseId: pending?.courseId || courseId,
+        message:
+          verified?.status === 'refunded'
+            ? 'Esta orden fue reembolsada en Lemon Squeezy.'
+            : 'El pago aún aparece pendiente de confirmación en Lemon Squeezy.',
+      });
+      return;
+    }
+
+    res.json({
+      verified: true,
+      status: 'paid',
+      paymentId,
+      courseId: pending?.courseId || verified.courseId || courseId,
+      courseTitle: pending?.courseTitle,
+      instructorId: pending?.instructorId,
+      transactionRef: `LS-${verified.orderNumber}`,
+      amountCents: pending?.amountCents,
+      originalAmountCents: pending?.originalAmountCents,
+      discountCents: pending?.discountCents,
+      discountSource: pending?.discountSource ?? 'none',
+      couponCode: pending?.couponCode,
+      giftCardCode: pending?.giftCardCode,
+      currency: pending?.currency,
+      receiptUrl: verified.receiptUrl,
     });
   });
 
@@ -467,7 +1225,7 @@ async function startServer() {
       res.status(400).json({ error: 'Missing required payment fields' });
       return;
     }
-    const allowedGateways = ['stripe', 'mercadopago', 'paypal'];
+    const allowedGateways = ['lemonsqueezy', 'stripe', 'mercadopago', 'paypal'];
     if (!allowedGateways.includes(String(gateway))) {
       res.status(400).json({ error: 'Unsupported payment gateway' });
       return;
@@ -608,7 +1366,15 @@ async function startServer() {
 
       // Si el precio final es 0, no pasamos por pasarela
       const isFree = finalAmountCents === 0;
-      const prefix = isFree ? 'free' : gateway === 'stripe' ? 'pi' : gateway === 'mercadopago' ? 'mp' : 'pp';
+      const prefix = isFree
+        ? 'free'
+        : gateway === 'lemonsqueezy'
+          ? 'ls'
+          : gateway === 'stripe'
+            ? 'pi'
+            : gateway === 'mercadopago'
+              ? 'mp'
+              : 'pp';
       const transactionRef = `${prefix}_${crypto.randomBytes(8).toString('hex')}`;
       const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
 
@@ -1414,6 +2180,37 @@ async function startServer() {
           }
           if (msg.type === 'CERTIFICATE_ISSUED' && typeof msg.instructorId === 'string') {
             void dispatchWebhooks(msg.instructorId, 'certificate.issued', msg);
+          }
+          return;
+        }
+
+        if (msg.type === 'GIFT_CARD_REDEEMED') {
+          const eventPayload = {
+            type: 'GIFT_CARD_REDEEMED',
+            cardCode: typeof msg.cardCode === 'string' ? msg.cardCode.slice(0, 64) : '',
+            courseId: typeof msg.courseId === 'string' ? msg.courseId.slice(0, 128) : '',
+            courseTitle: typeof msg.courseTitle === 'string' ? msg.courseTitle.slice(0, 140) : '',
+            instructorId: typeof msg.instructorId === 'string' ? msg.instructorId.slice(0, 128) : '',
+            amountAppliedCents: typeof msg.amountAppliedCents === 'number' ? msg.amountAppliedCents : 0,
+            currency: typeof msg.currency === 'string' ? msg.currency.slice(0, 8) : 'DOP',
+            senderUid: currentClient.uid,
+          };
+          broadcastEvent({ ...eventPayload, scope: 'user' }, currentClient.uid);
+          if (eventPayload.instructorId && eventPayload.instructorId !== currentClient.uid) {
+            broadcastEvent({ ...eventPayload, scope: 'user' }, eventPayload.instructorId);
+          }
+          for (const client of clients) {
+            if (
+              client.ws.readyState === WebSocket.OPEN &&
+              client.role === 'instructor' &&
+              client.uid !== currentClient.uid &&
+              client.uid !== eventPayload.instructorId
+            ) {
+              client.ws.send(JSON.stringify({ ...eventPayload, serverTimestamp: new Date().toISOString() }));
+            }
+          }
+          if (eventPayload.instructorId) {
+            void dispatchWebhooks(eventPayload.instructorId, 'gift_card.redeemed', eventPayload);
           }
         }
       } catch {

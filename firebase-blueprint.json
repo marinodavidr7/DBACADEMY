@@ -105,7 +105,7 @@
         "couponCode": { "type": "string", "maxLength": 64 },
         "discountSource": { "type": "string", "enum": ["none", "coupon", "referral_welcome", "gift_card"] },
         "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
-        "gateway": { "type": "string", "enum": ["stripe", "mercadopago", "paypal", "free", "gift_card"] },
+        "gateway": { "type": "string", "enum": ["stripe", "mercadopago", "paypal", "lemonsqueezy", "free", "gift_card"] },
         "status": { "type": "string", "enum": ["succeeded", "refunded"] },
         "transactionRef": { "type": "string", "minLength": 4, "maxLength": 100 },
         "createdAt": { "type": "string", "format": "date-time" }

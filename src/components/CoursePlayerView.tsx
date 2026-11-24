@@ -63,6 +63,7 @@ import { CourseProgressBar } from './ui/CourseProgressBar';
 import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
 import { GradesPanel } from './GradesPanel';
 import { FormattedTheoryContent } from './FormattedTheoryContent';
+import { CompletionCelebration, type CelebrationEvent } from './CompletionCelebration';
 
 const ExcelTopicSimulator = lazy(() =>
   import('./ExcelTopicSimulator').then((m) => ({ default: m.ExcelTopicSimulator }))
@@ -332,6 +333,7 @@ export const CoursePlayerView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [newlyIssuedCert, setNewlyIssuedCert] = useState<Certificate | null>(null);
   const [previewCert, setPreviewCert] = useState<Certificate | null>(null);
+  const [celebration, setCelebration] = useState<CelebrationEvent | null>(null);
   const [lightboxImage, setLightboxImage] = useState<CourseMaterial | null>(null);
   const [savingTheoryImg, setSavingTheoryImg] = useState(false);
   const [theoryImgError, setTheoryImgError] = useState<string | null>(null);
@@ -627,8 +629,69 @@ export const CoursePlayerView: React.FC = () => {
     }
   }, [activeLessonId, currentLesson]);
 
+  const handleDismissCelebration = useCallback(() => {
+    setCelebration(null);
+  }, []);
+
+  const handleViewCelebrationCert = useCallback((cert: Certificate) => {
+    setPreviewCert(cert);
+  }, []);
+
+  const triggerCompletionCelebration = useCallback(
+    (
+      lessonId: string,
+      lessonTitle: string,
+      durationMinutes: number,
+      issuedCert?: Certificate,
+      serverProgressPercent?: number
+    ) => {
+      if (!activeCourse) return;
+      const updatedCompleted = new Set(completedLessonSet);
+      updatedCompleted.add(lessonId);
+
+      const courseCompleted =
+        Boolean(issuedCert) ||
+        (typeof serverProgressPercent === 'number' && serverProgressPercent >= 100) ||
+        (allLessons.length > 0 && allLessons.every((l) => updatedCompleted.has(l.id)));
+
+      const parentModule = activeCourse.modules.find((m) =>
+        m.lessons.some((l) => l.id === lessonId)
+      );
+      const moduleCompleted = Boolean(
+        parentModule && parentModule.lessons.every((l) => updatedCompleted.has(l.id))
+      );
+
+      if (courseCompleted) {
+        setCelebration({
+          id: Date.now(),
+          kind: 'course',
+          title: activeCourse.title,
+          subtitle: issuedCert
+            ? `Certificado emitido (${issuedCert.verificationCode})`
+            : 'Has completado el 100% de las lecciones del programa.',
+          certificate: issuedCert ?? null,
+        });
+      } else if (moduleCompleted && parentModule) {
+        setCelebration({
+          id: Date.now(),
+          kind: 'module',
+          title: parentModule.title,
+          subtitle: `Capítulo "${lessonTitle}" completado · +${durationMinutes} min`,
+        });
+      } else {
+        setCelebration({
+          id: Date.now(),
+          kind: 'lesson',
+          title: lessonTitle,
+          subtitle: `Progreso guardado · +${durationMinutes} min de estudio`,
+        });
+      }
+    },
+    [activeCourse, allLessons, completedLessonSet]
+  );
+
   const markSubModuleComplete = useCallback(
-    async (lessonId: string, _lessonTitle: string, durationMinutes: number) => {
+    async (lessonId: string, lessonTitle: string, durationMinutes: number) => {
       if (!activeCourse || !activeEnrollment) return;
       if (completedLessonSet.has(lessonId)) return;
 
@@ -649,6 +712,7 @@ export const CoursePlayerView: React.FC = () => {
         }));
         setLockWarning(null);
         triggerHaptic();
+        triggerCompletionCelebration(lessonId, lessonTitle, durationMinutes);
         return;
       }
 
@@ -663,12 +727,26 @@ export const CoursePlayerView: React.FC = () => {
         if (res.certificateIssued) {
           setNewlyIssuedCert(res.certificateIssued);
         }
+        triggerCompletionCelebration(
+          lessonId,
+          lessonTitle,
+          durationMinutes,
+          res.certificateIssued,
+          res.progressPercent
+        );
       } finally {
         inFlightLessonsRef.current.delete(lessonId);
         setSaving(false);
       }
     },
-    [activeCourse, activeEnrollment, completedLessonSet, isSyntheticPreview, completeLesson]
+    [
+      activeCourse,
+      activeEnrollment,
+      completedLessonSet,
+      isSyntheticPreview,
+      completeLesson,
+      triggerCompletionCelebration,
+    ]
   );
 
   // Reset tab, clear stale example selection, persist active lesson, and restore saved scroll position
@@ -891,6 +969,55 @@ export const CoursePlayerView: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Persistent Sticky Real-Time Course Progress Bar */}
+      <div
+        className={`sticky z-20 -mx-4 min-[480px]:mx-0 min-[480px]:rounded-xl border-b min-[480px]:border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#0B1220]/95 backdrop-blur-md px-4 py-2.5 shadow-xs ${
+          zenMode ? 'top-0' : 'top-[54px]'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                effectiveProgressPercent >= 100
+                  ? 'bg-emerald-500'
+                  : 'bg-blue-600 dark:bg-blue-400'
+              }`}
+            />
+            <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {activeCourse.title}
+            </span>
+            <span className="hidden sm:inline text-xs text-slate-400 dark:text-slate-500">·</span>
+            <span className="hidden sm:inline text-xs text-slate-500 dark:text-slate-400 truncate max-w-[260px]">
+              {currentLesson.module.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0 text-xs">
+            <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+              {effectiveCompletedLessonIds.length}/{allLessons.length || activeCourse.totalLessons} capítulos
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono tabular-nums font-bold ${
+                effectiveProgressPercent >= 100
+                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300'
+              }`}
+            >
+              {effectiveProgressPercent}%
+              {effectiveProgressPercent >= 100 && (
+                <span className="hidden sm:inline font-sans font-semibold">· Completado</span>
+              )}
+            </span>
+          </div>
+        </div>
+        <CourseProgressBar
+          percent={effectiveProgressPercent}
+          label={`Progreso en ${activeCourse.title}`}
+          size="md"
+          showHeader={false}
+        />
+      </div>
+
       {/* Zen Mode Minimal Focus Bar vs Compact Integrated Course Header */}
       {zenMode ? (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
@@ -900,7 +1027,7 @@ export const CoursePlayerView: React.FC = () => {
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {t('zenActiveHint')} ·{' '}
-              <span className="font-mono tabular-nums">{activeEnrollment.progressPercent}%</span>
+              <span className="font-mono tabular-nums">{effectiveProgressPercent}%</span>
             </p>
           </div>
           <button
@@ -1022,6 +1149,7 @@ export const CoursePlayerView: React.FC = () => {
                     setActiveLessonId(null);
                     setLockWarning(null);
                     setNewlyIssuedCert(null);
+                    setCelebration(null);
                   }}
                   aria-label={t('myCoursesTitle')}
                   className="rounded-lg border border-slate-700 bg-[#0D1930] px-3 py-2 text-base sm:text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] sm:min-h-[36px] max-w-full sm:max-w-[230px]"
@@ -1033,14 +1161,6 @@ export const CoursePlayerView: React.FC = () => {
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="pt-2.5 border-t border-slate-800/90">
-              <CourseProgressBar
-                percent={effectiveProgressPercent}
-                label={`Avance en ${activeCourse.title}`}
-                size="sm"
-              />
             </div>
           </section>
 
@@ -2046,9 +2166,10 @@ export const CoursePlayerView: React.FC = () => {
                     </button>
                   )}
 
-                  <button
+                  <motion.button
                     type="button"
                     disabled={saving || isLessonDone}
+                    whileTap={shouldReduceMotion || isLessonDone || saving ? undefined : { scale: 0.96 }}
                     onClick={() => void handleCompleteLesson()}
                     className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
                       !prevLesson && !nextLesson ? 'col-span-2' : ''
@@ -2060,7 +2181,7 @@ export const CoursePlayerView: React.FC = () => {
                   >
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span className="truncate">{isLessonDone ? t('lessonCompleted') : t('completeLesson')}</span>
-                  </button>
+                  </motion.button>
 
                   {nextLesson && (
                     isNextLessonLocked ? (
@@ -2144,7 +2265,7 @@ export const CoursePlayerView: React.FC = () => {
 
         {/* Right Syllabus Tree (Module Explorer) */}
         {!zenMode && (
-          <aside className="min-w-0 lg:sticky lg:top-16 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+          <aside className="min-w-0 lg:sticky lg:top-[128px] rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
             {/* Syllabus Search Header */}
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
               <div className="relative">
@@ -2165,7 +2286,7 @@ export const CoursePlayerView: React.FC = () => {
               )}
             </div>
 
-            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[calc(100dvh-8rem)] overflow-y-auto">
+            <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[calc(100dvh-10.5rem)] overflow-y-auto">
             {activeCourse.modules.map((mod, mIdx) => {
               const modDone = effectiveCompletedModuleIds.includes(mod.id);
               const doneInModule = mod.lessons.filter((l) =>
@@ -2327,6 +2448,12 @@ export const CoursePlayerView: React.FC = () => {
       <ImageLightboxModal
         singleImage={lightboxImage}
         onClose={() => setLightboxImage(null)}
+      />
+
+      <CompletionCelebration
+        event={celebration}
+        onDismiss={handleDismissCelebration}
+        onViewCertificate={handleViewCelebrationCert}
       />
     </div>
   );

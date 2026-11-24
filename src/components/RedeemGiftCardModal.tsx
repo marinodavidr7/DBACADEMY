@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -76,7 +76,7 @@ function buildValidationFeedback(
         kind: 'invalid_format',
         title: 'Formato de código inválido',
         message: reason || 'El código ingresado no tiene un formato válido.',
-        hint: 'Usa únicamente letras, números y guiones (entre 4 y 32 caracteres).',
+        hint: 'Usa únicamente letras, números y guiones (entre 6 y 64 caracteres).',
       };
     case 'course_mismatch':
       return {
@@ -148,11 +148,13 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
     enrollments,
     certificates,
     signInWithGoogle,
-    validateGiftCard,
+    subscribeToGiftCard,
     redeemGiftCardCode,
   } = usePlatform();
 
   const [codeInput, setCodeInput] = useState('');
+  const [liveCode, setLiveCode] = useState('');
+  const [subNonce, setSubNonce] = useState(0);
   const [validating, setValidating] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [validationFeedback, setValidationFeedback] = useState<ValidationFeedback | null>(null);
@@ -213,49 +215,93 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
     };
   }, [validation, activeCourse, enrollments, certificates, isAdmin]);
 
-  const handleValidate = async (e?: React.FormEvent) => {
+  // Auto-suscripción en tiempo real tras breve pausa al escribir un código completo
+  useEffect(() => {
+    if (!user || redeemedSuccess) return;
+    const normalized = codeInput.trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{8,64}$/.test(normalized) || normalized === liveCode) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setValidationFeedback(null);
+      setValidating(true);
+      setLiveCode(normalized);
+      setSubNonce((n) => n + 1);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [codeInput, liveCode, user, redeemedSuccess]);
+
+  // Listener en tiempo real sobre giftCards/{liveCode}
+  useEffect(() => {
+    if (!liveCode || !user || redeemedSuccess) {
+      setValidating(false);
+      return;
+    }
+
+    const unsub = subscribeToGiftCard(liveCode, initialCourse || null, (res) => {
+      setValidating(false);
+      setValidation(res);
+      if (!res.valid) {
+        setValidationFeedback(buildValidationFeedback(res.errorCode, res.reason));
+        return;
+      }
+      setValidationFeedback(null);
+      if (res.card?.courseId) {
+        setSelectedCourseId(res.card.courseId);
+      } else if (!initialCourse) {
+        setSelectedCourseId((prev) => {
+          if (prev && visibleCourses.some((c) => c.id === prev && c.currency === res.card?.currency)) {
+            return prev;
+          }
+          const firstMatch = visibleCourses.find(
+            (c) =>
+              c.currency === res.card?.currency &&
+              !enrollments.some((en) => en.courseId === c.id)
+          );
+          return firstMatch ? firstMatch.id : prev;
+        });
+      }
+    });
+
+    return () => unsub();
+  }, [
+    liveCode,
+    subNonce,
+    initialCourse,
+    user,
+    redeemedSuccess,
+    subscribeToGiftCard,
+    visibleCourses,
+    enrollments,
+  ]);
+
+  const handleValidate = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setValidationFeedback(null);
     setValidation(null);
 
     const normalized = codeInput.trim().toUpperCase();
     if (!normalized) {
+      setLiveCode('');
       setValidationFeedback(
         buildValidationFeedback('invalid_format', 'Ingresa el código de tu Gift Card antes de verificar.')
       );
       return;
     }
-    if (!/^[A-Z0-9_-]{4,32}$/.test(normalized)) {
+    if (!/^[A-Z0-9_-]{6,64}$/.test(normalized)) {
+      setLiveCode('');
       setValidationFeedback(
         buildValidationFeedback(
           'invalid_format',
-          'El código debe tener entre 4 y 32 caracteres (solo letras, números y guiones).'
+          'El código debe tener entre 6 y 64 caracteres (solo letras, números y guiones).'
         )
       );
       return;
     }
 
     setValidating(true);
-    try {
-      const res = await validateGiftCard(normalized, initialCourse || null);
-      setValidation(res);
-      if (!res.valid) {
-        setValidationFeedback(buildValidationFeedback(res.errorCode, res.reason));
-        return;
-      }
-      if (res.card?.courseId) {
-        setSelectedCourseId(res.card.courseId);
-      } else if (!initialCourse && !selectedCourseId) {
-        const firstMatch = visibleCourses.find(
-          (c) =>
-            c.currency === res.card?.currency &&
-            !enrollments.some((en) => en.courseId === c.id)
-        );
-        if (firstMatch) setSelectedCourseId(firstMatch.id);
-      }
-    } finally {
-      setValidating(false);
-    }
+    setLiveCode(normalized);
+    setSubNonce((n) => n + 1);
   };
 
   const handleRedeemFull = async () => {
@@ -410,6 +456,8 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
                     aria-invalid={Boolean(validationFeedback)}
                     onChange={(e) => {
                       setCodeInput(e.target.value.toUpperCase());
+                      if (liveCode) setLiveCode('');
+                      if (validating) setValidating(false);
                       if (validation) setValidation(null);
                       if (validationFeedback) setValidationFeedback(null);
                     }}

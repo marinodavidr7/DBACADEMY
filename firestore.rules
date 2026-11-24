@@ -166,7 +166,7 @@ service cloud.firestore {
         && (!('couponCode' in data) || data.couponCode == null || (data.couponCode is string && data.couponCode.size() >= 1 && data.couponCode.size() <= 64))
         && (!('discountSource' in data) || data.discountSource == null || data.discountSource in ['none', 'coupon', 'referral_welcome', 'gift_card'])
         && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
-        && data.gateway in ['stripe', 'mercadopago', 'paypal', 'free', 'gift_card']
+        && data.gateway in ['stripe', 'mercadopago', 'paypal', 'lemonsqueezy', 'free', 'gift_card']
         && data.status in ['succeeded', 'refunded']
         && data.transactionRef is string && data.transactionRef.size() >= 4 && data.transactionRef.size() <= 100
         && data.createdAt is timestamp;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -360,65 +360,78 @@ export const InstructorDashboard: React.FC = () => {
     setShowBuilder(true);
   };
 
-  const handleCancelBuilder = () => {
+  const handleCancelBuilder = useCallback(() => {
     setShowBuilder(false);
     setEditingCourse(null);
-  };
+  }, []);
 
-  const handleEditorCreate = async (input: CourseEditorInput): Promise<Course> => {
-    const created = await createCourse({
-      title: input.title,
-      subtitle: input.subtitle,
-      description: input.description,
-      category: input.category,
-      level: input.level,
-      priceCents: input.priceCents,
-      currency: input.currency,
-      coverImage: input.coverImage,
-      published: input.published,
-      modulesCount: input.modulesCount,
-      totalLessons: input.totalLessons,
-      modules: input.modules,
-    });
-    setEditingCourse(created);
-    return created;
-  };
+  const handleEditorCreate = useCallback(
+    async (input: CourseEditorInput, syncOptions?: { targetRevision?: number }): Promise<Course> => {
+      const created = await createCourse(
+        {
+          title: input.title,
+          subtitle: input.subtitle,
+          description: input.description,
+          category: input.category,
+          level: input.level,
+          priceCents: input.priceCents,
+          currency: input.currency,
+          coverImage: input.coverImage,
+          published: input.published,
+          modulesCount: input.modulesCount,
+          totalLessons: input.totalLessons,
+          modules: input.modules,
+        },
+        syncOptions
+      );
+      setEditingCourse(created);
+      return created;
+    },
+    [createCourse]
+  );
 
-  const handleEditorUpdate = async (courseId: string, input: CourseEditorInput) => {
-    await updateCourse(courseId, {
-      title: input.title,
-      subtitle: input.subtitle,
-      description: input.description,
-      category: input.category,
-      level: input.level,
-      priceCents: input.priceCents,
-      currency: input.currency,
-      coverImage: input.coverImage,
-      published: input.published,
-      modulesCount: input.modulesCount,
-      totalLessons: input.totalLessons,
-      modules: input.modules,
-    });
-    setEditingCourse((prev) =>
-      prev && prev.id === courseId
-        ? {
-            ...prev,
-            title: input.title,
-            subtitle: input.subtitle,
-            description: input.description,
-            category: input.category,
-            level: input.level,
-            priceCents: input.priceCents,
-            currency: input.currency,
-            coverImage: input.coverImage,
-            published: input.published,
-            modulesCount: input.modulesCount,
-            totalLessons: input.totalLessons,
-            modules: input.modules,
-          }
-        : prev
-    );
-  };
+  const handleEditorUpdate = useCallback(
+    async (courseId: string, input: CourseEditorInput, syncOptions?: { targetRevision?: number }) => {
+      await updateCourse(
+        courseId,
+        {
+          title: input.title,
+          subtitle: input.subtitle,
+          description: input.description,
+          category: input.category,
+          level: input.level,
+          priceCents: input.priceCents,
+          currency: input.currency,
+          coverImage: input.coverImage,
+          published: input.published,
+          modulesCount: input.modulesCount,
+          totalLessons: input.totalLessons,
+          modules: input.modules,
+        },
+        syncOptions
+      );
+      setEditingCourse((prev) =>
+        prev && prev.id === courseId
+          ? {
+              ...prev,
+              title: input.title,
+              subtitle: input.subtitle,
+              description: input.description,
+              category: input.category,
+              level: input.level,
+              priceCents: input.priceCents,
+              currency: input.currency,
+              coverImage: input.coverImage,
+              published: input.published,
+              modulesCount: input.modulesCount,
+              totalLessons: input.totalLessons,
+              modules: input.modules,
+            }
+          : prev
+      );
+    },
+    [updateCourse]
+  );
 
   const handleExportProgressCsv = () => {
     exportToCsv(
@@ -732,8 +745,10 @@ export const InstructorDashboard: React.FC = () => {
           key={editorSessionId}
           course={editingCourse}
           onCancel={handleCancelBuilder}
-          onCreate={(input) => handleEditorCreate(input)}
-          onUpdate={(courseId, input) => handleEditorUpdate(courseId, input)}
+          onCreate={handleEditorCreate}
+          onUpdate={handleEditorUpdate}
+          labels={courseEditorLabels}
+          t={t}
         />
       )}
 

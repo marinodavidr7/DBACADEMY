@@ -206,18 +206,17 @@ export async function exportCertificatePdf(cert: Certificate) {
 
   const davidSignaturePng = await loadDavidSignaturePngDataUrl();
   if (davidSignaturePng) {
-    doc.addImage(davidSignaturePng, 'PNG', leftX - 48, lineY - 56, 96, 32);
+    doc.addImage(davidSignaturePng, 'PNG', leftX - 54, lineY - 40, 108, 36);
   } else {
     doc.setTextColor(15, 23, 42);
     doc.setFont('times', 'italic');
     doc.setFontSize(20);
-    doc.text(DAVID_SIGNER_NAME, leftX, lineY - 26, { align: 'center' });
+    doc.text(DAVID_SIGNER_NAME, leftX, lineY - 12, { align: 'center' });
   }
 
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text(DAVID_SIGNER_NAME, leftX, lineY - 8, { align: 'center', maxWidth: 180 });
   doc.text(formatCertificateDate(cert.issuedAt), rightX, lineY - 8, { align: 'center', maxWidth: 180 });
 
   doc.setDrawColor(148, 163, 184);

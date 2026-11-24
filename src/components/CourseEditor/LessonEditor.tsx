@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -99,7 +99,7 @@ const LESSON_TYPES: Array<{
   { value: 'quiz', labelKey: 'typeQuiz', icon: <HelpCircle className="h-4 w-4" /> },
 ];
 
-export const LessonEditor: React.FC<LessonEditorProps> = ({
+export const LessonEditor: React.FC<LessonEditorProps> = memo(({
   lesson,
   moduleTitle,
   lessonLabel,
@@ -120,12 +120,31 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
   const [imageDescriptionInput, setImageDescriptionInput] = useState('');
 
   const allMaterials = lesson.materials ?? [];
-  const theoryImages = allMaterials.filter((m) => m.type === 'image');
-  const otherMaterials = allMaterials.filter((m) => m.type !== 'image');
+  const theoryImages = useMemo(
+    () => allMaterials.filter((m) => m.type === 'image'),
+    [allMaterials]
+  );
+  const otherMaterials = useMemo(
+    () => allMaterials.filter((m) => m.type !== 'image'),
+    [allMaterials]
+  );
 
-  const updateTheoryImages = (nextImages: CourseMaterial[]) => {
-    onChange({ materials: [...nextImages, ...otherMaterials] });
-  };
+  const updateTheoryImages = useCallback(
+    (nextImages: CourseMaterial[]) => {
+      onChange({ materials: [...nextImages, ...otherMaterials] });
+    },
+    [onChange, otherMaterials]
+  );
+
+  const handleContentChange = useCallback(
+    (content: string) => onChange({ content }),
+    [onChange]
+  );
+
+  const handleMaterialsChange = useCallback(
+    (materials: CourseMaterial[]) => onChange({ materials }),
+    [onChange]
+  );
 
   const handleTheoryImageUpload = async (files: FileList | null) => {
     if (!files || files.length === 0 || !canEdit) return;
@@ -419,7 +438,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         id={`content-${lesson.id}`}
         label={lesson.type === 'video' ? `${labels.content} (Notas y apuntes opcionales)` : labels.content}
         value={lesson.content}
-        onChange={(value) => onChange({ content: value })}
+        onChange={handleContentChange}
         placeholder={lesson.type === 'video' ? 'Agrega apuntes o resumen de la lección...' : labels.contentPlaceholder}
         editLabel={labels.editTab}
         previewLabel={labels.previewTab}
@@ -561,6 +580,8 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
                   <img
                     src={img.url}
                     alt={img.name}
+                    loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                     className="h-full w-full object-contain"
                   />
@@ -638,9 +659,9 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         courseId={courseId}
         lessonId={lesson.id}
         lessonTitle={lesson.title}
-        materials={lesson.materials ?? []}
+        materials={allMaterials}
         canEdit={canEdit}
-        onChange={(materials: CourseMaterial[]) => onChange({ materials })}
+        onChange={handleMaterialsChange}
         labels={labels.materials}
       />
 
@@ -767,4 +788,4 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
       <div className="hidden">{typeLabel}</div>
     </div>
   );
-};
+});

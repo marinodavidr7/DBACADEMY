@@ -1,6 +1,8 @@
 {
-  "name": "Cátedra — Plataforma de Cursos Virtuales",
+  "name": "DB-ACADEMY",
   "description": "Plataforma profesional de cursos virtuales con pasarelas de pago, seguimiento en tiempo real, foros, certificación automática, cifrado E2EE y sincronización multidispositivo.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

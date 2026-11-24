@@ -53,6 +53,7 @@ import type {
   CouponType,
   CouponValidationResult,
   Course,
+  CourseSyncState,
   CurrencyCode,
   CustomExcelExercise,
   EncryptedNote,
@@ -64,6 +65,9 @@ import type {
   GiftCardValidationResult,
   InAppNotification,
   Language,
+  LemonSqueezyCheckoutSession,
+  LemonSqueezyStatus,
+  LemonSqueezyVerificationResult,
   PaymentGateway,
   PaymentRecord,
   ThemeMode,
@@ -296,6 +300,22 @@ function getDeviceLabel(): string {
   return 'Linux / Web Client';
 }
 
+function extractCourseSyncError(err: unknown): string {
+  if (!(err instanceof Error)) return 'No se pudieron guardar los cambios en Firestore.';
+  const raw = err.message.trim();
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw) as { error?: string };
+      if (typeof parsed.error === 'string' && parsed.error.trim()) {
+        return parsed.error;
+      }
+    } catch {
+      // Ignore JSON parse fallback
+    }
+  }
+  return raw || 'No se pudieron guardar los cambios en Firestore.';
+}
+
 interface PlatformContextValue {
   user: User | null;
   authReady: boolean;
@@ -343,11 +363,47 @@ interface PlatformContextValue {
   enrollWithPayment: (
     course: Course,
     gateway: PaymentGateway,
-    options?: { couponCode?: string; referralWelcome?: boolean; testMode?: boolean }
+    options?: {
+      couponCode?: string;
+      referralWelcome?: boolean;
+      testMode?: boolean;
+      externalPaymentId?: string;
+      externalTransactionRef?: string;
+    }
   ) => Promise<PaymentRecord>;
+  getLemonSqueezyStatus: () => Promise<LemonSqueezyStatus>;
+  createLemonSqueezyCheckout: (
+    course: Course,
+    options?: { couponCode?: string; giftCardCode?: string }
+  ) => Promise<LemonSqueezyCheckoutSession>;
+  verifyAndCompleteLemonSqueezyCheckout: (
+    paymentId: string,
+    courseId: string,
+    orderId?: string
+  ) => Promise<{
+    verified: boolean;
+    status: 'paid' | 'pending' | 'refunded';
+    payment?: PaymentRecord;
+    message?: string;
+  }>;
+  lemonSqueezyBanner: { status: 'verifying' | 'success' | 'pending' | 'error'; message: string } | null;
+  clearLemonSqueezyBanner: () => void;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
-  createCourse: (courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>) => Promise<Course>;
-  updateCourse: (courseId: string, patch: Partial<Course>) => Promise<void>;
+  courseSyncState: CourseSyncState;
+  getCourseSyncSnapshot: () => CourseSyncState;
+  initCourseSync: (courseId: string | null) => void;
+  markCourseUnsaved: (courseId?: string | null) => number;
+  setCourseSyncError: (message: string | null, courseId?: string | null) => void;
+  resetCourseSync: () => void;
+  createCourse: (
+    courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>,
+    syncOptions?: { targetRevision?: number }
+  ) => Promise<Course>;
+  updateCourse: (
+    courseId: string,
+    patch: Partial<Course>,
+    syncOptions?: { targetRevision?: number }
+  ) => Promise<void>;
   deleteCourse: (courseId: string) => Promise<void>;
   createCustomExercise: (input: Omit<CustomExcelExercise, 'id' | 'ownerId' | 'authorName' | 'createdAt' | 'updatedAt'>) => Promise<CustomExcelExercise>;
   deleteCustomExercise: (exerciseId: string) => Promise<void>;
@@ -387,10 +443,16 @@ interface PlatformContextValue {
   toggleGiftCardActive: (card: GiftCard) => Promise<void>;
   deleteGiftCard: (cardCode: string) => Promise<void>;
   validateGiftCard: (code: string, course?: Course | null) => Promise<GiftCardValidationResult>;
+  subscribeToGiftCard: (
+    code: string,
+    course: Course | null | undefined,
+    onUpdate: (result: GiftCardValidationResult) => void
+  ) => () => void;
   redeemGiftCardForCourse: (
     code: string,
     course: Course,
-    partialGateway?: PaymentGateway
+    partialGateway?: PaymentGateway,
+    options?: { externalPaymentId?: string; externalTransactionRef?: string }
   ) => Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }>;
   redeemGiftCardCode: (
     code: string,
@@ -453,6 +515,82 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');
 
   const [courses, setCourses] = useState<Course[]>(SEED_COURSES);
+  const coursesRef = useRef<Course[]>(courses);
+  coursesRef.current = courses;
+  const [courseSyncState, setCourseSyncState] = useState<CourseSyncState>({
+    courseId: null,
+    status: 'idle',
+    dirtyRevision: 0,
+    savedRevision: 0,
+    lastSavedAt: null,
+    error: null,
+  });
+  const courseSyncRef = useRef<CourseSyncState>(courseSyncState);
+
+  const commitCourseSync = useCallback(
+    (updater: (prev: CourseSyncState) => CourseSyncState): CourseSyncState => {
+      const next = updater(courseSyncRef.current);
+      courseSyncRef.current = next;
+      setCourseSyncState(next);
+      return next;
+    },
+    []
+  );
+
+  const getCourseSyncSnapshot = useCallback(() => courseSyncRef.current, []);
+
+  const initCourseSync = useCallback(
+    (courseId: string | null) => {
+      commitCourseSync(() => ({
+        courseId,
+        status: 'saved',
+        dirtyRevision: 0,
+        savedRevision: 0,
+        lastSavedAt: Date.now(),
+        error: null,
+      }));
+    },
+    [commitCourseSync]
+  );
+
+  const markCourseUnsaved = useCallback(
+    (courseId?: string | null): number => {
+      const next = commitCourseSync((prev) => ({
+        courseId: courseId !== undefined ? courseId : prev.courseId,
+        status: prev.status === 'saving' ? 'saving' : 'unsaved',
+        dirtyRevision: prev.dirtyRevision + 1,
+        savedRevision: prev.savedRevision,
+        lastSavedAt: prev.lastSavedAt,
+        error: null,
+      }));
+      return next.dirtyRevision;
+    },
+    [commitCourseSync]
+  );
+
+  const setCourseSyncError = useCallback(
+    (message: string | null, courseId?: string | null) => {
+      commitCourseSync((prev) => ({
+        ...prev,
+        courseId: courseId !== undefined ? courseId : prev.courseId,
+        status: message ? 'error' : prev.dirtyRevision > prev.savedRevision ? 'unsaved' : 'saved',
+        error: message,
+      }));
+    },
+    [commitCourseSync]
+  );
+
+  const resetCourseSync = useCallback(() => {
+    commitCourseSync(() => ({
+      courseId: null,
+      status: 'idle',
+      dirtyRevision: 0,
+      savedRevision: 0,
+      lastSavedAt: null,
+      error: null,
+    }));
+  }, [commitCourseSync]);
+
   const [customExercises, setCustomExercises] = useState<CustomExcelExercise[]>(() =>
     loadLocalCustomExercises()
   );
@@ -478,9 +616,15 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [e2eeFingerprint, setE2eeFingerprint] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const clearAuthError = useCallback(() => setAuthError(null), []);
+  const [lemonSqueezyBanner, setLemonSqueezyBanner] = useState<{
+    status: 'verifying' | 'success' | 'pending' | 'error';
+    message: string;
+  } | null>(null);
+  const clearLemonSqueezyBanner = useCallback(() => setLemonSqueezyBanner(null), []);
 
   const wsRef = useRef<WebSocket | null>(null);
   const notifiedDeadlineIdsRef = useRef<Set<string>>(new Set());
+  const handledLemonReturnRef = useRef<string | null>(null);
 
   const toggleZenMode = useCallback(() => {
     setZenMode((prev) => !prev);
@@ -905,6 +1049,12 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               'Nuevo mensaje en foro',
               String(data.title || 'Se ha publicado un nuevo debate')
             );
+          } else if (data.type === 'GIFT_CARD_REDEEMED' && data.senderUid !== user.uid) {
+            triggerPushAlert(
+              'payment',
+              'Gift Card canjeada en tiempo real',
+              `${String(data.courseTitle || 'Curso')} · Código ${String(data.cardCode || '')}`
+            );
           }
         } catch {
           // ignore
@@ -1162,7 +1312,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         onSnapshot(
           collection(db, 'giftCards'),
           (snap) => {
-            const loaded = snap.docs.map((d) => d.data() as GiftCard);
+            const loaded = snap.docs
+              .map((d) => d.data() as GiftCard)
+              .sort((a, b) => (toEpochMs(b.createdAt) ?? 0) - (toEpochMs(a.createdAt) ?? 0));
             setGiftCards(loaded);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'giftCards')
@@ -1179,7 +1331,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       onSnapshot(
         redemptionsQuery,
         (snap) => {
-          setGiftCardRedemptions(snap.docs.map((d) => d.data() as GiftCardRedemption));
+          const loaded = snap.docs
+            .map((d) => d.data() as GiftCardRedemption)
+            .sort((a, b) => (toEpochMs(b.redeemedAt) ?? 0) - (toEpochMs(a.redeemedAt) ?? 0));
+          setGiftCardRedemptions(loaded);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'giftCardRedemptions')
       )
@@ -1637,7 +1792,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (
       course: Course,
       gateway: PaymentGateway,
-      options?: { couponCode?: string; referralWelcome?: boolean; testMode?: boolean }
+      options?: {
+        couponCode?: string;
+        referralWelcome?: boolean;
+        testMode?: boolean;
+        externalPaymentId?: string;
+        externalTransactionRef?: string;
+      }
     ): Promise<PaymentRecord> => {
       if (!user) throw new Error('Authentication required');
 
@@ -1727,15 +1888,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       const paymentId =
-        authoritativePriceCents === 0 && !appliedCouponCode
-          ? `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-          : `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        options?.externalPaymentId && /^[a-zA-Z0-9_-]{4,128}$/.test(options.externalPaymentId)
+          ? options.externalPaymentId
+          : authoritativePriceCents === 0 && !appliedCouponCode
+            ? `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+            : `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const transactionRef =
-        finalAmount === 0 && !appliedCouponCode
-          ? `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-          : testMode
-            ? `test_${gateway.slice(0, 4)}_${Date.now().toString(36)}`
-            : `${gateway.slice(0, 4)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
+        options?.externalTransactionRef && options.externalTransactionRef.length >= 4
+          ? options.externalTransactionRef.slice(0, 100)
+          : finalAmount === 0 && !appliedCouponCode
+            ? `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+            : testMode
+              ? `test_${gateway.slice(0, 4)}_${Date.now().toString(36)}`
+              : `${gateway.slice(0, 4)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
 
       const resolvedGateway: PaymentGateway = finalAmount === 0 ? 'free' : gateway;
       const discountSource: PaymentRecord['discountSource'] = appliedCouponCode ? 'coupon' : 'none';
@@ -1964,93 +2129,126 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const createCourse = useCallback(
     async (
-      courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>
+      courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>,
+      syncOptions?: { targetRevision?: number }
     ): Promise<Course> => {
+      const targetRevision = syncOptions?.targetRevision ?? courseSyncRef.current.dirtyRevision;
+      commitCourseSync((prev) => ({
+        ...prev,
+        status: 'saving',
+        error: null,
+      }));
       if (!user || !isAdmin) {
-        throw new Error(
-          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede crear cursos.'
-        );
+        const msg = 'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede crear cursos.';
+        commitCourseSync((prev) => ({ ...prev, status: 'error', error: msg }));
+        throw new Error(msg);
       }
-      const verifiedAdmin = await assertPlatformAdminWrite('crear cursos', user);
       const id = `crs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      const createdCourse: Course = {
-        ...courseInput,
-        id,
-        instructorId: verifiedAdmin.uid,
-        instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
-      };
       try {
+        const verifiedAdmin = await assertPlatformAdminWrite('crear cursos', user);
+        const createdCourse: Course = {
+          ...courseInput,
+          id,
+          instructorId: verifiedAdmin.uid,
+          instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
+        };
         await setDoc(doc(db, 'courses', id), {
           ...createdCourse,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
+        const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
+        commitCourseSync((prev) => ({
+          ...prev,
+          courseId: id,
+          savedRevision: nextSavedRevision,
+          lastSavedAt: Date.now(),
+          status: allSaved ? 'saved' : 'unsaved',
+          error: null,
+        }));
         return createdCourse;
       } catch (err) {
+        commitCourseSync((prev) => ({
+          ...prev,
+          status: 'error',
+          error: extractCourseSyncError(err),
+        }));
         handleFirestoreError(err, OperationType.CREATE, `courses/${id}`);
       }
     },
-    [user, isAdmin]
+    [user, isAdmin, commitCourseSync]
   );
 
   const updateCourse = useCallback(
-    async (courseId: string, patch: Partial<Course>) => {
+    async (
+      courseId: string,
+      patch: Partial<Course>,
+      syncOptions?: { targetRevision?: number }
+    ) => {
+      const targetRevision = syncOptions?.targetRevision ?? courseSyncRef.current.dirtyRevision;
+      commitCourseSync((prev) => ({
+        ...prev,
+        courseId,
+        status: 'saving',
+        error: null,
+      }));
       if (!user || !isAdmin) {
-        throw new Error(
-          'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede editar cursos.'
-        );
+        const msg = 'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede editar cursos.';
+        commitCourseSync((prev) => ({ ...prev, courseId, status: 'error', error: msg }));
+        throw new Error(msg);
       }
-      const verifiedAdmin = await assertPlatformAdminWrite('editar cursos', user);
-      const courseRef = doc(db, 'courses', courseId);
-      const allowedPatch: Record<string, unknown> = {};
-
-      if (typeof patch.title === 'string') allowedPatch.title = patch.title.trim().slice(0, 140);
-      if (typeof patch.subtitle === 'string') allowedPatch.subtitle = patch.subtitle.trim().slice(0, 240);
-      if (typeof patch.description === 'string') {
-        allowedPatch.description = patch.description.trim().slice(0, 2000);
-      }
-      if (typeof patch.category === 'string') allowedPatch.category = patch.category.trim().slice(0, 60);
-      if (patch.level === 'beginner' || patch.level === 'intermediate' || patch.level === 'advanced') {
-        allowedPatch.level = patch.level;
-      }
-      if (typeof patch.priceCents === 'number') {
-        allowedPatch.priceCents = Math.max(0, Math.min(10000000, Math.round(patch.priceCents)));
-      }
-      if (patch.currency === 'DOP' || patch.currency === 'USD' || patch.currency === 'EUR' || patch.currency === 'MXN') {
-        allowedPatch.currency = patch.currency;
-      }
-      if (typeof patch.coverImage === 'string') {
-        allowedPatch.coverImage = patch.coverImage.slice(0, 300000);
-      }
-      if (typeof patch.instructorName === 'string') {
-        allowedPatch.instructorName = patch.instructorName.trim().slice(0, 100);
-      }
-      if (typeof patch.published === 'boolean') allowedPatch.published = patch.published;
-      if (Array.isArray(patch.prerequisites)) {
-        allowedPatch.prerequisites = patch.prerequisites
-          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-          .slice(0, 10);
-      }
-      if (Array.isArray(patch.technologies)) {
-        allowedPatch.technologies = patch.technologies
-          .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-          .slice(0, 20);
-      }
-
-      if (Array.isArray(patch.modules) && patch.modules.length > 0) {
-        const modulesSlice = patch.modules.slice(0, 12);
-        allowedPatch.modules = modulesSlice;
-        allowedPatch.modulesCount = modulesSlice.length;
-        allowedPatch.totalLessons = Math.max(
-          1,
-          modulesSlice.reduce((acc, m) => acc + (m.lessons?.length || 0), 0)
-        );
-      } else {
-        if (typeof patch.modulesCount === 'number') allowedPatch.modulesCount = patch.modulesCount;
-        if (typeof patch.totalLessons === 'number') allowedPatch.totalLessons = patch.totalLessons;
-      }
-
       try {
+        const verifiedAdmin = await assertPlatformAdminWrite('editar cursos', user);
+        const courseRef = doc(db, 'courses', courseId);
+        const allowedPatch: Record<string, unknown> = {};
+
+        if (typeof patch.title === 'string') allowedPatch.title = patch.title.trim().slice(0, 140);
+        if (typeof patch.subtitle === 'string') allowedPatch.subtitle = patch.subtitle.trim().slice(0, 240);
+        if (typeof patch.description === 'string') {
+          allowedPatch.description = patch.description.trim().slice(0, 2000);
+        }
+        if (typeof patch.category === 'string') allowedPatch.category = patch.category.trim().slice(0, 60);
+        if (patch.level === 'beginner' || patch.level === 'intermediate' || patch.level === 'advanced') {
+          allowedPatch.level = patch.level;
+        }
+        if (typeof patch.priceCents === 'number') {
+          allowedPatch.priceCents = Math.max(0, Math.min(10000000, Math.round(patch.priceCents)));
+        }
+        if (patch.currency === 'DOP' || patch.currency === 'USD' || patch.currency === 'EUR' || patch.currency === 'MXN') {
+          allowedPatch.currency = patch.currency;
+        }
+        if (typeof patch.coverImage === 'string') {
+          allowedPatch.coverImage = patch.coverImage.slice(0, 300000);
+        }
+        if (typeof patch.instructorName === 'string') {
+          allowedPatch.instructorName = patch.instructorName.trim().slice(0, 100);
+        }
+        if (typeof patch.published === 'boolean') allowedPatch.published = patch.published;
+        if (Array.isArray(patch.prerequisites)) {
+          allowedPatch.prerequisites = patch.prerequisites
+            .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+            .slice(0, 10);
+        }
+        if (Array.isArray(patch.technologies)) {
+          allowedPatch.technologies = patch.technologies
+            .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+            .slice(0, 20);
+        }
+
+        if (Array.isArray(patch.modules) && patch.modules.length > 0) {
+          const modulesSlice = patch.modules.slice(0, 12);
+          allowedPatch.modules = modulesSlice;
+          allowedPatch.modulesCount = modulesSlice.length;
+          allowedPatch.totalLessons = Math.max(
+            1,
+            modulesSlice.reduce((acc, m) => acc + (m.lessons?.length || 0), 0)
+          );
+        } else {
+          if (typeof patch.modulesCount === 'number') allowedPatch.modulesCount = patch.modulesCount;
+          if (typeof patch.totalLessons === 'number') allowedPatch.totalLessons = patch.totalLessons;
+        }
+
         const snap = await getDoc(courseRef);
         if (snap.exists()) {
           await updateDoc(courseRef, {
@@ -2058,7 +2256,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             updatedAt: serverTimestamp(),
           });
         } else {
-          const existingLocal = courses.find((c) => c.id === courseId);
+          const existingLocal = coursesRef.current.find((c) => c.id === courseId);
           if (!existingLocal) throw new Error('Course not found');
           await setDoc(courseRef, {
             ...existingLocal,
@@ -2070,11 +2268,28 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             updatedAt: serverTimestamp(),
           });
         }
+
+        const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
+        const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
+        commitCourseSync((prev) => ({
+          ...prev,
+          courseId,
+          savedRevision: nextSavedRevision,
+          lastSavedAt: Date.now(),
+          status: allSaved ? 'saved' : 'unsaved',
+          error: null,
+        }));
       } catch (err) {
+        commitCourseSync((prev) => ({
+          ...prev,
+          courseId,
+          status: 'error',
+          error: extractCourseSyncError(err),
+        }));
         handleFirestoreError(err, OperationType.UPDATE, `courses/${courseId}`);
       }
     },
-    [user, isAdmin, courses]
+    [user, isAdmin, commitCourseSync]
   );
 
   const deleteCourse = useCallback(
@@ -2773,8 +2988,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user, isAdmin]
   );
 
-  const validateGiftCard = useCallback(
-    async (rawCode: string, course?: Course | null): Promise<GiftCardValidationResult> => {
+  const evaluateGiftCardData = useCallback(
+    (card: GiftCard | null, course?: Course | null): GiftCardValidationResult => {
       const baseInvalid = (
         reason: string,
         errorCode: GiftCardValidationErrorCode
@@ -2788,46 +3003,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         errorCode,
       });
 
-      if (!user) {
-        return baseInvalid(
-          'Inicia sesión con Google para validar y canjear una Gift Card.',
-          'auth_required'
-        );
-      }
-
-      const code = normalizeGiftCardCode(rawCode);
-      if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
-        return baseInvalid(
-          'El código debe tener al menos 6 caracteres (letras y números, ej: DBA-XXXX-XXXX).',
-          'invalid_format'
-        );
-      }
-
-      let snap;
-      try {
-        snap = await getDoc(doc(db, 'giftCards', code));
-      } catch (err) {
-        if (isFirestoreOfflineError(err)) {
-          return baseInvalid(
-            'Sin conexión con el servidor para verificar el código.',
-            'network'
-          );
-        }
-        const fbCode = (err as { code?: string })?.code;
-        if (fbCode === 'permission-denied') {
-          handleFirestoreError(err, OperationType.GET, `giftCards/${code}`);
-        }
-        return baseInvalid('No se pudo verificar el código de Gift Card.', 'network');
-      }
-
-      if (!snap.exists()) {
+      if (!card) {
         return baseInvalid(
           'Este código no existe en el sistema. Verifica que esté escrito correctamente.',
           'not_found'
         );
       }
 
-      const card = snap.data() as GiftCard;
       if (card.status === 'redeemed' || card.remainingAmountCents <= 0) {
         return baseInvalid(
           'Esta Gift Card ya fue utilizada y no tiene saldo disponible.',
@@ -2897,14 +3079,128 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         coversFullCourse: true,
       };
     },
-    [user, enrollments]
+    [enrollments]
+  );
+
+  const validateGiftCard = useCallback(
+    async (rawCode: string, course?: Course | null): Promise<GiftCardValidationResult> => {
+      const baseInvalid = (
+        reason: string,
+        errorCode: GiftCardValidationErrorCode
+      ): GiftCardValidationResult => ({
+        valid: false,
+        coveredCents: 0,
+        remainingToPayCents: course ? course.priceCents : 0,
+        remainingCardBalanceAfterCents: 0,
+        coversFullCourse: false,
+        reason,
+        errorCode,
+      });
+
+      if (!user) {
+        return baseInvalid(
+          'Inicia sesión con Google para validar y canjear una Gift Card.',
+          'auth_required'
+        );
+      }
+
+      const code = normalizeGiftCardCode(rawCode);
+      if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
+        return baseInvalid(
+          'El código debe tener al menos 6 caracteres (letras y números, ej: DBA-XXXX-XXXX).',
+          'invalid_format'
+        );
+      }
+
+      let snap;
+      try {
+        snap = await getDoc(doc(db, 'giftCards', code));
+      } catch (err) {
+        if (isFirestoreOfflineError(err)) {
+          return baseInvalid(
+            'Sin conexión con el servidor para verificar el código.',
+            'network'
+          );
+        }
+        const fbCode = (err as { code?: string })?.code;
+        if (fbCode === 'permission-denied') {
+          handleFirestoreError(err, OperationType.GET, `giftCards/${code}`);
+        }
+        return baseInvalid('No se pudo verificar el código de Gift Card.', 'network');
+      }
+
+      return evaluateGiftCardData(snap.exists() ? (snap.data() as GiftCard) : null, course);
+    },
+    [user, evaluateGiftCardData]
+  );
+
+  const subscribeToGiftCard = useCallback(
+    (
+      rawCode: string,
+      course: Course | null | undefined,
+      onUpdate: (result: GiftCardValidationResult) => void
+    ): (() => void) => {
+      const baseInvalid = (
+        reason: string,
+        errorCode: GiftCardValidationErrorCode
+      ): GiftCardValidationResult => ({
+        valid: false,
+        coveredCents: 0,
+        remainingToPayCents: course ? course.priceCents : 0,
+        remainingCardBalanceAfterCents: 0,
+        coversFullCourse: false,
+        reason,
+        errorCode,
+      });
+
+      if (!user) {
+        onUpdate(
+          baseInvalid(
+            'Inicia sesión con Google para validar y canjear una Gift Card.',
+            'auth_required'
+          )
+        );
+        return () => {};
+      }
+
+      const code = normalizeGiftCardCode(rawCode);
+      if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
+        onUpdate(
+          baseInvalid(
+            'El código debe tener al menos 6 caracteres (letras y números, ej: DBA-XXXX-XXXX).',
+            'invalid_format'
+          )
+        );
+        return () => {};
+      }
+
+      const unsub = onSnapshot(
+        doc(db, 'giftCards', code),
+        (snap) => {
+          onUpdate(evaluateGiftCardData(snap.exists() ? (snap.data() as GiftCard) : null, course));
+        },
+        (err) => {
+          if (isFirestoreOfflineError(err)) {
+            onUpdate(
+              baseInvalid('Sin conexión con el servidor para verificar el código.', 'network')
+            );
+            return;
+          }
+          onUpdate(baseInvalid('No se pudo verificar el código de Gift Card.', 'network'));
+        }
+      );
+
+      return unsub;
+    },
+    [user, evaluateGiftCardData]
   );
 
   const redeemGiftCardForCourse = useCallback(
     async (
       rawCode: string,
       course: Course,
-      partialGateway: PaymentGateway = 'stripe'
+      partialGateway: PaymentGateway = 'lemonsqueezy',
+      options?: { externalPaymentId?: string; externalTransactionRef?: string }
     ): Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }> => {
       if (!user) throw new Error('Inicia sesión para canjear una Gift Card.');
       if (!user.emailVerified) {
@@ -3010,8 +3306,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const nextRedemptionNumber = (card.redemptionCount || 0) + 1;
 
         const redemptionId = `${code}_${nextRedemptionNumber}`;
-        const paymentId = `pay_gc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-        const transactionRef = `gift_${code.slice(0, 14)}_${nextRedemptionNumber}`;
+        const paymentId =
+          options?.externalPaymentId && /^[a-zA-Z0-9_-]{4,128}$/.test(options.externalPaymentId)
+            ? options.externalPaymentId
+            : `pay_gc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        const transactionRef =
+          options?.externalTransactionRef && options.externalTransactionRef.length >= 4
+            ? options.externalTransactionRef.slice(0, 100)
+            : `gift_${code.slice(0, 14)}_${nextRedemptionNumber}`;
 
         const studentName = (user.displayName || user.email || 'Estudiante').slice(0, 100);
         const studentEmail = (user.email || '').slice(0, 200);
@@ -3110,6 +3412,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Non-blocking calendar sync
       }
 
+      sendWs({
+        type: 'GIFT_CARD_REDEEMED',
+        cardCode: code,
+        courseId: course.id,
+        courseTitle: course.title.slice(0, 140),
+        instructorId: resolvedInstructorId,
+        amountAppliedCents: txResult.redemption.amountAppliedCents,
+        currency: authoritativeCurrency,
+      });
+
       triggerPushAlert(
         'payment',
         'Gift Card canjeada con éxito',
@@ -3118,7 +3430,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return txResult;
     },
-    [user, isAdmin, enrollments, certificates, courses, privateInfo, triggerPushAlert]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, sendWs, triggerPushAlert]
   );
 
   const redeemGiftCardCode = useCallback(
@@ -3182,6 +3494,231 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [validateGiftCard, courses, redeemGiftCardForCourse]
   );
 
+  const getLemonSqueezyStatus = useCallback(async (): Promise<LemonSqueezyStatus> => {
+    const resp = await fetch('/api/v1/payments/lemonsqueezy/status');
+    if (!resp.ok) {
+      throw new Error('No se pudo consultar el estado de Lemon Squeezy.');
+    }
+    return (await resp.json()) as LemonSqueezyStatus;
+  }, []);
+
+  const createLemonSqueezyCheckout = useCallback(
+    async (
+      course: Course,
+      options?: { couponCode?: string; giftCardCode?: string }
+    ): Promise<LemonSqueezyCheckoutSession> => {
+      if (!user) throw new Error('Inicia sesión para continuar con Lemon Squeezy.');
+
+      if (course.prerequisites && course.prerequisites.length > 0 && !isAdmin) {
+        const unmet = course.prerequisites.filter((prereqId) => {
+          const enr = enrollments.find((e) => e.courseId === prereqId);
+          const hasCert = certificates.some((c) => c.courseId === prereqId);
+          return !((enr && enr.progressPercent >= 100) || hasCert);
+        });
+        if (unmet.length > 0) {
+          const prereqCourse = courses.find((c) => c.id === unmet[0]);
+          throw new Error(
+            `Prerrequisito obligatorio no completado: Debes completar primero "${prereqCourse?.title || unmet[0]}".`
+          );
+        }
+      }
+
+      const courseRef = doc(db, 'courses', course.id);
+      const courseSnap = await getDoc(courseRef);
+      if (!courseSnap.exists()) {
+        if (isAdmin && user.emailVerified) {
+          await assertPlatformAdminWrite('registrar curso antes de Lemon Squeezy checkout', user);
+          await setDoc(courseRef, {
+            ...course,
+            instructorId: course.instructorId === 'platform-faculty' ? user.uid : course.instructorId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          throw new Error(
+            'El curso aún no está publicado en Firestore. Solicita al administrador que sincronice el catálogo.'
+          );
+        }
+      }
+
+      const idToken = await user.getIdToken();
+      const resp = await fetch('/api/v1/payments/lemonsqueezy/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          courseId: course.id,
+          couponCode: options?.couponCode,
+          giftCardCode: options?.giftCardCode,
+          customerName: user.displayName || undefined,
+        }),
+      });
+      const json = (await resp.json().catch(() => ({}))) as LemonSqueezyCheckoutSession & { error?: string };
+      if (!resp.ok) {
+        throw new Error(json.error || 'No se pudo iniciar la pasarela Lemon Squeezy.');
+      }
+      return json;
+    },
+    [user, isAdmin, enrollments, certificates, courses]
+  );
+
+  const verifyAndCompleteLemonSqueezyCheckout = useCallback(
+    async (
+      paymentId: string,
+      courseId: string,
+      orderId?: string
+    ): Promise<{
+      verified: boolean;
+      status: 'paid' | 'pending' | 'refunded';
+      payment?: PaymentRecord;
+      message?: string;
+    }> => {
+      if (!user) {
+        throw new Error('Inicia sesión para verificar tu pago de Lemon Squeezy.');
+      }
+
+      const idToken = await user.getIdToken();
+      const url = new URL('/api/v1/payments/lemonsqueezy/verify', window.location.origin);
+      url.searchParams.set('paymentId', paymentId);
+      url.searchParams.set('courseId', courseId);
+      if (orderId) url.searchParams.set('orderId', orderId);
+
+      const resp = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      const verification = (await resp.json().catch(() => ({}))) as LemonSqueezyVerificationResult & {
+        error?: string;
+      };
+      if (!resp.ok) {
+        throw new Error(verification.error || 'No se pudo verificar la orden en Lemon Squeezy.');
+      }
+
+      if (!verification.verified || verification.status !== 'paid') {
+        return {
+          verified: false,
+          status: verification.status || 'pending',
+          message: verification.message,
+        };
+      }
+
+      const targetCourseId = verification.courseId || courseId;
+      let targetCourse = coursesRef.current.find((c) => c.id === targetCourseId) || null;
+      if (!targetCourse) {
+        const snap = await getDoc(doc(db, 'courses', targetCourseId));
+        if (snap.exists()) {
+          targetCourse = snap.data() as Course;
+        }
+      }
+      if (!targetCourse) {
+        throw new Error('Curso asociado al pago no encontrado.');
+      }
+
+      const existingEnr = enrollments.find((e) => e.courseId === targetCourseId);
+      const existingPay = payments.find((p) => p.id === paymentId || p.courseId === targetCourseId);
+      if (existingEnr && existingPay) {
+        return { verified: true, status: 'paid', payment: existingPay };
+      }
+
+      let recordedPayment: PaymentRecord;
+      if (verification.giftCardCode) {
+        const res = await redeemGiftCardForCourse(
+          verification.giftCardCode,
+          targetCourse,
+          'lemonsqueezy',
+          {
+            externalPaymentId: verification.paymentId,
+            externalTransactionRef: verification.transactionRef,
+          }
+        );
+        recordedPayment = res.payment;
+      } else {
+        recordedPayment = await enrollWithPayment(targetCourse, 'lemonsqueezy', {
+          couponCode: verification.couponCode,
+          externalPaymentId: verification.paymentId,
+          externalTransactionRef: verification.transactionRef,
+        });
+      }
+
+      try {
+        sessionStorage.removeItem('dba_pending_ls_checkout');
+      } catch {
+        // Ignore sessionStorage errors
+      }
+
+      return {
+        verified: true,
+        status: 'paid',
+        payment: recordedPayment,
+      };
+    },
+    [user, enrollments, payments, enrollWithPayment, redeemGiftCardForCourse]
+  );
+
+  useEffect(() => {
+    if (!authReady || !user || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ls_checkout') !== 'success') return;
+
+    const courseId = (params.get('course_id') || '').trim();
+    let paymentId = (params.get('payment_id') || '').trim();
+    const orderId = (params.get('order_id') || '').trim() || undefined;
+
+    if (!paymentId) {
+      try {
+        const stored = sessionStorage.getItem('dba_pending_ls_checkout');
+        if (stored) {
+          const parsed = JSON.parse(stored) as { paymentId?: string; courseId?: string };
+          if (parsed.paymentId && (!courseId || parsed.courseId === courseId)) {
+            paymentId = parsed.paymentId;
+          }
+        }
+      } catch {
+        // Ignore storage error
+      }
+    }
+
+    if (!courseId || !paymentId) return;
+    const dedupeKey = `${paymentId}:${courseId}`;
+    if (handledLemonReturnRef.current === dedupeKey) return;
+    handledLemonReturnRef.current = dedupeKey;
+
+    setLemonSqueezyBanner({
+      status: 'verifying',
+      message: 'Verificando tu pago con Lemon Squeezy...',
+    });
+
+    void (async () => {
+      try {
+        const res = await verifyAndCompleteLemonSqueezyCheckout(paymentId, courseId, orderId);
+        window.history.replaceState({}, '', window.location.pathname);
+        if (res.verified) {
+          setSelectedCourseId(courseId);
+          setActiveView('learning');
+          setLemonSqueezyBanner({
+            status: 'success',
+            message: '¡Pago confirmado en Lemon Squeezy! Tu curso ya está desbloqueado.',
+          });
+        } else {
+          setLemonSqueezyBanner({
+            status: 'pending',
+            message:
+              res.message ||
+              'Tu pago en Lemon Squeezy aún está en confirmación. Vuelve a intentar en unos segundos.',
+          });
+        }
+      } catch (err) {
+        setLemonSqueezyBanner({
+          status: 'error',
+          message: err instanceof Error ? err.message : 'No se pudo verificar el pago de Lemon Squeezy.',
+        });
+      }
+    })();
+  }, [authReady, user, verifyAndCompleteLemonSqueezyCheckout]);
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications]
@@ -3231,7 +3768,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     signInAsAdmin,
     logout,
     enrollWithPayment,
+    getLemonSqueezyStatus,
+    createLemonSqueezyCheckout,
+    verifyAndCompleteLemonSqueezyCheckout,
+    lemonSqueezyBanner,
+    clearLemonSqueezyBanner,
     completeLesson,
+    courseSyncState,
+    getCourseSyncSnapshot,
+    initCourseSync,
+    markCourseUnsaved,
+    setCourseSyncError,
+    resetCourseSync,
     createCourse,
     updateCourse,
     deleteCourse,
@@ -3264,6 +3812,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toggleGiftCardActive,
     deleteGiftCard,
     validateGiftCard,
+    subscribeToGiftCard,
     redeemGiftCardForCourse,
     redeemGiftCardCode,
     coupons,

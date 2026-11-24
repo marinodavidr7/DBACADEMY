@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bold,
   Code,
@@ -115,7 +115,7 @@ interface MarkdownEditorProps {
   error?: string;
 }
 
-export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
+export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   id,
   label,
   value,
@@ -154,16 +154,21 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  const autoGrow = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.max(180, el.scrollHeight + 2)}px`;
-  };
-
   useEffect(() => {
-    autoGrow();
-  }, [value]);
+    if (!split && tab !== 'edit') return;
+    const rafId = window.requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${Math.max(180, el.scrollHeight + 2)}px`;
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [value, split, tab]);
+
+  const previewHtml = useMemo(() => {
+    if (!split && tab !== 'preview') return '';
+    return value.trim() ? renderMarkdown(value) : '';
+  }, [split, tab, value]);
 
   const apply = (transform: (before: string, selection: string, after: string) => string) => {
     const el = textareaRef.current;
@@ -427,10 +432,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           {split || tab === 'preview' ? (
             <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200 max-w-[75ch]">
               {split && <div className="border-l border-slate-200 dark:border-slate-700" />}
-              {value.trim() ? (
+              {previewHtml ? (
                 <div
                   className="prose-sm"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }}
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
                 />
               ) : (
                 <p className="text-slate-400 dark:text-slate-500">{previewEmpty}</p>
@@ -441,4 +446,4 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       </div>
     </Field>
   );
-};
+});
