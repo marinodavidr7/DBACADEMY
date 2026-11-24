@@ -420,6 +420,15 @@ service cloud.firestore {
         && data.redeemedAt is timestamp;
     }
 
+    function isValidGiftCardRedemptionContext(data, cardBefore, cardAfter, courseDoc, uid) {
+      return (!('courseId' in cardBefore) || cardBefore.courseId == '' || cardBefore.courseId == data.courseId)
+        && data.amountAppliedCents <= cardBefore.remainingAmountCents
+        && data.coursePriceCents == courseDoc.priceCents
+        && (data.amountAppliedCents + data.remainingPaidCents) >= data.coursePriceCents
+        && cardAfter.redemptionCount == data.redemptionNumber
+        && cardAfter.redeemedBy == uid;
+    }
+
     function isValidCouponCode(code) {
       return code is string && code.size() >= 3 && code.size() <= 64 && code.matches('^[A-Z0-9_\\-]+$');
     }
@@ -534,7 +543,7 @@ service cloud.firestore {
     }
 
     match /courses/{courseId} {
-      allow get: if isValidId(courseId) && (existing().published == true || isAdmin());
+      allow get: if isValidId(courseId) && (isAdmin() || (resource != null && existing().published == true));
       allow list: if existing().published == true || isAdmin();
       allow create: if isValidId(courseId) && isAdmin()
         && isValidCourse(incoming())
@@ -551,7 +560,13 @@ service cloud.firestore {
     }
 
     match /enrollments/{enrollmentId} {
-      allow get: if isValidCompositeId(enrollmentId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow get: if isValidCompositeId(enrollmentId) && isSignedIn() && (
+        isAdmin()
+        || (resource == null
+          && enrollmentId.size() > request.auth.uid.size() + 1
+          && enrollmentId[enrollmentId.size() - request.auth.uid.size() - 1 : enrollmentId.size()] == ('_' + request.auth.uid))
+        || (resource != null && existing().studentId == request.auth.uid)
+      );
       allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && isValidCompositeId(enrollmentId)
@@ -924,18 +939,16 @@ service cloud.firestore {
         && redemptionId == (incoming().cardCode + '_' + string(incoming().redemptionNumber))
         && incoming().studentId == request.auth.uid
         && incoming().redeemedAt == request.time
-        && exists(/databases/$(database)/documents/courses/$(incoming().courseId))
         && !exists(/databases/$(database)/documents/enrollments/$(incoming().courseId + '_' + request.auth.uid))
         && existsAfter(/databases/$(database)/documents/enrollments/$(incoming().courseId + '_' + request.auth.uid))
         && existsAfter(/databases/$(database)/documents/payments/$(incoming().paymentId))
-        && (!('courseId' in get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data)
-            || get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.courseId == ''
-            || get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.courseId == incoming().courseId)
-        && incoming().amountAppliedCents <= get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.remainingAmountCents
-        && incoming().coursePriceCents == get(/databases/$(database)/documents/courses/$(incoming().courseId)).data.priceCents
-        && (incoming().amountAppliedCents + incoming().remainingPaidCents) >= incoming().coursePriceCents
-        && getAfter(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.redemptionCount == incoming().redemptionNumber
-        && getAfter(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.redeemedBy == request.auth.uid;
+        && isValidGiftCardRedemptionContext(
+          incoming(),
+          get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data,
+          getAfter(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data,
+          get(/databases/$(database)/documents/courses/$(incoming().courseId)).data,
+          request.auth.uid
+        );
       allow update: if false;
       allow delete: if isValidCompositeId(redemptionId) && isAdmin();
     }
