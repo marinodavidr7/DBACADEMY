@@ -135,6 +135,22 @@ function formatMoney(cents: number, currency: CurrencyCode) {
   return formatCurrency(cents, currency);
 }
 
+function formatRedeemErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : 'No se pudo completar el canje.';
+  if (raw.startsWith('{') && raw.includes('"operationType"')) {
+    try {
+      const parsed = JSON.parse(raw) as { error?: string };
+      if (parsed.error && parsed.error.toLowerCase().includes('permission')) {
+        return 'No tienes permisos suficientes en este momento para completar el canje. Recarga la página o inicia sesión nuevamente.';
+      }
+      if (parsed.error) return parsed.error;
+    } catch {
+      // Fallback to raw message
+    }
+  }
+  return raw;
+}
+
 export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
   initialCourse = null,
   onClose,
@@ -158,6 +174,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
   const [validating, setValidating] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [validationFeedback, setValidationFeedback] = useState<ValidationFeedback | null>(null);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
   const [validation, setValidation] = useState<GiftCardValidationResult | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourse?.id || '');
   const [redeemedSuccess, setRedeemedSuccess] = useState<{
@@ -224,6 +241,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
     }
     const timer = window.setTimeout(() => {
       setValidationFeedback(null);
+      setRedeemError(null);
       setValidating(true);
       setLiveCode(normalized);
       setSubNonce((n) => n + 1);
@@ -278,6 +296,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
   const handleValidate = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setValidationFeedback(null);
+    setRedeemError(null);
     setValidation(null);
 
     const normalized = codeInput.trim().toUpperCase();
@@ -314,6 +333,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
     }
 
     setValidationFeedback(null);
+    setRedeemError(null);
     setRedeeming(true);
     try {
       const result = await redeemGiftCardCode(validation.card.code, activeCourse);
@@ -322,12 +342,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
         transactionRef: result.payment.transactionRef,
       });
     } catch (err) {
-      setValidationFeedback(
-        buildValidationFeedback(
-          'network',
-          err instanceof Error ? err.message : 'No se pudo completar el canje.'
-        )
-      );
+      setRedeemError(formatRedeemErrorMessage(err));
     } finally {
       setRedeeming(false);
     }
@@ -460,6 +475,7 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
                       if (validating) setValidating(false);
                       if (validation) setValidation(null);
                       if (validationFeedback) setValidationFeedback(null);
+                      if (redeemError) setRedeemError(null);
                     }}
                     placeholder="Ej: DBA-XXXX-XXXX"
                     className={`flex-1 rounded-lg border bg-[var(--dba-bg-canvas)] px-3.5 py-2.5 text-sm font-mono uppercase text-[var(--dba-text-primary)] placeholder:text-zinc-400 focus:outline-none focus:ring-2 min-h-[44px] transition-colors ${
@@ -533,7 +549,10 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
                       ) : (
                         <select
                           value={selectedCourseId}
-                          onChange={(e) => setSelectedCourseId(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedCourseId(e.target.value);
+                            if (redeemError) setRedeemError(null);
+                          }}
                           className="w-full rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] px-3 py-2.5 text-xs text-[var(--dba-text-primary)] min-h-[42px]"
                         >
                           <option value="">Selecciona un curso...</option>
@@ -597,26 +616,40 @@ export const RedeemGiftCardModal: React.FC<RedeemGiftCardModalProps> = ({
                         <span>Debes completar el prerrequisito de este curso antes de canjearlo.</span>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between gap-3 pt-1">
-                        <span className="text-[11px] text-[var(--dba-text-secondary)] flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Canje atómico instantáneo</span>
-                        </span>
-                        <button
-                          type="button"
-                          disabled={redeeming}
-                          onClick={() => void handleRedeemFull()}
-                          className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-60 px-5 py-2.5 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[42px]"
-                        >
-                          <Gift className="w-4 h-4" />
-                          <span>
-                            {redeeming
-                              ? 'Canjeando...'
-                              : effectiveSummary.coversFullCourse
-                                ? 'Canjear y obtener curso'
-                                : `Aplicar y pagar ${formatMoney(effectiveSummary.remainingToPayCents, activeCourse.currency)}`}
+                      <div className="space-y-3 pt-1">
+                        {redeemError && (
+                          <div
+                            role="alert"
+                            className="rounded-xl border border-red-300 dark:border-red-900/70 bg-red-50 dark:bg-red-950/35 px-4 py-3 text-xs text-red-800 dark:text-red-200 flex items-start gap-2.5"
+                          >
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-xs">No se pudo completar el canje</p>
+                              <p className="leading-relaxed">{redeemError}</p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-[var(--dba-text-secondary)] flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Canje atómico instantáneo</span>
                           </span>
-                        </button>
+                          <button
+                            type="button"
+                            disabled={redeeming}
+                            onClick={() => void handleRedeemFull()}
+                            className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-60 px-5 py-2.5 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[42px]"
+                          >
+                            <Gift className="w-4 h-4" />
+                            <span>
+                              {redeeming
+                                ? 'Canjeando...'
+                                : effectiveSummary.coversFullCourse
+                                  ? 'Canjear y obtener curso'
+                                  : `Aplicar y pagar ${formatMoney(effectiveSummary.remainingToPayCents, activeCourse.currency)}`}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     )
                   )}

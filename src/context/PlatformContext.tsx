@@ -1912,9 +1912,6 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!validation.valid || !validation.coupon) {
           throw new Error(validation.reason || 'Cupón inválido.');
         }
-        if (!testMode && !user.emailVerified) {
-          throw new Error('Tu cuenta requiere correo verificado para canjear cupones.');
-        }
         discountCents = validation.discountCents;
         finalAmount = validation.finalPriceCents;
         appliedCouponCode = validation.coupon.code;
@@ -3338,9 +3335,6 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       options?: { externalPaymentId?: string; externalTransactionRef?: string }
     ): Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }> => {
       if (!user) throw new Error('Inicia sesión para canjear una Gift Card.');
-      if (!user.emailVerified) {
-        throw new Error('Tu cuenta requiere correo verificado (o acceso con Google) para canjear Gift Cards.');
-      }
 
       // Validar prerrequisitos estrictos igual que en checkout normal
       if (course.prerequisites && course.prerequisites.length > 0 && !isAdmin) {

@@ -562,7 +562,7 @@ service cloud.firestore {
         && incoming().enrolledAt == request.time
         && incoming().updatedAt == request.time
         && exists(/databases/$(database)/documents/courses/$(incoming().courseId));
-      allow update: if isValidCompositeId(enrollmentId) && isVerified()
+      allow update: if isValidCompositeId(enrollmentId) && isSignedIn()
         && isValidEnrollment(incoming())
         && incoming().id == existing().id
         && incoming().courseId == existing().courseId
@@ -609,7 +609,7 @@ service cloud.firestore {
     match /certificates/{certificateId} {
       allow get: if isValidId(certificateId);
       allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
-      allow create: if isValidId(certificateId) && isVerified()
+      allow create: if isValidId(certificateId) && isSignedIn()
         && isValidCertificate(incoming())
         && incoming().id == certificateId
         && incoming().studentId == request.auth.uid
@@ -802,7 +802,7 @@ service cloud.firestore {
         && incoming().createdBy == request.auth.uid
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isValidCouponCode(couponId) && isVerified()
+      allow update: if isValidCouponCode(couponId) && isSignedIn()
         && isValidCoupon(incoming())
         && incoming().id == existing().id
         && incoming().code == existing().code
@@ -827,7 +827,7 @@ service cloud.firestore {
     match /couponRedemptions/{redemptionId} {
       allow get: if isValidCompositeId(redemptionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow create: if isValidCompositeId(redemptionId) && isVerified()
+      allow create: if isValidCompositeId(redemptionId) && isSignedIn()
         && isValidCouponRedemption(incoming())
         && incoming().id == redemptionId
         && redemptionId == (incoming().couponCode + '_' + string(incoming().redemptionNumber))
@@ -877,7 +877,7 @@ service cloud.firestore {
         && incoming().createdBy == request.auth.uid
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isValidGiftCardCode(cardId) && isVerified()
+      allow update: if isValidGiftCardCode(cardId) && isSignedIn()
         && isValidGiftCard(incoming())
         && incoming().id == existing().id
         && incoming().code == existing().code
@@ -918,7 +918,7 @@ service cloud.firestore {
     match /giftCardRedemptions/{redemptionId} {
       allow get: if isValidCompositeId(redemptionId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
-      allow create: if isValidCompositeId(redemptionId) && isVerified()
+      allow create: if isValidCompositeId(redemptionId) && isSignedIn()
         && isValidGiftCardRedemption(incoming())
         && incoming().id == redemptionId
         && redemptionId == (incoming().cardCode + '_' + string(incoming().redemptionNumber))
