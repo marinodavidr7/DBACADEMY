@@ -30,6 +30,15 @@ export interface CourseMaterial {
 
 export type CourseLessonType = 'text' | 'video' | 'excel' | 'quiz';
 
+export interface LessonAssignmentConfig {
+  enabled: boolean;
+  title?: string;
+  instructions?: string;
+  dueDate?: string; // ISO string
+  maxScore?: number; // default 100
+  allowedFileTypes?: string[]; // e.g. ['.xlsx', '.xls', '.pdf', '.docx', '.zip']
+}
+
 export interface CourseLesson {
   id: string;
   title: string;
@@ -43,6 +52,7 @@ export interface CourseLesson {
   requiredWatchPercent?: number;
   allowSpeedChange?: boolean;
   status?: 'draft' | 'published';
+  assignmentConfig?: LessonAssignmentConfig;
 }
 
 export interface CourseQuizOption {
@@ -336,5 +346,29 @@ export interface CouponValidationResult {
   currency: 'USD' | 'EUR' | 'MXN';
   reason?: string;
   coupon?: Coupon;
+}
+
+export type AssignmentSubmissionStatus = 'submitted' | 'graded' | 'resubmit_requested';
+
+export interface AssignmentSubmission {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  lessonId: string;
+  lessonTitle: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  submittedAt: string; // ISO date string
+  comment?: string;
+  status: AssignmentSubmissionStatus;
+  grade?: number; // e.g. 95 (out of maxScore)
+  maxScore: number; // default 100
+  feedback?: string;
+  gradedAt?: string; // ISO date string
+  gradedBy?: string;
 }
 

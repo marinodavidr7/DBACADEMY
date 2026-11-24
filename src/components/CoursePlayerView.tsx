@@ -60,6 +60,8 @@ import { ModuleQuizPanel } from './ModuleQuizPanel';
 import { getTopicSimulatorMeta } from './ExcelTopicSimulator';
 import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { CourseProgressBar } from './ui/CourseProgressBar';
+import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
+import { GradesPanel } from './GradesPanel';
 
 const ExcelTopicSimulator = lazy(() =>
   import('./ExcelTopicSimulator').then((m) => ({ default: m.ExcelTopicSimulator }))
@@ -262,6 +264,7 @@ export const CoursePlayerView: React.FC = () => {
     completeLesson,
     updateCourse,
     t,
+    assignmentSubmissions,
   } = usePlatform();
 
   const shouldReduceMotion = useReducedMotion();
@@ -1065,6 +1068,13 @@ export const CoursePlayerView: React.FC = () => {
             </Suspense>
           )}
 
+          {/* Student grades panel */}
+          {!isAdmin && assignmentSubmissions.filter((s) => s.studentId === (user?.uid ?? '')).length > 0 && (
+            <div className="mt-6">
+              <GradesPanel />
+            </div>
+          )}
+
           {prereqCourses.length > 0 && !prereqsMet && (
             <div className="rounded-xl border border-amber-200/90 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
               <div className="flex items-start gap-2.5">
@@ -1507,6 +1517,16 @@ export const CoursePlayerView: React.FC = () => {
                         </div>
                       );
                     })()}
+
+                    {/* Assignment panel */}
+                    {currentLesson.assignmentConfig?.enabled && activeCourse && (
+                      <AssignmentSubmitPanel
+                        courseId={activeCourse.id}
+                        lessonId={currentLesson.id}
+                        lessonTitle={currentLesson.title}
+                        config={currentLesson.assignmentConfig}
+                      />
+                    )}
 
                     {(() => {
                       const canManageTheoryImages = isAdmin && !viewAsStudent && Boolean(activeCourse);

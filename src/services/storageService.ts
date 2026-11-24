@@ -276,3 +276,64 @@ export function buildExternalMaterial(
     uploadedAt: new Date().toISOString(),
   };
 }
+
+/**
+ * Upload an assignment submission file by a student.
+ * If Firebase Storage is restricted or offline, falls back gracefully to Data URL.
+ */
+export async function uploadAssignmentSubmissionFile(
+  courseId: string,
+  lessonId: string,
+  studentId: string,
+  file: File,
+  onProgress?: UploadProgressCallback
+): Promise<{ url: string; name: string; size: number }> {
+  const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storagePath = `submissions/${courseId}/${lessonId}/${studentId}_${Date.now()}_${sanitized}`;
+
+  try {
+    const fileRef = ref(storage, storagePath);
+    const task = uploadBytesResumable(fileRef, file, {
+      contentType: file.type || 'application/octet-stream',
+      customMetadata: { originalName: file.name, studentId, courseId, lessonId },
+    });
+
+    return await new Promise<{ url: string; name: string; size: number }>((resolve, reject) => {
+      task.on(
+        'state_changed',
+        (snap) => {
+          const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+          onProgress?.(pct);
+        },
+        (err) => reject(err),
+        async () => {
+          try {
+            const url = await getDownloadURL(task.snapshot.ref);
+            resolve({
+              url,
+              name: file.name,
+              size: file.size,
+            });
+          } catch (e) {
+            reject(e);
+          }
+        }
+      );
+    });
+  } catch (err) {
+    console.warn('Firebase Storage submission upload failed or not permitted, using Data URL fallback:', err);
+    onProgress?.(100);
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    return {
+      url: dataUrl,
+      name: file.name,
+      size: file.size,
+    };
+  }
+}

@@ -30,6 +30,7 @@ import { CertificateDocumentCard, CertificatePreviewModal } from './CertificateP
 import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
+import { AssignmentInbox } from './AssignmentInbox';
 
 const COURSE_EDITOR_LABELS = (t: (key: TranslationKeys) => string) => ({
   index: {
@@ -216,9 +217,10 @@ export const InstructorDashboard: React.FC = () => {
     selectedCourseId,
     setSelectedCourseId,
     t,
+    assignmentSubmissions,
   } = usePlatform();
 
-  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'coupons' | 'referrals'>('courses');
+  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'coupons' | 'referrals' | 'submissions'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
@@ -490,6 +492,7 @@ export const InstructorDashboard: React.FC = () => {
           { id: 'certificates', label: `Certificados (${instructorCertificates.length})` },
           { id: 'coupons', label: t('couponsTitle') },
           { id: 'referrals', label: t('referralsTitle') },
+          { id: 'submissions', label: `Entregas (${assignmentSubmissions.filter((s) => s.status === 'submitted').length})` },
         ] as const).map((tab) => (
           <button
             key={tab.id}
@@ -635,6 +638,12 @@ export const InstructorDashboard: React.FC = () => {
       {adminTab === 'referrals' && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 text-sm text-slate-500">
           Configuración de referidos disponible vía API /api/referrals/settings. Panel detallado pendiente de UI extendida.
+        </div>
+      )}
+
+      {adminTab === 'submissions' && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5">
+          <AssignmentInbox />
         </div>
       )}
 

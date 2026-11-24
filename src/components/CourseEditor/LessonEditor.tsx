@@ -15,7 +15,7 @@ import {
   UploadCloud,
   Video,
 } from 'lucide-react';
-import type { CourseLesson, CourseLessonType, CourseMaterial } from '../../types';
+import type { CourseLesson, CourseLessonType, CourseMaterial, LessonAssignmentConfig } from '../../types';
 import {
   buildExternalMaterial,
   uploadCourseMaterial,
@@ -643,6 +643,122 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         onChange={(materials: CourseMaterial[]) => onChange({ materials })}
         labels={labels.materials}
       />
+
+      {/* Assignment config */}
+      {canEdit && (
+        <section className="rounded-xl border border-indigo-200/60 dark:border-indigo-800/40 bg-indigo-50/40 dark:bg-indigo-950/20 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-300">📋 Tarea de la lección</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Activa una tarea para que los estudiantes puedan subir un archivo.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  assignmentConfig: {
+                    ...(lesson.assignmentConfig ?? {}),
+                    enabled: !lesson.assignmentConfig?.enabled,
+                    title: lesson.assignmentConfig?.title ?? '',
+                    instructions: lesson.assignmentConfig?.instructions ?? '',
+                    maxScore: lesson.assignmentConfig?.maxScore ?? 100,
+                    allowedFileTypes: lesson.assignmentConfig?.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip',
+                  } as LessonAssignmentConfig,
+                })
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                lesson.assignmentConfig?.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  lesson.assignmentConfig?.enabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {lesson.assignmentConfig?.enabled && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  Título de la tarea
+                </label>
+                <input
+                  type="text"
+                  value={lesson.assignmentConfig.title ?? ''}
+                  onChange={(e) =>
+                    onChange({ assignmentConfig: { ...lesson.assignmentConfig!, title: e.target.value } })
+                  }
+                  placeholder="Ej: Práctica de fórmulas Excel"
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  Instrucciones
+                </label>
+                <textarea
+                  value={lesson.assignmentConfig.instructions ?? ''}
+                  onChange={(e) =>
+                    onChange({ assignmentConfig: { ...lesson.assignmentConfig!, instructions: e.target.value } })
+                  }
+                  rows={3}
+                  placeholder="Describe qué debe hacer el estudiante..."
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    Fecha límite (opcional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={lesson.assignmentConfig.dueDate ?? ''}
+                    onChange={(e) =>
+                      onChange({ assignmentConfig: { ...lesson.assignmentConfig!, dueDate: e.target.value } })
+                    }
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                    Puntuación máxima
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={lesson.assignmentConfig.maxScore ?? 100}
+                    onChange={(e) =>
+                      onChange({ assignmentConfig: { ...lesson.assignmentConfig!, maxScore: Number(e.target.value) } })
+                    }
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  Tipos de archivo permitidos
+                </label>
+                <input
+                  type="text"
+                  value={lesson.assignmentConfig.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip'}
+                  onChange={(e) =>
+                    onChange({ assignmentConfig: { ...lesson.assignmentConfig!, allowedFileTypes: e.target.value } })
+                  }
+                  placeholder=".xlsx,.pdf,.docx,.zip"
+                  className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Separados por coma, ej: .xlsx,.pdf,.docx,.zip</p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="hidden">{typeLabel}</div>
     </div>

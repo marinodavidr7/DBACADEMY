@@ -40,6 +40,7 @@ import { translations, type TranslationKeys } from '../i18n/translations';
 import type {
   ApiIntegrationKey,
   AppView,
+  AssignmentSubmission,
   CalendarEvent,
   Certificate,
   CloudProvider,
@@ -56,6 +57,7 @@ import type {
   UserPrivateInfo,
   UserProfile,
 } from '../types';
+import { uploadAssignmentSubmissionFile } from '../services/storageService';
 import { encryptTextE2EE, getOrCreateVaultKey, sha256Hex } from '../utils/crypto';
 
 const isAdminEmail = isAuthorizedAdminEmail;
@@ -75,6 +77,27 @@ function loadLocalCustomExercises(): CustomExcelExercise[] {
 function saveLocalCustomExercises(items: CustomExcelExercise[]) {
   try {
     localStorage.setItem(CUSTOM_EXERCISES_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+const ASSIGNMENTS_STORAGE_KEY = 'dbacademy_submissions_v1';
+
+function loadLocalSubmissions(): AssignmentSubmission[] {
+  try {
+    const raw = localStorage.getItem(ASSIGNMENTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as AssignmentSubmission[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalSubmissions(items: AssignmentSubmission[]) {
+  try {
+    localStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(items));
   } catch {
     // Ignore storage quota errors
   }
@@ -276,6 +299,7 @@ interface PlatformContextValue {
   calendarEvents: CalendarEvent[];
   encryptedNotes: EncryptedNote[];
   apiKeys: ApiIntegrationKey[];
+  assignmentSubmissions: AssignmentSubmission[];
   notifications: InAppNotification[];
   unreadCount: number;
   connectedDevicesCount: number;
@@ -317,6 +341,9 @@ interface PlatformContextValue {
   toggleApiKey: (keyRecord: ApiIntegrationKey) => Promise<void>;
   deleteApiKey: (keyId: string) => Promise<void>;
   refreshVaultFingerprint: () => Promise<string>;
+  submitAssignment: (courseId: string, lessonId: string, file: File, comment?: string) => Promise<AssignmentSubmission>;
+  gradeAssignment: (submissionId: string, grade: number, feedback: string, requestResubmit?: boolean) => Promise<void>;
+  deleteSubmission: (submissionId: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<PlatformContextValue | null>(null);
@@ -364,6 +391,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [encryptedNotes, setEncryptedNotes] = useState<EncryptedNote[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiIntegrationKey[]>([]);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<AssignmentSubmission[]>(() =>
+    loadLocalSubmissions()
+  );
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [connectedDevicesCount, setConnectedDevicesCount] = useState(1);
   const [wsConnected, setWsConnected] = useState(false);
@@ -1022,6 +1052,27 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setCustomExercises([...remote, ...localOnly]);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'customExercises')
+      )
+    );
+
+    const submissionsQuery = isAdmin
+      ? collection(db, 'assignmentSubmissions')
+      : query(collection(db, 'assignmentSubmissions'), where('studentId', '==', user.uid));
+    unsubs.push(
+      onSnapshot(
+        submissionsQuery,
+        (snap) => {
+          const remote = snap.docs.map((d) => d.data() as AssignmentSubmission);
+          const remoteIds = new Set(remote.map((x) => x.id));
+          const localOnly = loadLocalSubmissions().filter((x) => !remoteIds.has(x.id));
+          const merged = [...remote, ...localOnly];
+          saveLocalSubmissions(merged);
+          setAssignmentSubmissions(merged);
+        },
+        (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'assignmentSubmissions');
+          setAssignmentSubmissions(loadLocalSubmissions());
+        }
       )
     );
 
@@ -1979,6 +2030,78 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user, isAdmin, apiKeys]
   );
 
+  const submitAssignment = useCallback(
+    async (courseId: string, lessonId: string, file: File, comment?: string): Promise<AssignmentSubmission> => {
+      if (!user) throw new Error('Authentication required');
+      const course = courses.find((c) => c.id === courseId);
+      const lesson = course?.modules.flatMap((m) => m.lessons).find((l) => l.id === lessonId);
+
+      const { url, name, size } = await uploadAssignmentSubmissionFile(courseId, lessonId, user.uid, file);
+
+      const id = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const submission: AssignmentSubmission = {
+        id,
+        courseId,
+        courseTitle: course?.title ?? courseId,
+        lessonId,
+        lessonTitle: lesson?.title ?? lessonId,
+        studentId: user.uid,
+        studentName: user.displayName || user.email || 'Estudiante',
+        studentEmail: user.email || '',
+        fileUrl: url,
+        fileName: name,
+        fileSize: size,
+        submittedAt: new Date().toISOString(),
+        comment: comment?.trim(),
+        status: 'submitted',
+        maxScore: lesson?.assignmentConfig?.maxScore ?? 100,
+      };
+
+      try {
+        await setDoc(doc(db, 'assignmentSubmissions', id), submission);
+      } catch (_err) {
+        const updated = [...loadLocalSubmissions(), submission];
+        saveLocalSubmissions(updated);
+        setAssignmentSubmissions(updated);
+      }
+      return submission;
+    },
+    [user, courses]
+  );
+
+  const gradeAssignment = useCallback(
+    async (submissionId: string, grade: number, feedback: string, requestResubmit = false) => {
+      if (!user) throw new Error('Authentication required');
+      if (!isAdmin) throw new Error('Solo el administrador puede calificar entregas.');
+      const patch = {
+        grade,
+        feedback: feedback.trim(),
+        gradedAt: new Date().toISOString(),
+        gradedBy: user.email || user.uid,
+        status: (requestResubmit ? 'resubmit_requested' : 'graded') as AssignmentSubmissionStatus,
+      };
+      try {
+        await updateDoc(doc(db, 'assignmentSubmissions', submissionId), patch);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `assignmentSubmissions/${submissionId}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
+  const deleteSubmission = useCallback(
+    async (submissionId: string) => {
+      if (!user) throw new Error('Authentication required');
+      if (!isAdmin) throw new Error('Solo el administrador puede eliminar entregas.');
+      try {
+        await deleteDoc(doc(db, 'assignmentSubmissions', submissionId));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `assignmentSubmissions/${submissionId}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications]
@@ -2051,6 +2174,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toggleApiKey,
     deleteApiKey,
     refreshVaultFingerprint,
+    assignmentSubmissions,
+    submitAssignment,
+    gradeAssignment,
+    deleteSubmission,
   };
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;
