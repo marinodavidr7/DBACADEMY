@@ -11,6 +11,7 @@ import {
   Plus,
   Sigma,
   UploadCloud,
+  Video,
   X,
 } from 'lucide-react';
 import { uploadCourseMaterial } from '../../services/storageService';
@@ -263,6 +264,22 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               onClick={() => insertBlock('[texto del enlace](https://ejemplo.com)')}
             >
               <Link2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className={toolbarButton}
+              title="Insertar video de YouTube (pega la URL en el contenido)"
+              aria-label="Insertar video de YouTube"
+              onClick={() => {
+                const url = window.prompt(
+                  'Introduce la URL del video de YouTube (ej. https://www.youtube.com/watch?v=...):'
+                );
+                if (url && url.trim()) {
+                  insertBlock(`\n${url.trim()}\n`);
+                }
+              }}
+            >
+              <Video className="h-4 w-4 text-red-500" />
             </button>
             <button
               type="button"

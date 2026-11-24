@@ -1,3 +1,5 @@
+import { extractYouTubeId } from './courseEditor';
+
 /**
  * Renderizador Markdown mínimo y seguro para la vista previa del editor.
  * Escapa HTML antes de aplicar la sintaxis, de modo que el contenido del
@@ -96,6 +98,24 @@ export function renderMarkdown(source: string): string {
       flushParagraph();
       list.push(line.replace(/^([-*]|\d+\.)\s+/, ''));
       continue;
+    }
+
+    const trimmedLine = line.trim();
+    if (
+      trimmedLine.startsWith('http://') ||
+      trimmedLine.startsWith('https://') ||
+      trimmedLine.startsWith('<iframe') ||
+      (trimmedLine.startsWith('[') && trimmedLine.includes('http'))
+    ) {
+      const ytid = extractYouTubeId(trimmedLine);
+      if (ytid) {
+        flushParagraph();
+        flushList();
+        html.push(
+          `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:0.75rem;margin:1rem 0;background:#000;"><iframe src="https://www.youtube-nocookie.com/embed/${ytid}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1" title="Reproductor de lección" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation allow-forms" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"></iframe></div>`
+        );
+        continue;
+      }
     }
 
     flushList();

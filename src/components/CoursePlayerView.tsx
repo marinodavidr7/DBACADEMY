@@ -50,6 +50,8 @@ import { exportCertificatePdf } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ImageLightboxModal, TheoryImageGallery } from './TheoryImageGallery';
+import { LessonVideoPlayer } from './LessonVideoPlayer';
+import { extractYouTubeId, extractVimeoId } from '../utils/courseEditor';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
@@ -1162,6 +1164,12 @@ export const CoursePlayerView: React.FC = () => {
                         Simulador: {simulatorMeta.shortBadge}
                       </span>
                     )}
+                    {(currentLesson.videoUrl || currentLesson.type === 'video') && (
+                      <span className="px-2 py-0.5 rounded bg-red-500/20 border border-red-400/40 text-red-200 text-[11px] font-semibold flex items-center gap-1">
+                        <Video className="w-3 h-3 text-red-400" />
+                        Video
+                      </span>
+                    )}
                   </div>
                   <h2 className="font-display text-lg sm:text-2xl font-bold text-white leading-snug">
                     {currentLesson.title}
@@ -1317,69 +1325,188 @@ export const CoursePlayerView: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
-                      {currentLesson.content
+                    {/* Video principal si está configurado en videoUrl */}
+                    {(() => {
+                      const vUrl = currentLesson.videoUrl?.trim();
+                      if (!vUrl) return null;
+                      return (
+                        <LessonVideoPlayer
+                          videoUrl={vUrl}
+                          title={currentLesson.title}
+                        />
+                      );
+                    })()}
+
+                    {/* Contenido teórico (Markdown, ilustraciones e incrustaciones de video) */}
+                    {(() => {
+                      const mainYtId = currentLesson.videoUrl ? extractYouTubeId(currentLesson.videoUrl) : null;
+                      const mainVimeoId = currentLesson.videoUrl ? extractVimeoId(currentLesson.videoUrl) : null;
+                      const renderedContentVideoIds = new Set<string>();
+                      if (mainYtId) renderedContentVideoIds.add(`yt:${mainYtId}`);
+                      if (mainVimeoId) renderedContentVideoIds.add(`vim:${mainVimeoId}`);
+
+                      const rawSegments = currentLesson.content
                         .split(/(!\[[^\]]*\]\([^)\s]+\))/g)
-                        .filter(Boolean)
-                        .map((segment, segIdx) => {
-                          const imgMatch = segment.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
-                          if (imgMatch) {
-                            const [, altText, imgSrc] = imgMatch;
-                            const isSafeSrc =
-                              /^https?:\/\//i.test(imgSrc) ||
-                              imgSrc.startsWith('/') ||
-                              /^data:image\//i.test(imgSrc);
-                            if (!isSafeSrc) return null;
-                            return (
-                              <figure
-                                key={`md-img-${segIdx}`}
-                                className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/60 overflow-hidden"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setLightboxImage({
-                                      id: `md-img-${segIdx}`,
-                                      name: altText || 'Imagen de la lección',
-                                      url: imgSrc,
-                                      type: 'image',
-                                      sizeByte: 0,
-                                      uploadedAt: '',
-                                    })
-                                  }
-                                  className="group relative block w-full bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        .filter(Boolean);
+
+                      if (rawSegments.length === 0 && !currentLesson.videoUrl) {
+                        return null;
+                      }
+
+                      return (
+                        <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
+                          {rawSegments.map((segment, segIdx) => {
+                            const imgMatch = segment.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+                            if (imgMatch) {
+                              const [, altText, imgSrc] = imgMatch;
+                              const isSafeSrc =
+                                /^https?:\/\//i.test(imgSrc) ||
+                                imgSrc.startsWith('/') ||
+                                /^data:image\//i.test(imgSrc);
+                              if (!isSafeSrc) return null;
+                              return (
+                                <figure
+                                  key={`md-img-${segIdx}`}
+                                  className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/60 overflow-hidden my-3"
                                 >
-                                  <img
-                                    src={imgSrc}
-                                    alt={altText || 'Imagen de la lección'}
-                                    loading="lazy"
-                                    decoding="async"
-                                    referrerPolicy="no-referrer"
-                                    className="w-full h-auto max-h-[540px] object-contain mx-auto block"
-                                  />
-                                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity absolute bottom-2.5 right-2.5">
-                                    <ZoomIn className="w-3.5 h-3.5" />
-                                    Ampliar
-                                  </span>
-                                </button>
-                                {altText && (
-                                  <figcaption className="px-3.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800">
-                                    {altText}
-                                  </figcaption>
-                                )}
-                              </figure>
-                            );
-                          }
-                          return (
-                            <p
-                              key={`md-txt-${segIdx}`}
-                              className={`whitespace-pre-line ${zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}`}
-                            >
-                              {segment}
-                            </p>
-                          );
-                        })}
-                    </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLightboxImage({
+                                        id: `md-img-${segIdx}`,
+                                        name: altText || 'Imagen de la lección',
+                                        url: imgSrc,
+                                        type: 'image',
+                                        sizeByte: 0,
+                                        uploadedAt: '',
+                                      })
+                                    }
+                                    className="group relative block w-full bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    <img
+                                      src={imgSrc}
+                                      alt={altText || 'Imagen de la lección'}
+                                      loading="lazy"
+                                      decoding="async"
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-auto max-h-[540px] object-contain mx-auto block"
+                                    />
+                                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity absolute bottom-2.5 right-2.5">
+                                      <ZoomIn className="w-3.5 h-3.5" />
+                                      Ampliar
+                                    </span>
+                                  </button>
+                                  {altText && (
+                                    <figcaption className="px-3.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-800">
+                                      {altText}
+                                    </figcaption>
+                                  )}
+                                </figure>
+                              );
+                            }
+
+                            // Texto que puede contener enlaces o embeds de video
+                            const lines = segment.split('\n');
+                            const nodes: React.ReactNode[] = [];
+                            let textBuf: string[] = [];
+
+                            const flushTextBuf = () => {
+                              if (textBuf.length > 0) {
+                                const txt = textBuf.join('\n').trim();
+                                if (txt) {
+                                  nodes.push(
+                                    <p
+                                      key={`txt-${segIdx}-${nodes.length}`}
+                                      className={`whitespace-pre-line ${zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}`}
+                                    >
+                                      {txt}
+                                    </p>
+                                  );
+                                }
+                                textBuf = [];
+                              }
+                            };
+
+                            for (let i = 0; i < lines.length; i++) {
+                              const rawLine = lines[i];
+                              const trimmed = rawLine.trim();
+                              const isCandidate =
+                                trimmed.startsWith('http://') ||
+                                trimmed.startsWith('https://') ||
+                                trimmed.startsWith('<iframe') ||
+                                (trimmed.startsWith('[') && (trimmed.includes('youtu') || trimmed.includes('vimeo')));
+
+                              const ytid = isCandidate ? extractYouTubeId(trimmed) : null;
+                              const vimeoId = isCandidate ? extractVimeoId(trimmed) : null;
+
+                              if (ytid || vimeoId) {
+                                const key = ytid ? `yt:${ytid}` : `vim:${vimeoId}`;
+                                if (!renderedContentVideoIds.has(key)) {
+                                  renderedContentVideoIds.add(key);
+                                  flushTextBuf();
+                                  const customTitle = trimmed.startsWith('[')
+                                    ? trimmed.match(/\[([^\]]+)\]/)?.[1]
+                                    : undefined;
+                                  nodes.push(
+                                    <LessonVideoPlayer
+                                      key={`vid-${segIdx}-${nodes.length}`}
+                                      videoUrl={trimmed}
+                                      title={customTitle}
+                                    />
+                                  );
+                                  continue;
+                                }
+                              }
+
+                              textBuf.push(rawLine);
+                            }
+
+                            flushTextBuf();
+                            return <React.Fragment key={`seg-${segIdx}`}>{nodes}</React.Fragment>;
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Videos complementarios adjuntos a la lección */}
+                    {(() => {
+                      const mainYtId = currentLesson.videoUrl ? extractYouTubeId(currentLesson.videoUrl) : null;
+                      const mainVimeoId = currentLesson.videoUrl ? extractVimeoId(currentLesson.videoUrl) : null;
+                      const contentText = currentLesson.content || '';
+
+                      const complementaryVideos = (currentLesson.materials ?? []).filter((m) => {
+                        const mUrl = m.url?.trim() ?? '';
+                        if (!mUrl) return false;
+                        const ytid = extractYouTubeId(mUrl);
+                        const vimeoId = extractVimeoId(mUrl);
+                        const isVideo = m.type === 'video' || Boolean(ytid || vimeoId);
+                        if (!isVideo) return false;
+                        if (ytid && (ytid === mainYtId || contentText.includes(ytid))) return false;
+                        if (vimeoId && (vimeoId === mainVimeoId || contentText.includes(vimeoId))) return false;
+                        if (mUrl === currentLesson.videoUrl) return false;
+                        return true;
+                      });
+
+                      if (complementaryVideos.length === 0) return null;
+
+                      return (
+                        <div className="space-y-3 pt-2">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            <Video className="w-4 h-4 text-red-500 shrink-0" />
+                            <span>Videos complementarios</span>
+                          </div>
+                          <div className="space-y-3">
+                            {complementaryVideos.map((vm) => (
+                              <LessonVideoPlayer
+                                key={vm.id}
+                                videoUrl={vm.url}
+                                title={vm.name}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {(() => {
                       const canManageTheoryImages = isAdmin && !viewAsStudent && Boolean(activeCourse);
@@ -2132,6 +2259,8 @@ export const CoursePlayerView: React.FC = () => {
                               <Lock className="w-3.5 h-3.5 shrink-0 text-slate-500 dark:text-slate-300" />
                             ) : done ? (
                               <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+                            ) : lesson.type === 'video' || lesson.videoUrl ? (
+                              <Video className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-red-200' : 'text-red-500 dark:text-red-400'}`} />
                             ) : (
                               <Circle className={`w-3.5 h-3.5 shrink-0 ${active ? 'text-blue-200' : 'text-slate-400'}`} />
                             )}

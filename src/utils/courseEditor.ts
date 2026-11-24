@@ -323,23 +323,29 @@ export function moveLessonBetweenModules(
 }
 
 /* ------------------------------------------------------------------ */
-/*  YouTube                                                            */
+/*  YouTube / Video Helpers                                            */
 /* ------------------------------------------------------------------ */
 
 export function extractYouTubeId(url: string): string | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
   const patterns = [
-    /(?:youtube\.com\/watch\?.*v=)([A-Za-z0-9_-]{6,15})/,
+    /(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{6,15})/,
+    /(?:youtube-nocookie\.com\/embed\/)([A-Za-z0-9_-]{6,15})/,
     /(?:youtu\.be\/)([A-Za-z0-9_-]{6,15})/,
-    /(?:youtube\.com\/embed\/)([A-Za-z0-9_-]{6,15})/,
-    /(?:youtube\.com\/shorts\/)([A-Za-z0-9_-]{6,15})/,
   ];
   for (const pattern of patterns) {
     const match = trimmed.match(pattern);
     if (match?.[1]) return match[1];
   }
   return null;
+}
+
+export function extractVimeoId(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/(?:vimeo\.com\/)(\d+)/);
+  return match?.[1] ?? null;
 }
 
 export function isYouTubeUrl(url: string): boolean {

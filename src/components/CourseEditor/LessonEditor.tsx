@@ -111,6 +111,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
   labels,
 }) => {
   const videoId = extractYouTubeId(lesson.videoUrl ?? '');
+  const [showVideoInput, setShowVideoInput] = useState(Boolean(lesson.videoUrl));
   const theoryImageInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingTheoryImages, setUploadingTheoryImages] = useState(false);
   const [theoryImageError, setTheoryImageError] = useState<string | null>(null);
@@ -293,10 +294,33 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         </Field>
       </div>
 
-      {lesson.type === 'video' && (
+      {(lesson.type === 'video' || Boolean(lesson.videoUrl) || showVideoInput) && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827] p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-red-500/10 text-red-500 flex items-center justify-center">
+                <Video className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {labels.videoUrl}
+              </span>
+            </div>
+            {lesson.type !== 'video' && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({ videoUrl: undefined });
+                  setShowVideoInput(false);
+                }}
+                className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+              >
+                Quitar video
+              </button>
+            )}
+          </div>
+
           <Field
-            label={labels.videoUrl}
+            label=""
             error={lesson.videoUrl && !videoId ? labels.videoInvalid : undefined}
             help={labels.videoTodo}
           >
@@ -312,10 +336,11 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
           {videoId ? (
             <div className="aspect-video w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-950">
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1`}
                 title={labels.videoPreview}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
                 className="h-full w-full"
               />
             </div>
@@ -361,6 +386,17 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         </div>
       )}
 
+      {lesson.type !== 'video' && !lesson.videoUrl && !showVideoInput && (
+        <button
+          type="button"
+          onClick={() => setShowVideoInput(true)}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 py-2.5 px-4 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:border-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/20 transition-colors"
+        >
+          <Video className="w-4 h-4 text-red-500" />
+          <span>+ Vincular video explicativo a esta lección (YouTube / Vimeo)</span>
+        </button>
+      )}
+
       {lesson.type === 'excel' && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 p-4 text-sm text-emerald-800 dark:text-emerald-200">
           <div className="flex items-start gap-2">
@@ -379,29 +415,27 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
         </div>
       )}
 
-      {lesson.type !== 'video' && (
-        <MarkdownEditor
-          id={`content-${lesson.id}`}
-          label={labels.content}
-          value={lesson.content}
-          onChange={(value) => onChange({ content: value })}
-          placeholder={labels.contentPlaceholder}
-          editLabel={labels.editTab}
-          previewLabel={labels.previewTab}
-          previewEmpty={labels.previewEmpty}
-          boldLabel={labels.bold}
-          italicLabel={labels.italic}
-          listLabel={labels.list}
-          codeLabel={labels.code}
-          formulaLabel={labels.formula}
-          linkLabel={labels.link}
-          courseId={courseId || 'general'}
-          lessonId={lesson.id}
-          canEdit={canEdit}
-        />
-      )}
+      <MarkdownEditor
+        id={`content-${lesson.id}`}
+        label={lesson.type === 'video' ? `${labels.content} (Notas y apuntes opcionales)` : labels.content}
+        value={lesson.content}
+        onChange={(value) => onChange({ content: value })}
+        placeholder={lesson.type === 'video' ? 'Agrega apuntes o resumen de la lección...' : labels.contentPlaceholder}
+        editLabel={labels.editTab}
+        previewLabel={labels.previewTab}
+        previewEmpty={labels.previewEmpty}
+        boldLabel={labels.bold}
+        italicLabel={labels.italic}
+        listLabel={labels.list}
+        codeLabel={labels.code}
+        formulaLabel={labels.formula}
+        linkLabel={labels.link}
+        courseId={courseId || 'general'}
+        lessonId={lesson.id}
+        canEdit={canEdit}
+      />
 
-      {!lesson.content.trim() && lesson.type !== 'video' && (
+      {!lesson.content.trim() && lesson.type !== 'video' && !lesson.videoUrl && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {labels.contentPlaceholder}
