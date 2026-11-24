@@ -6,6 +6,7 @@ import {
   BookOpen,
   Calendar,
   Code2,
+  Gift,
   GraduationCap,
   Home,
   LayoutDashboard,
@@ -27,6 +28,7 @@ import { LandingPage } from './components/LandingPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { RedeemGiftCardModal } from './components/RedeemGiftCardModal';
 import { BrandLogo } from './components/ui/BrandLogo';
 import { PageContainer } from './components/ui/PageContainer';
 import { PlatformProvider, usePlatform } from './context/PlatformContext';
@@ -98,6 +100,7 @@ const AppShell: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [redeemOpen, setRedeemOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('catedra_sidebar_collapsed') === 'true';
@@ -171,16 +174,16 @@ const AppShell: React.FC = () => {
   const isZenActive = zenMode && activeView === 'learning';
 
   return (
-    <div className="min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden overflow-x-hidden bg-slate-50 dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex">
+    <div className="min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden overflow-x-hidden bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)] flex">
       {/* Desktop Sidebar (Collapsible Rail, hidden in Zen Mode) */}
       {!isZenActive && (
         <aside
-          className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-[100dvh] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F1624] transition-[width] duration-200 ease-out z-40 shrink-0 ${
+          className={`hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-[100dvh] border-r border-[var(--dba-border)] bg-[var(--dba-bg-surface)] transition-[width] duration-200 ease-out z-40 shrink-0 ${
             sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-56'
           }`}
         >
           <div
-            className={`h-14 border-b border-slate-200 dark:border-slate-800 flex items-center shrink-0 ${
+            className={`h-14 border-b border-[var(--dba-border)] flex items-center shrink-0 ${
               sidebarCollapsed ? 'justify-center px-1.5 gap-1' : 'justify-between px-3'
             }`}
           >
@@ -236,8 +239,8 @@ const AppShell: React.FC = () => {
                     sidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
                   } ${
                     active
-                      ? 'bg-[#0052CC] text-white'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70'
+                      ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)] font-semibold'
+                      : 'text-[var(--dba-text-secondary)] hover:bg-stone-100 dark:hover:bg-zinc-800/70'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -352,7 +355,7 @@ const AppShell: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void signInWithGoogle()}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 min-h-[40px]"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] min-h-[40px]"
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     <span>{t('signInGoogle')}</span>
@@ -368,7 +371,7 @@ const AppShell: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 lg:h-[100dvh] lg:overflow-y-auto overflow-x-hidden">
         {/* Clean 3-Zone Top Bar (hidden in Zen Mode) */}
         {!isZenActive && (
-          <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#0F1624]/95 backdrop-blur-xs safe-pt px-4 sm:px-5 flex items-center justify-between gap-3 min-h-[54px]">
+          <header className="sticky top-0 z-30 border-b border-[var(--dba-border)] bg-[var(--dba-bg-surface)]/95 backdrop-blur-xs safe-pt px-4 sm:px-5 flex items-center justify-between gap-3 min-h-[54px]">
             <div className="flex items-center gap-2 min-w-0">
               <button
                 type="button"
@@ -425,6 +428,14 @@ const AppShell: React.FC = () => {
             </nav>
 
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setRedeemOpen(true)}
+                className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 text-xs font-semibold text-[var(--dba-accent-ink)] transition-colors whitespace-nowrap min-h-[40px]"
+              >
+                <Gift className="w-3.5 h-3.5" />
+                <span>Canjear código</span>
+              </button>
               <PWAInstallButton label={t('installApp')} />
               <button
                 type="button"
@@ -434,7 +445,7 @@ const AppShell: React.FC = () => {
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="ml-1 text-[11px] font-mono tabular-nums font-semibold text-blue-600 dark:text-cyan-300">
+                  <span className="ml-1 text-[11px] font-mono tabular-nums font-semibold text-[var(--dba-accent-ink)]">
                     {unreadCount}
                   </span>
                 )}
@@ -453,7 +464,7 @@ const AppShell: React.FC = () => {
                     onClick={() => void logout()}
                     title={t('signOut')}
                     aria-label={t('signOut')}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-[44px] min-h-[44px]"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-[var(--dba-border)] text-xs font-medium text-[var(--dba-text-primary)] hover:bg-stone-100 dark:hover:bg-zinc-800 transition-colors min-w-[44px] min-h-[44px]"
                   >
                     <LogOut className="w-4 h-4 shrink-0" />
                     <span className="hidden sm:inline">{t('signOut')}</span>
@@ -463,7 +474,7 @@ const AppShell: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void signInWithGoogle()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3.5 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                 >
                   <LogIn className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">{t('signInGoogle')}</span>
@@ -543,7 +554,7 @@ const AppShell: React.FC = () => {
       {!isZenActive && (
         <nav
           aria-label="Navegación inferior"
-          className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#090D16]/95 backdrop-blur-md safe-pb safe-px"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-[var(--dba-border)] bg-[var(--dba-bg-surface)]/95 backdrop-blur-md safe-pb safe-px"
         >
           <div className="grid grid-cols-4 h-14 max-w-md mx-auto">
             {[
@@ -561,8 +572,8 @@ const AppShell: React.FC = () => {
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] px-1 transition-colors ${
                     isActive
-                      ? 'text-[#0052CC] dark:text-cyan-300 font-semibold'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      ? 'text-[var(--dba-accent-ink)] font-semibold'
+                      : 'text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'
                   }`}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
@@ -579,8 +590,8 @@ const AppShell: React.FC = () => {
               aria-expanded={mobileMenuOpen}
               className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] px-1 transition-colors ${
                 mobileMenuOpen
-                  ? 'text-[#0052CC] dark:text-cyan-300 font-semibold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                  ? 'text-[var(--dba-accent-ink)] font-semibold'
+                  : 'text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'
               }`}
             >
               <Menu className="w-5 h-5 shrink-0" />
@@ -610,16 +621,16 @@ const AppShell: React.FC = () => {
                   ? { duration: 0 }
                   : { type: 'spring', damping: 28, stiffness: 300 }
               }
-              className="w-72 max-w-[85vw] bg-white dark:bg-[#0F1624] h-full flex flex-col border-r border-slate-200 dark:border-slate-800 safe-pt safe-pb"
+              className="w-72 max-w-[85vw] bg-[var(--dba-bg-surface)] h-full flex flex-col border-r border-[var(--dba-border)] safe-pt safe-pb"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="h-14 px-4 flex items-center justify-between border-b border-[var(--dba-border)] shrink-0">
                 <BrandLogo size="sm" showWordmark={true} />
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Cerrar menú"
-                  className="min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
+                  className="min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-[var(--dba-text-secondary)] hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -636,8 +647,8 @@ const AppShell: React.FC = () => {
                       onClick={() => handleSelectNav(item.id)}
                       className={`w-full flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium min-h-[44px] ${
                         active
-                          ? 'bg-[#0052CC] text-white'
-                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)] font-semibold'
+                          : 'text-[var(--dba-text-primary)] hover:bg-stone-100 dark:hover:bg-zinc-800'
                       }`}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
@@ -646,6 +657,20 @@ const AppShell: React.FC = () => {
                   );
                 })}
               </nav>
+
+              <div className="px-3 pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setRedeemOpen(true);
+                  }}
+                  className="w-full flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-[var(--dba-accent-ink)] min-h-[44px]"
+                >
+                  <Gift className="w-4 h-4 shrink-0" />
+                  <span>Canjear Gift Card</span>
+                </button>
+              </div>
 
               <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3 shrink-0">
                 <div className="flex items-center gap-2">
@@ -688,6 +713,21 @@ const AppShell: React.FC = () => {
 
       <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
       <OfflineIndicator message={t('offlineBanner')} />
+      {redeemOpen && (
+        <RedeemGiftCardModal
+          onClose={() => setRedeemOpen(false)}
+          onEnrolled={(courseId) => {
+            setRedeemOpen(false);
+            setSelectedCourseId(courseId);
+            setActiveView('learning');
+          }}
+          onContinuePartialCheckout={(course) => {
+            setRedeemOpen(false);
+            setSelectedCourseId(course.id);
+            setActiveView('course-detail');
+          }}
+        />
+      )}
     </div>
   );
 };

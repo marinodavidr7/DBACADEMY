@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -24,10 +24,12 @@ import { usePlatform } from '../context/PlatformContext';
 import type { TranslationKeys } from '../i18n/translations';
 import { isAuthorizedAdminEmail } from '../firebase';
 import type { Certificate, Course } from '../types';
+import { formatCurrency } from '../utils/currency';
 import { exportCertificatePdf, exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 import { CertificateDocumentCard, CertificatePreviewModal } from './CertificatePreviewModal';
 import { CouponsAdminPanel } from './CouponsAdminPanel';
+import { GiftCardsAdminPanel } from './GiftCardsAdminPanel';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
 import { AssignmentInbox } from './AssignmentInbox';
@@ -218,13 +220,16 @@ export const InstructorDashboard: React.FC = () => {
     setSelectedCourseId,
     t,
     assignmentSubmissions,
+    giftCards,
   } = usePlatform();
 
-  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'coupons' | 'referrals' | 'submissions'>('courses');
+  const [adminTab, setAdminTab] = useState<'courses' | 'certificates' | 'giftcards' | 'coupons' | 'referrals' | 'submissions'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editorSessionId, setEditorSessionId] = useState(0);
+  const autoOpenedCourseIdRef = useRef<string | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -241,10 +246,17 @@ export const InstructorDashboard: React.FC = () => {
   );
 
   useEffect(() => {
-    if (selectedCourseId && courses.length > 0) {
+    if (!selectedCourseId) {
+      autoOpenedCourseIdRef.current = null;
+      return;
+    }
+    if (autoOpenedCourseIdRef.current === selectedCourseId) return;
+    if (courses.length > 0) {
       const target = courses.find((c) => c.id === selectedCourseId);
       if (target) {
+        autoOpenedCourseIdRef.current = selectedCourseId;
         setEditingCourse(target);
+        setEditorSessionId((n) => n + 1);
         setShowBuilder(true);
       }
     }
@@ -318,7 +330,7 @@ export const InstructorDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveView('catalog')}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors min-h-[40px]"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[40px]"
           >
             <BookOpen className="w-4 h-4" />
             <span>Volver al catálogo</span>
@@ -336,6 +348,7 @@ export const InstructorDashboard: React.FC = () => {
     if (!canAdminMutate) return;
     setEditingCourse(null);
     setSaveSuccess('');
+    setEditorSessionId((n) => n + 1);
     setShowBuilder(true);
   };
 
@@ -343,6 +356,7 @@ export const InstructorDashboard: React.FC = () => {
     if (!canAdminMutate) return;
     setEditingCourse(course);
     setSaveSuccess('');
+    setEditorSessionId((n) => n + 1);
     setShowBuilder(true);
   };
 
@@ -351,8 +365,8 @@ export const InstructorDashboard: React.FC = () => {
     setEditingCourse(null);
   };
 
-  const handleEditorCreate = async (input: CourseEditorInput) => {
-    await createCourse({
+  const handleEditorCreate = async (input: CourseEditorInput): Promise<Course> => {
+    const created = await createCourse({
       title: input.title,
       subtitle: input.subtitle,
       description: input.description,
@@ -366,9 +380,8 @@ export const InstructorDashboard: React.FC = () => {
       totalLessons: input.totalLessons,
       modules: input.modules,
     });
-    setSaveSuccess(`Curso "${input.title}" creado correctamente.`);
-    setShowBuilder(false);
-    setEditingCourse(null);
+    setEditingCourse(created);
+    return created;
   };
 
   const handleEditorUpdate = async (courseId: string, input: CourseEditorInput) => {
@@ -386,9 +399,25 @@ export const InstructorDashboard: React.FC = () => {
       totalLessons: input.totalLessons,
       modules: input.modules,
     });
-    setSaveSuccess(`Curso "${input.title}" actualizado correctamente.`);
-    setShowBuilder(false);
-    setEditingCourse(null);
+    setEditingCourse((prev) =>
+      prev && prev.id === courseId
+        ? {
+            ...prev,
+            title: input.title,
+            subtitle: input.subtitle,
+            description: input.description,
+            category: input.category,
+            level: input.level,
+            priceCents: input.priceCents,
+            currency: input.currency,
+            coverImage: input.coverImage,
+            published: input.published,
+            modulesCount: input.modulesCount,
+            totalLessons: input.totalLessons,
+            modules: input.modules,
+          }
+        : prev
+    );
   };
 
   const handleExportProgressCsv = () => {
@@ -489,6 +518,7 @@ export const InstructorDashboard: React.FC = () => {
       <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
         {([
           { id: 'courses', label: 'Cursos' },
+          { id: 'giftcards', label: `Gift Cards (${giftCards.length})` },
           { id: 'certificates', label: `Certificados (${instructorCertificates.length})` },
           { id: 'coupons', label: t('couponsTitle') },
           { id: 'referrals', label: t('referralsTitle') },
@@ -498,7 +528,7 @@ export const InstructorDashboard: React.FC = () => {
             key={tab.id}
             type="button"
             onClick={() => setAdminTab(tab.id)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${adminTab === tab.id ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${adminTab === tab.id ? 'border-[var(--dba-accent-ink)] text-[var(--dba-accent-ink)] font-semibold' : 'border-transparent text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'}`}
           >
             {tab.label}
           </button>
@@ -507,14 +537,14 @@ export const InstructorDashboard: React.FC = () => {
 
       {adminTab === 'certificates' && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 sm:p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--dba-border)] pb-3">
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-[#0052CC] dark:text-cyan-400" />
+                <h2 className="text-sm sm:text-base font-bold text-[var(--dba-text-primary)] flex items-center gap-2">
+                  <Award className="w-4 h-4 text-[var(--dba-accent-ink)]" />
                   <span>Vista previa del certificado oficial con logo DB Academy</span>
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-[var(--dba-text-secondary)] mt-0.5">
                   Comprueba cómo se ve el diploma oficial que reciben los estudiantes y descárgalo en PDF.
                 </p>
               </div>
@@ -522,7 +552,7 @@ export const InstructorDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setPreviewCert({ cert: sampleCertificate, isSample: true })}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--dba-border)] px-3 py-2 text-xs font-semibold text-[var(--dba-text-primary)] hover:bg-stone-50 dark:hover:bg-zinc-800"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>Ampliar</span>
@@ -530,7 +560,7 @@ export const InstructorDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void exportCertificatePdf(sampleCertificate)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3.5 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)]"
                 >
                   <FileDown className="w-3.5 h-3.5" />
                   <span>Descargar PDF de muestra</span>
@@ -634,10 +664,11 @@ export const InstructorDashboard: React.FC = () => {
         </div>
       )}
 
+      {adminTab === 'giftcards' && <GiftCardsAdminPanel />}
       {adminTab === 'coupons' && <CouponsAdminPanel />}
       {adminTab === 'referrals' && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 text-sm text-slate-500">
-          Configuración de referidos disponible vía API /api/referrals/settings. Panel detallado pendiente de UI extendida.
+          El programa de referidos se encuentra en preparación. Mientras tanto, puedes emitir códigos promocionales desde Gift Cards o Cupones.
         </div>
       )}
 
@@ -671,7 +702,7 @@ export const InstructorDashboard: React.FC = () => {
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
           <p className="text-xs text-slate-500 dark:text-slate-400">{t('kpiRevenue')}</p>
           <p className="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
-            ${(totalRevenueCents / 100).toFixed(2)}
+            {formatCurrency(totalRevenueCents, instructorPayments[0]?.currency || courses[0]?.currency || 'DOP')}
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4">
@@ -698,6 +729,7 @@ export const InstructorDashboard: React.FC = () => {
       {/* Editor de curso: índice + editor de lección + evaluación */}
       {showBuilder && (
         <CourseEditor
+          key={editorSessionId}
           course={editingCourse}
           onCancel={handleCancelBuilder}
           onCreate={(input) => handleEditorCreate(input)}
@@ -724,7 +756,7 @@ export const InstructorDashboard: React.FC = () => {
           {courses.map((course) => (
             <div
               key={course.id}
-              className="group flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-[#0F1624] hover:shadow-md transition-shadow"
+              className="group flex flex-col rounded-xl border border-[var(--dba-border)] overflow-hidden bg-[var(--dba-bg-surface)] hover:shadow-md transition-shadow"
             >
               <div
                 className="aspect-video w-full bg-slate-900 overflow-hidden relative cursor-pointer"
@@ -750,7 +782,7 @@ export const InstructorDashboard: React.FC = () => {
                   </div>
                 )}
                 <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/75 text-[10px] font-mono font-semibold text-white">
-                  ${(course.priceCents / 100).toFixed(2)} {course.currency}
+                  {formatCurrency(course.priceCents, course.currency)}
                 </div>
               </div>
 
@@ -965,7 +997,7 @@ export const InstructorDashboard: React.FC = () => {
                       {pay.gateway}
                     </td>
                     <td className="py-3 px-5 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-slate-100">
-                      {(pay.amountCents / 100).toFixed(2)} {pay.currency}
+                      {formatCurrency(pay.amountCents, pay.currency)}
                     </td>
                   </tr>
                 ))

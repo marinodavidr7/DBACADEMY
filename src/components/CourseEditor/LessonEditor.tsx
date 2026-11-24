@@ -746,7 +746,11 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({
                 </label>
                 <input
                   type="text"
-                  value={lesson.assignmentConfig.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip'}
+                  value={
+                    Array.isArray(lesson.assignmentConfig.allowedFileTypes)
+                      ? lesson.assignmentConfig.allowedFileTypes.join(',')
+                      : (lesson.assignmentConfig.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip')
+                  }
                   onChange={(e) =>
                     onChange({ assignmentConfig: { ...lesson.assignmentConfig!, allowedFileTypes: e.target.value } })
                   }

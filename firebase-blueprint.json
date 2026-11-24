@@ -53,7 +53,7 @@
         "category": { "type": "string", "minLength": 2, "maxLength": 60 },
         "level": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
         "priceCents": { "type": "number" },
-        "currency": { "type": "string", "enum": ["USD", "EUR", "MXN"] },
+        "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
         "coverImage": { "type": "string", "maxLength": 500 },
         "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "instructorName": { "type": "string", "minLength": 1, "maxLength": 100 },
@@ -100,8 +100,12 @@
         "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "instructorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "amountCents": { "type": "number" },
-        "currency": { "type": "string", "enum": ["USD", "EUR", "MXN"] },
-        "gateway": { "type": "string", "enum": ["stripe", "mercadopago", "paypal"] },
+        "originalAmountCents": { "type": "number" },
+        "discountCents": { "type": "number" },
+        "couponCode": { "type": "string", "maxLength": 64 },
+        "discountSource": { "type": "string", "enum": ["none", "coupon", "referral_welcome", "gift_card"] },
+        "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
+        "gateway": { "type": "string", "enum": ["stripe", "mercadopago", "paypal", "free", "gift_card"] },
         "status": { "type": "string", "enum": ["succeeded", "refunded"] },
         "transactionRef": { "type": "string", "minLength": 4, "maxLength": 100 },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -255,6 +259,195 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "AssignmentSubmission": {
+      "title": "AssignmentSubmission",
+      "description": "Student file submission and instructor grading record for lesson assignments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "lessonId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "lessonTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "studentEmail": { "type": "string", "maxLength": 200 },
+        "fileUrl": { "type": "string", "minLength": 1, "maxLength": 950000 },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 260 },
+        "fileSize": { "type": "number" },
+        "submittedAt": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "comment": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["submitted", "graded", "resubmit_requested"] },
+        "grade": { "type": "number" },
+        "maxScore": { "type": "number" },
+        "feedback": { "type": "string", "maxLength": 2000 },
+        "gradedAt": { "type": "string", "minLength": 10, "maxLength": 64 },
+        "gradedBy": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "courseId",
+        "courseTitle",
+        "lessonId",
+        "lessonTitle",
+        "studentId",
+        "studentName",
+        "studentEmail",
+        "fileUrl",
+        "fileName",
+        "fileSize",
+        "submittedAt",
+        "status",
+        "maxScore",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GiftCard": {
+      "title": "GiftCard",
+      "description": "Prepaid Gift Card / redemption code that grants course credit or full course unlock.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "code": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "initialAmountCents": { "type": "number" },
+        "remainingAmountCents": { "type": "number" },
+        "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
+        "courseId": { "type": "string", "maxLength": 128 },
+        "courseTitle": { "type": "string", "maxLength": 140 },
+        "singleUse": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "redeemed", "disabled"] },
+        "active": { "type": "boolean" },
+        "redemptionCount": { "type": "number" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "note": { "type": "string", "maxLength": 200 },
+        "redeemedBy": { "type": "string", "maxLength": 128 },
+        "redeemedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "code",
+        "initialAmountCents",
+        "remainingAmountCents",
+        "currency",
+        "singleUse",
+        "status",
+        "active",
+        "redemptionCount",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GiftCardRedemption": {
+      "title": "GiftCardRedemption",
+      "description": "Immutable audit record of a student redeeming a Gift Card for a course.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "cardCode": { "type": "string", "minLength": 6, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "redemptionNumber": { "type": "number" },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "studentEmail": { "type": "string", "maxLength": 200 },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "amountAppliedCents": { "type": "number" },
+        "coursePriceCents": { "type": "number" },
+        "remainingPaidCents": { "type": "number" },
+        "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
+        "paymentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "redeemedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "cardCode",
+        "redemptionNumber",
+        "studentId",
+        "studentName",
+        "courseId",
+        "courseTitle",
+        "amountAppliedCents",
+        "coursePriceCents",
+        "remainingPaidCents",
+        "currency",
+        "paymentId",
+        "redeemedAt"
+      ]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional discount coupon managed by platform admin and validated/redeemed atomically at checkout.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "code": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "type": { "type": "string", "enum": ["percent", "fixed"] },
+        "value": { "type": "number" },
+        "currency": { "type": "string", "enum": ["DOP", "USD", "EUR", "MXN"] },
+        "appliesTo": { "type": "string", "enum": ["all", "courses"] },
+        "courseIds": { "type": "array" },
+        "startsAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "maxRedemptions": { "type": "number" },
+        "maxPerUser": { "type": "number" },
+        "minPurchaseCents": { "type": "number" },
+        "redemptionCount": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "code",
+        "description",
+        "type",
+        "value",
+        "currency",
+        "appliesTo",
+        "courseIds",
+        "maxPerUser",
+        "redemptionCount",
+        "active",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CouponRedemption": {
+      "title": "CouponRedemption",
+      "description": "Immutable audit record of a coupon redemption linked to a payment order.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 5, "maxLength": 260, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "couponCode": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[A-Z0-9_\\-]+$" },
+        "redemptionNumber": { "type": "number" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "courseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "discountCents": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "refunded"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "couponCode",
+        "redemptionNumber",
+        "userId",
+        "courseId",
+        "orderId",
+        "discountCents",
+        "status",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -305,6 +498,26 @@
     "/customExercises/{exerciseId}": {
       "schema": { "$ref": "#/entities/CustomExcelExercise" },
       "description": "Custom interactive Excel exercises authored by users and instructors."
+    },
+    "/assignmentSubmissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/AssignmentSubmission" },
+      "description": "Student assignment submissions and instructor grades."
+    },
+    "/giftCards/{cardId}": {
+      "schema": { "$ref": "#/entities/GiftCard" },
+      "description": "Prepaid Gift Cards managed by admin and redeemed atomically by students."
+    },
+    "/giftCardRedemptions/{redemptionId}": {
+      "schema": { "$ref": "#/entities/GiftCardRedemption" },
+      "description": "Immutable student Gift Card redemption audit records."
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Promotional discount coupons managed by admin and validated by exact code."
+    },
+    "/couponRedemptions/{redemptionId}": {
+      "schema": { "$ref": "#/entities/CouponRedemption" },
+      "description": "Immutable student coupon redemption audit records."
     }
   }
 }

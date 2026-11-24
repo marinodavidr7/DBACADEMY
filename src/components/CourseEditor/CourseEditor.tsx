@@ -51,7 +51,7 @@ type SaveStatus = 'idle' | 'saved' | 'saving' | 'unsaved' | 'error';
 interface CourseEditorProps {
   course: Course | null;
   onCancel: () => void;
-  onCreate: (input: CourseInput) => Promise<void>;
+  onCreate: (input: CourseInput) => Promise<Course | void>;
   onUpdate: (courseId: string, patch: CourseInput) => Promise<void>;
   labels?: CourseEditorLabels;
   t?: (key: any) => string;
@@ -376,7 +376,7 @@ function courseToInput(course: Course): CourseInput {
     category: course.category ?? 'Productividad',
     level: course.level ?? 'beginner',
     priceCents: course.priceCents ?? 0,
-    currency: course.currency ?? 'USD',
+    currency: course.currency ?? 'DOP',
     coverImage: course.coverImage ?? '',
     published: course.published ?? false,
     modulesCount: course.modulesCount ?? course.modules.length,
@@ -451,7 +451,12 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
 
   const originalRef = useRef<string>(JSON.stringify(input));
+  const latestInputRef = useRef<CourseInput>(input);
+  latestInputRef.current = input;
   const debounceRef = useRef<number | null>(null);
+  const inFlightSaveRef = useRef<boolean>(false);
+  const pendingSaveOriginRef = useRef<'auto' | 'manual' | null>(null);
+  const tempCourseIdRef = useRef<string>(`tmp_${newId('crs')}`);
   const lastSnapshotRef = useRef<CourseModule[]>(input.modules);
   const lastLessonSnapshotRef = useRef<CourseLesson | null>(null);
 
@@ -588,56 +593,128 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     setConfirm(null);
   };
 
-  const save = useCallback(async () => {
-    if (!canEdit) return;
-    setStatus('saving');
-    setError('');
-    try {
-      const payload: CourseInput = {
-        ...input,
-        title: input.title.trim(),
-        subtitle: input.subtitle.trim(),
-        description:
-          input.description.trim().length >= 10
-            ? input.description.trim()
-            : `${input.subtitle.trim()} — Programa de formación técnica en tiempo real.`,
-        modules: input.modules.map((module) => ({
+  const save = useCallback(
+    async (origin: 'auto' | 'manual' = 'manual', options?: { silent?: boolean }) => {
+      if (!canEdit) return;
+      const currentInput = latestInputRef.current;
+
+      if (!course && currentInput.title.trim().length < 3) {
+        if (origin === 'manual' && !options?.silent) {
+          setStatus('error');
+          setError('Escribe un título de al menos 3 caracteres antes de guardar el nuevo curso.');
+        }
+        return;
+      }
+
+      if (inFlightSaveRef.current) {
+        pendingSaveOriginRef.current =
+          pendingSaveOriginRef.current === 'manual' || origin === 'manual' ? 'manual' : 'auto';
+        return;
+      }
+
+      inFlightSaveRef.current = true;
+      setStatus('saving');
+      setError('');
+
+      const snapshotJson = JSON.stringify(currentInput);
+      try {
+        const normalizedModules = currentInput.modules.map((module) => ({
           ...module,
           durationMinutes: module.lessons.reduce((acc, lesson) => acc + (Number(lesson.durationMinutes) || 0), 0),
-        })),
-      };
-      const normalizedModules = payload.modules;
-      payload.modulesCount = normalizedModules.length;
-      payload.totalLessons = normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0);
+        }));
+        const payload: CourseInput = {
+          ...currentInput,
+          title: currentInput.title.trim(),
+          subtitle: currentInput.subtitle.trim(),
+          description:
+            currentInput.description.trim().length >= 10
+              ? currentInput.description.trim()
+              : `${currentInput.subtitle.trim() || currentInput.title.trim()} — Programa de formación técnica en tiempo real.`,
+          modules: normalizedModules,
+          modulesCount: normalizedModules.length,
+          totalLessons: normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0),
+        };
 
-      if (course) {
-        await onUpdate(course.id, payload);
-      } else {
-        await onCreate(payload);
+        if (course) {
+          await onUpdate(course.id, payload);
+        } else {
+          await onCreate(payload);
+        }
+
+        originalRef.current = snapshotJson;
+        const stillMatchesSnapshot = JSON.stringify(latestInputRef.current) === snapshotJson;
+        if (stillMatchesSnapshot) {
+          setStatus('saved');
+          setSavedAt(Date.now());
+        } else {
+          setStatus('unsaved');
+        }
+
+        if (origin === 'manual' && !options?.silent) {
+          pushToast(labels.actions.saved);
+        }
+      } catch (err) {
+        setStatus('error');
+        setError(err instanceof Error ? err.message : labels.actions.saveError);
+      } finally {
+        inFlightSaveRef.current = false;
+        const queuedOrigin = pendingSaveOriginRef.current;
+        pendingSaveOriginRef.current = null;
+        if (queuedOrigin) {
+          void save(queuedOrigin, options);
+        }
       }
-      originalRef.current = JSON.stringify(payload);
-      setInput(payload);
-      setStatus('saved');
-      setSavedAt(Date.now());
-      pushToast(labels.actions.saved);
-    } catch (err) {
-      setStatus('error');
-      setError(err instanceof Error ? err.message : labels.actions.saveError);
-    }
-  }, [canEdit, input, course, onCreate, onUpdate, labels.actions.saved, labels.actions.saveError]);
+    },
+    [canEdit, course, onCreate, onUpdate, labels.actions.saved, labels.actions.saveError, pushToast]
+  );
 
-  // Autoguardado con debounce.
+  // Autoguardado con debounce de 5 segundos tras detener la escritura (sin interrumpir interacciones activas).
   useEffect(() => {
     if (!dirty || !canEdit) return;
-    setStatus('unsaved');
+    if (!inFlightSaveRef.current) {
+      setStatus('unsaved');
+    }
+    if (uploadingCover || generatingCover || confirm !== null) return;
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
-      void save();
-    }, 1500);
+      void save('auto');
+    }, 5000);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [dirty, input, canEdit, save]);
+  }, [dirty, input, canEdit, uploadingCover, generatingCover, confirm, save]);
+
+  const handleManualSave = useCallback(() => {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    void save('manual');
+  }, [save]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (canEdit) {
+          handleManualSave();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canEdit, handleManualSave]);
+
+  const handleCloseEditor = useCallback(async () => {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (canEdit && dirty && (course || latestInputRef.current.title.trim().length >= 3)) {
+      await save('manual', { silent: true });
+    }
+    onCancel();
+  }, [canEdit, dirty, course, save, onCancel]);
 
   // Aviso al salir con cambios pendientes.
   useEffect(() => {
@@ -777,11 +854,13 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-            aria-label={labels.index.title}
+            onClick={() => void handleCloseEditor()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Volver al panel de cursos"
+            title="Guardar y volver al panel de cursos"
           >
             <X className="h-4 w-4" />
+            <span className="hidden sm:inline">Volver</span>
           </button>
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -792,14 +871,38 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setIndexOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 lg:hidden"
-        >
-          {indexOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-          {labels.index.title}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/70 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-300">
+            {status === 'saving' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+            ) : status === 'error' ? (
+              <AlertCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+            ) : status === 'unsaved' ? (
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span>{statusLabel}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleManualSave}
+            disabled={!canEdit || status === 'saving'}
+            title="Guardar cambios ahora (Ctrl+S)"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <span>{labels.actions.save}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndexOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 lg:hidden"
+          >
+            {indexOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            {labels.index.title}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
@@ -897,6 +1000,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
                     }}
                     className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 text-sm"
                   >
+                    <option value="DOP">DOP (RD$)</option>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="MXN">MXN</option>
@@ -1081,7 +1185,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
               onChange={(patch) => updateLesson(selectedModule.id, selectedLesson.id, patch)}
               onDelete={() => requestDeleteLesson(selectedModule.id, selectedLesson.id)}
               onPreview={() => setPreviewCourse(buildCourseFromInput(input, course))}
-              courseId={course?.id ?? `tmp_${newId('crs')}`}
+              courseId={course?.id ?? tempCourseIdRef.current}
               canEdit={canEdit}
               labels={labels.lesson}
             />
@@ -1121,7 +1225,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             )}
             <span className="text-slate-700 dark:text-slate-200">{statusLabel}</span>
             {status === 'error' && (
-              <button type="button" onClick={() => void save()} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+              <button type="button" onClick={handleManualSave} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
                 {labels.actions.retry}
               </button>
             )}
@@ -1146,7 +1250,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => void save()}
+              onClick={handleManualSave}
               disabled={!canEdit || status === 'saving'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             >
@@ -1228,8 +1332,8 @@ function emptyInput(): CourseInput {
     description: '',
     category: 'Productividad',
     level: 'beginner',
-    priceCents: 4900,
-    currency: 'USD',
+    priceCents: 60000,
+    currency: 'DOP',
     coverImage: '',
     published: true,
     modulesCount: 1,

@@ -17,8 +17,10 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -41,14 +43,25 @@ import type {
   ApiIntegrationKey,
   AppView,
   AssignmentSubmission,
+  AssignmentSubmissionStatus,
   CalendarEvent,
   Certificate,
   CloudProvider,
+  Coupon,
+  CouponAppliesTo,
+  CouponRedemption,
+  CouponType,
+  CouponValidationResult,
   Course,
+  CurrencyCode,
   CustomExcelExercise,
   EncryptedNote,
   Enrollment,
   ForumThread,
+  GiftCard,
+  GiftCardRedemption,
+  GiftCardValidationErrorCode,
+  GiftCardValidationResult,
   InAppNotification,
   Language,
   PaymentGateway,
@@ -171,11 +184,25 @@ function mergeSeedLessonsIntoCourse(course: Course): { course: Course; changed: 
         );
       }
 
+      const hasLegacyRawTheoryDump =
+        typeof lesson.content === 'string' &&
+        (lesson.content.includes('=== ') ||
+          lesson.content.includes('PRÁCTICAS —') ||
+          lesson.content.includes('PRÁCTICAS (3):'));
+      const nextContent =
+        hasLegacyRawTheoryDump && seedLesson.content && lesson.content !== seedLesson.content
+          ? seedLesson.content
+          : lesson.content;
+      if (nextContent !== lesson.content) {
+        lessonChanged = true;
+      }
+
       if (!lessonChanged) return lesson;
       changed = true;
       modMaterialsChanged = true;
       return {
         ...lesson,
+        content: nextContent,
         materials: nextMaterials,
       };
     });
@@ -319,7 +346,7 @@ interface PlatformContextValue {
     options?: { couponCode?: string; referralWelcome?: boolean; testMode?: boolean }
   ) => Promise<PaymentRecord>;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
-  createCourse: (courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  createCourse: (courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>) => Promise<Course>;
   updateCourse: (courseId: string, patch: Partial<Course>) => Promise<void>;
   deleteCourse: (courseId: string) => Promise<void>;
   createCustomExercise: (input: Omit<CustomExcelExercise, 'id' | 'ownerId' | 'authorName' | 'createdAt' | 'updatedAt'>) => Promise<CustomExcelExercise>;
@@ -344,6 +371,54 @@ interface PlatformContextValue {
   submitAssignment: (courseId: string, lessonId: string, file: File, comment?: string) => Promise<AssignmentSubmission>;
   gradeAssignment: (submissionId: string, grade: number, feedback: string, requestResubmit?: boolean) => Promise<void>;
   deleteSubmission: (submissionId: string) => Promise<void>;
+  giftCards: GiftCard[];
+  giftCardRedemptions: GiftCardRedemption[];
+  createGiftCards: (input: {
+    amountCents: number;
+    currency: CurrencyCode;
+    courseId?: string;
+    courseTitle?: string;
+    singleUse?: boolean;
+    quantity?: number;
+    customCode?: string;
+    expiresAtIso?: string;
+    note?: string;
+  }) => Promise<GiftCard[]>;
+  toggleGiftCardActive: (card: GiftCard) => Promise<void>;
+  deleteGiftCard: (cardCode: string) => Promise<void>;
+  validateGiftCard: (code: string, course?: Course | null) => Promise<GiftCardValidationResult>;
+  redeemGiftCardForCourse: (
+    code: string,
+    course: Course,
+    partialGateway?: PaymentGateway
+  ) => Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }>;
+  redeemGiftCardCode: (
+    code: string,
+    targetCourse?: Course | null
+  ) => Promise<{
+    success: boolean;
+    course: Course;
+    payment: PaymentRecord;
+    redemption: GiftCardRedemption;
+  }>;
+  coupons: Coupon[];
+  createCoupon: (input: {
+    code: string;
+    description: string;
+    type: CouponType;
+    value: number;
+    currency: CurrencyCode;
+    appliesTo: CouponAppliesTo;
+    courseIds: string[];
+    maxRedemptions?: number;
+    maxPerUser?: number;
+    minPurchaseCents?: number;
+    startsAtIso?: string;
+    expiresAtIso?: string;
+  }) => Promise<Coupon>;
+  toggleCouponActive: (coupon: Coupon) => Promise<void>;
+  deleteCoupon: (couponCode: string) => Promise<void>;
+  validateCoupon: (code: string, course: Course) => Promise<CouponValidationResult>;
 }
 
 const PlatformContext = createContext<PlatformContextValue | null>(null);
@@ -394,6 +469,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<AssignmentSubmission[]>(() =>
     loadLocalSubmissions()
   );
+  const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
+  const [giftCardRedemptions, setGiftCardRedemptions] = useState<GiftCardRedemption[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [connectedDevicesCount, setConnectedDevicesCount] = useState(1);
   const [wsConnected, setWsConnected] = useState(false);
@@ -749,6 +827,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setCalendarEvents([]);
         setEncryptedNotes([]);
         setApiKeys([]);
+        setGiftCards([]);
+        setGiftCardRedemptions([]);
+        setCoupons([]);
         return;
       }
 
@@ -1076,6 +1157,48 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       )
     );
 
+    if (isAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'giftCards'),
+          (snap) => {
+            const loaded = snap.docs.map((d) => d.data() as GiftCard);
+            setGiftCards(loaded);
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'giftCards')
+        )
+      );
+    } else {
+      setGiftCards([]);
+    }
+
+    const redemptionsQuery = isAdmin
+      ? collection(db, 'giftCardRedemptions')
+      : query(collection(db, 'giftCardRedemptions'), where('studentId', '==', user.uid));
+    unsubs.push(
+      onSnapshot(
+        redemptionsQuery,
+        (snap) => {
+          setGiftCardRedemptions(snap.docs.map((d) => d.data() as GiftCardRedemption));
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, 'giftCardRedemptions')
+      )
+    );
+
+    if (isAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'coupons'),
+          (snap) => {
+            setCoupons(snap.docs.map((d) => d.data() as Coupon));
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'coupons')
+        )
+      );
+    } else {
+      setCoupons([]);
+    }
+
     return () => unsubs.forEach((u) => u());
   }, [authReady, user, isAdmin]);
 
@@ -1218,6 +1341,298 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user, sendWs]
   );
 
+  const normalizeCouponCode = (raw: string): string =>
+    raw.trim().toUpperCase().replace(/\s+/g, '');
+
+  const toEpochMs = (val: unknown): number | null => {
+    if (!val) return null;
+    if (typeof val === 'object' && val !== null && 'toMillis' in val && typeof (val as { toMillis: unknown }).toMillis === 'function') {
+      return (val as { toMillis: () => number }).toMillis();
+    }
+    if (typeof val === 'string' || typeof val === 'number') {
+      const ms = new Date(val).getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+    return null;
+  };
+
+  const createCoupon = useCallback(
+    async (input: {
+      code: string;
+      description: string;
+      type: CouponType;
+      value: number;
+      currency: CurrencyCode;
+      appliesTo: CouponAppliesTo;
+      courseIds: string[];
+      maxRedemptions?: number;
+      maxPerUser?: number;
+      minPurchaseCents?: number;
+      startsAtIso?: string;
+      expiresAtIso?: string;
+    }): Promise<Coupon> => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede crear cupones.');
+      }
+      const verifiedAdmin = await assertPlatformAdminWrite('crear cupón', user);
+
+      const code = normalizeCouponCode(input.code);
+      if (!/^[A-Z0-9_-]{3,64}$/.test(code)) {
+        throw new Error('El código del cupón debe tener entre 3 y 64 caracteres (A-Z, 0-9, "-" o "_").');
+      }
+
+      const description = input.description.trim().slice(0, 240);
+      if (!description) {
+        throw new Error('Agrega una descripción breve para el cupón.');
+      }
+
+      const rawValue = Math.round(Number(input.value));
+      if (!Number.isFinite(rawValue) || rawValue < 1) {
+        throw new Error('El valor del cupón debe ser mayor que 0.');
+      }
+      if (input.type === 'percent' && rawValue > 100) {
+        throw new Error('El descuento porcentual debe estar entre 1% y 100%.');
+      }
+      if (input.type === 'fixed' && rawValue > 10000000) {
+        throw new Error('El descuento fijo supera el límite permitido.');
+      }
+
+      const existingSnap = await getDoc(doc(db, 'coupons', code));
+      if (existingSnap.exists()) {
+        throw new Error(`El cupón "${code}" ya existe.`);
+      }
+
+      let startsTimestamp: Timestamp | null = null;
+      if (input.startsAtIso && input.startsAtIso.trim()) {
+        const d = new Date(input.startsAtIso);
+        if (Number.isNaN(d.getTime())) throw new Error('Fecha de inicio inválida.');
+        startsTimestamp = Timestamp.fromDate(d);
+      }
+
+      let expiresTimestamp: Timestamp | null = null;
+      if (input.expiresAtIso && input.expiresAtIso.trim()) {
+        const d = new Date(input.expiresAtIso);
+        if (Number.isNaN(d.getTime())) throw new Error('Fecha de expiración inválida.');
+        expiresTimestamp = Timestamp.fromDate(d);
+      }
+
+      if (startsTimestamp && expiresTimestamp && expiresTimestamp.toMillis() <= startsTimestamp.toMillis()) {
+        throw new Error('La fecha de expiración debe ser posterior a la fecha de inicio.');
+      }
+
+      const maxRedemptions =
+        typeof input.maxRedemptions === 'number' && Number.isFinite(input.maxRedemptions) && input.maxRedemptions >= 1
+          ? Math.min(1000000, Math.round(input.maxRedemptions))
+          : undefined;
+      const maxPerUser =
+        typeof input.maxPerUser === 'number' && Number.isFinite(input.maxPerUser) && input.maxPerUser >= 1
+          ? Math.min(1000, Math.round(input.maxPerUser))
+          : 1;
+      const minPurchaseCents =
+        typeof input.minPurchaseCents === 'number' && Number.isFinite(input.minPurchaseCents) && input.minPurchaseCents >= 0
+          ? Math.min(10000000, Math.round(input.minPurchaseCents))
+          : undefined;
+
+      const courseIds = input.appliesTo === 'courses'
+        ? input.courseIds.map((c) => c.trim()).filter(Boolean).slice(0, 50)
+        : [];
+      if (input.appliesTo === 'courses' && courseIds.length === 0) {
+        throw new Error('Indica al menos un ID de curso para cupones específicos.');
+      }
+
+      const payload: Record<string, unknown> = {
+        id: code,
+        code,
+        description,
+        type: input.type,
+        value: rawValue,
+        currency: input.currency,
+        appliesTo: input.appliesTo,
+        courseIds,
+        maxPerUser,
+        redemptionCount: 0,
+        active: true,
+        createdBy: verifiedAdmin.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...(startsTimestamp ? { startsAt: startsTimestamp } : {}),
+        ...(expiresTimestamp ? { expiresAt: expiresTimestamp } : {}),
+        ...(maxRedemptions !== undefined ? { maxRedemptions } : {}),
+        ...(minPurchaseCents !== undefined ? { minPurchaseCents } : {}),
+      };
+
+      try {
+        await setDoc(doc(db, 'coupons', code), payload);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `coupons/${code}`);
+      }
+
+      return {
+        id: code,
+        code,
+        description,
+        type: input.type,
+        value: rawValue,
+        currency: input.currency,
+        appliesTo: input.appliesTo,
+        courseIds,
+        startsAt: startsTimestamp ?? undefined,
+        expiresAt: expiresTimestamp ?? undefined,
+        maxRedemptions,
+        maxPerUser,
+        minPurchaseCents,
+        redemptionCount: 0,
+        active: true,
+        createdBy: verifiedAdmin.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    },
+    [user, isAdmin]
+  );
+
+  const toggleCouponActive = useCallback(
+    async (coupon: Coupon) => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede modificar cupones.');
+      }
+      await assertPlatformAdminWrite('actualizar cupón', user);
+      try {
+        await updateDoc(doc(db, 'coupons', coupon.code), {
+          active: !coupon.active,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `coupons/${coupon.code}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
+  const deleteCoupon = useCallback(
+    async (couponCode: string) => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede eliminar cupones.');
+      }
+      await assertPlatformAdminWrite('eliminar cupón', user);
+      try {
+        await deleteDoc(doc(db, 'coupons', couponCode));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `coupons/${couponCode}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
+  const validateCoupon = useCallback(
+    async (rawCode: string, course: Course): Promise<CouponValidationResult> => {
+      const baseInvalid = (reason: string): CouponValidationResult => ({
+        valid: false,
+        originalPriceCents: course.priceCents,
+        discountCents: 0,
+        finalPriceCents: course.priceCents,
+        currency: course.currency,
+        reason,
+      });
+
+      if (!user) {
+        return baseInvalid('Inicia sesión con Google para aplicar un cupón.');
+      }
+
+      const code = normalizeCouponCode(rawCode);
+      if (!/^[A-Z0-9_-]{3,64}$/.test(code)) {
+        return baseInvalid('Formato de código inválido.');
+      }
+
+      let snap;
+      try {
+        snap = await getDoc(doc(db, 'coupons', code));
+      } catch (err) {
+        if (isFirestoreOfflineError(err)) {
+          return baseInvalid('Sin conexión con el servidor para verificar el cupón.');
+        }
+        const fbCode = (err as { code?: string })?.code;
+        if (fbCode === 'permission-denied') {
+          handleFirestoreError(err, OperationType.GET, `coupons/${code}`);
+        }
+        return baseInvalid('No se pudo verificar el cupón.');
+      }
+
+      if (!snap.exists()) {
+        return baseInvalid('Cupón no encontrado.');
+      }
+
+      const coupon = snap.data() as Coupon;
+      if (!coupon.active) {
+        return baseInvalid('Este cupón está desactivado.');
+      }
+
+      const now = Date.now();
+      const startsMs = toEpochMs(coupon.startsAt);
+      if (startsMs !== null && now < startsMs) {
+        return baseInvalid('Este cupón aún no entra en vigencia.');
+      }
+      const expiresMs = toEpochMs(coupon.expiresAt);
+      if (expiresMs !== null && now > expiresMs) {
+        return baseInvalid('Este cupón ha expirado.');
+      }
+
+      if (typeof coupon.maxRedemptions === 'number' && coupon.redemptionCount >= coupon.maxRedemptions) {
+        return baseInvalid('Este cupón alcanzó el límite máximo de canjes.');
+      }
+
+      if (coupon.appliesTo === 'courses' && !coupon.courseIds.includes(course.id)) {
+        return baseInvalid('Este cupón no aplica para este curso.');
+      }
+
+      if (coupon.type === 'fixed' && coupon.currency !== course.currency) {
+        return baseInvalid(`Este cupón es en ${coupon.currency}, pero el curso está en ${course.currency}.`);
+      }
+
+      if (typeof coupon.minPurchaseCents === 'number' && course.priceCents < coupon.minPurchaseCents) {
+        return baseInvalid(
+          `Compra mínima requerida: ${(coupon.minPurchaseCents / 100).toFixed(2)} ${course.currency}.`
+        );
+      }
+
+      if (coupon.maxPerUser > 0) {
+        try {
+          const userRedemptionsSnap = await getDocs(
+            query(collection(db, 'couponRedemptions'), where('userId', '==', user.uid))
+          );
+          const usedByUser = userRedemptionsSnap.docs.filter((d) => {
+            const data = d.data() as CouponRedemption;
+            return data.couponCode === code && data.status !== 'refunded';
+          }).length;
+          if (usedByUser >= coupon.maxPerUser) {
+            return baseInvalid('Ya alcanzaste el máximo de usos permitidos para este cupón.');
+          }
+        } catch (err) {
+          if (!isFirestoreOfflineError(err)) {
+            handleFirestoreError(err, OperationType.LIST, 'couponRedemptions');
+          }
+          return baseInvalid('No se pudo verificar el límite de uso del cupón.');
+        }
+      }
+
+      const discountCents =
+        coupon.type === 'percent'
+          ? Math.min(course.priceCents, Math.round((course.priceCents * coupon.value) / 100))
+          : Math.min(course.priceCents, coupon.value);
+      const finalPriceCents = Math.max(0, course.priceCents - discountCents);
+
+      return {
+        valid: true,
+        originalPriceCents: course.priceCents,
+        discountCents,
+        finalPriceCents,
+        currency: course.currency,
+        coupon,
+      };
+    },
+    [user]
+  );
+
   const enrollWithPayment = useCallback(
     async (
       course: Course,
@@ -1241,59 +1656,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      const couponCode = options?.couponCode?.trim().toUpperCase() || '';
-      const referralWelcome = options?.referralWelcome === true;
-      const testMode = options?.testMode === true;
-
-      // Cursos gratis sin cupón/referido: inscripción directa
-      let receipt: {
-        paymentId: string;
-        transactionRef: string;
-        status: 'succeeded';
-        amountCents?: number;
-        originalAmountCents?: number;
-        discountCents?: number;
-        couponCode?: string;
-        discountSource?: 'none' | 'coupon' | 'referral_welcome';
-      };
-
-      if (course.priceCents === 0 && !couponCode && !referralWelcome) {
-        receipt = {
-          paymentId: `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
-          transactionRef: `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`,
-          status: 'succeeded',
-          amountCents: 0,
-          originalAmountCents: 0,
-          discountCents: 0,
-        };
-      } else {
-        const idToken = await user.getIdToken();
-        const res = await fetch('/api/v1/payments/checkout', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            courseId: course.id,
-            gateway,
-            couponCode: couponCode || undefined,
-            referralWelcome,
-            testMode,
-          }),
-        });
-        if (!res.ok) {
-          const errData = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(errData.error || 'Payment authorization failed');
-        }
-        receipt = (await res.json()) as typeof receipt;
-      }
+      const rawCouponCode = options?.couponCode ? normalizeCouponCode(options.couponCode) : '';
+      const testMode = Boolean(isAdmin && options?.testMode === true);
 
       // Ensure the course document exists in Firestore before enrollment/payment rules check exists()
       const courseRef = doc(db, 'courses', course.id);
       const courseSnap = await getDoc(courseRef);
       let resolvedInstructorId =
         course.instructorId === 'platform-faculty' ? user.uid : course.instructorId;
+      let authoritativePriceCents = course.priceCents;
+      let authoritativeCurrency = course.currency;
+
       if (!courseSnap.exists()) {
         if (isAdmin && user.emailVerified) {
           await assertPlatformAdminWrite('registrar curso en inscripción', user);
@@ -1313,31 +1686,79 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           );
         }
       } else {
-        resolvedInstructorId = String(courseSnap.data()?.instructorId || resolvedInstructorId);
+        const cData = courseSnap.data() as Course;
+        resolvedInstructorId = String(cData.instructorId || resolvedInstructorId);
+        authoritativePriceCents = Math.max(0, Math.round(Number(cData.priceCents ?? course.priceCents)));
+        authoritativeCurrency =
+          cData.currency === 'DOP' || cData.currency === 'USD' || cData.currency === 'EUR' || cData.currency === 'MXN'
+            ? cData.currency
+            : 'DOP';
       }
 
+      const authoritativeCourse: Course = {
+        ...course,
+        priceCents: authoritativePriceCents,
+        currency: authoritativeCurrency,
+        instructorId: resolvedInstructorId,
+      };
+
       const enrollmentId = `${course.id}_${user.uid}`;
-      const batch = writeBatch(db);
-      const finalAmount = typeof receipt.amountCents === 'number' ? receipt.amountCents : course.priceCents;
+      const enrollmentRef = doc(db, 'enrollments', enrollmentId);
+      const existingEnrollmentSnap = await getDoc(enrollmentRef);
+      if (existingEnrollmentSnap.exists() && !testMode) {
+        throw new Error('Ya estás inscrito en este curso.');
+      }
+
+      let discountCents = 0;
+      let finalAmount = authoritativePriceCents;
+      let appliedCouponCode = '';
+
+      if (rawCouponCode) {
+        const validation = await validateCoupon(rawCouponCode, authoritativeCourse);
+        if (!validation.valid || !validation.coupon) {
+          throw new Error(validation.reason || 'Cupón inválido.');
+        }
+        if (!testMode && !user.emailVerified) {
+          throw new Error('Tu cuenta requiere correo verificado para canjear cupones.');
+        }
+        discountCents = validation.discountCents;
+        finalAmount = validation.finalPriceCents;
+        appliedCouponCode = validation.coupon.code;
+      }
+
+      const paymentId =
+        authoritativePriceCents === 0 && !appliedCouponCode
+          ? `free_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+          : `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const transactionRef =
+        finalAmount === 0 && !appliedCouponCode
+          ? `gratis_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+          : testMode
+            ? `test_${gateway.slice(0, 4)}_${Date.now().toString(36)}`
+            : `${gateway.slice(0, 4)}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
+
+      const resolvedGateway: PaymentGateway = finalAmount === 0 ? 'free' : gateway;
+      const discountSource: PaymentRecord['discountSource'] = appliedCouponCode ? 'coupon' : 'none';
+
       const paymentPayload: PaymentRecord = {
-        id: receipt.paymentId,
+        id: paymentId,
         courseId: course.id,
         courseTitle: course.title.slice(0, 140),
         studentId: user.uid,
         instructorId: resolvedInstructorId,
         amountCents: finalAmount,
-        originalAmountCents: typeof receipt.originalAmountCents === 'number' ? receipt.originalAmountCents : course.priceCents,
-        discountCents: typeof receipt.discountCents === 'number' ? receipt.discountCents : 0,
-        couponCode: receipt.couponCode,
-        discountSource: receipt.discountSource,
-        currency: course.currency,
-        gateway: finalAmount === 0 ? 'free' : gateway,
+        originalAmountCents: authoritativePriceCents,
+        discountCents,
+        ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}),
+        discountSource,
+        currency: authoritativeCurrency,
+        gateway: resolvedGateway,
         status: 'succeeded',
-        transactionRef: receipt.transactionRef,
+        transactionRef,
         createdAt: serverTimestamp(),
       };
-      batch.set(doc(db, 'payments', receipt.paymentId), paymentPayload);
-      batch.set(doc(db, 'enrollments', enrollmentId), {
+
+      const enrollmentPayload = {
         id: enrollmentId,
         courseId: course.id,
         courseTitle: course.title.slice(0, 140),
@@ -1351,40 +1772,99 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         status: 'active',
         enrolledAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-      // Also create a default deadline task synced with calendar
-      const deadlineId = `cal_${course.id}_${Date.now().toString(36)}`;
-      batch.set(doc(db, 'calendarEvents', deadlineId), {
-        id: deadlineId,
-        ownerId: user.uid,
-        courseId: course.id,
-        courseTitle: course.title.slice(0, 140),
-        title: `Completar Módulo 1: ${course.title.slice(0, 80)}`,
-        type: 'deadline',
-        dueAtIso: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        completed: false,
-        priority: 'medium',
-        reminderMinutes: privateInfo?.deadlineLeadMinutes ?? 60,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      };
 
-      try {
-        await batch.commit();
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'payments+enrollments');
+      if (appliedCouponCode && !testMode) {
+        const couponRef = doc(db, 'coupons', appliedCouponCode);
+        try {
+          await runTransaction(db, async (tx) => {
+            const [cSnap, eSnap] = await Promise.all([tx.get(couponRef), tx.get(enrollmentRef)]);
+            if (!cSnap.exists()) {
+              throw new Error('Cupón no encontrado.');
+            }
+            const couponData = cSnap.data() as Coupon;
+            if (!couponData.active) {
+              throw new Error('Este cupón ya no está activo.');
+            }
+            if (typeof couponData.maxRedemptions === 'number' && couponData.redemptionCount >= couponData.maxRedemptions) {
+              throw new Error('Este cupón alcanzó su límite de canjes.');
+            }
+
+            const nextRedemptionNumber = (couponData.redemptionCount || 0) + 1;
+            const redemptionId = `${appliedCouponCode}_${nextRedemptionNumber}`;
+
+            tx.update(couponRef, {
+              redemptionCount: nextRedemptionNumber,
+              updatedAt: serverTimestamp(),
+            });
+            tx.set(doc(db, 'couponRedemptions', redemptionId), {
+              id: redemptionId,
+              couponCode: appliedCouponCode,
+              redemptionNumber: nextRedemptionNumber,
+              userId: user.uid,
+              courseId: course.id,
+              orderId: paymentId,
+              discountCents,
+              status: 'confirmed',
+              createdAt: serverTimestamp(),
+            });
+            tx.set(doc(db, 'payments', paymentId), paymentPayload);
+            if (!eSnap.exists()) {
+              tx.set(enrollmentRef, enrollmentPayload);
+            }
+          });
+        } catch (err) {
+          const fbCode = (err as { code?: string })?.code;
+          if (fbCode === 'permission-denied') {
+            handleFirestoreError(err, OperationType.WRITE, `coupons/${appliedCouponCode}`);
+          }
+          throw err;
+        }
+      } else {
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'payments', paymentId), paymentPayload);
+        if (!existingEnrollmentSnap.exists()) {
+          batch.set(enrollmentRef, enrollmentPayload);
+        }
+        try {
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'payments+enrollments');
+        }
+      }
+
+      if (!existingEnrollmentSnap.exists()) {
+        try {
+          const deadlineId = `cal_${course.id}_${Date.now().toString(36)}`;
+          await setDoc(doc(db, 'calendarEvents', deadlineId), {
+            id: deadlineId,
+            ownerId: user.uid,
+            courseId: course.id,
+            courseTitle: course.title.slice(0, 140),
+            title: `Completar Módulo 1: ${course.title.slice(0, 80)}`,
+            type: 'deadline',
+            dueAtIso: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            completed: false,
+            priority: 'medium',
+            reminderMinutes: privateInfo?.deadlineLeadMinutes ?? 60,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } catch {
+          // Non-blocking calendar deadline sync
+        }
       }
 
       triggerPushAlert(
         'payment',
         t('paymentSuccess'),
-        course.priceCents === 0
-          ? `${course.title} (Inscripción gratuita)`
-          : `${course.title} (${gateway.toUpperCase()} · ${receipt.transactionRef})`
+        finalAmount === 0
+          ? `${course.title} (${appliedCouponCode ? `Cupón ${appliedCouponCode}` : 'Inscripción gratuita'})`
+          : `${course.title} (${resolvedGateway.toUpperCase()} · ${transactionRef})`
       );
       return paymentPayload;
     },
-    [user, isAdmin, privateInfo, triggerPushAlert, t]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, t]
   );
 
   const completeLesson = useCallback(
@@ -1485,7 +1965,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const createCourse = useCallback(
     async (
       courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>
-    ) => {
+    ): Promise<Course> => {
       if (!user || !isAdmin) {
         throw new Error(
           'Solo el administrador autorizado (Marinodavidr7@gmail.com) puede crear cursos.'
@@ -1493,15 +1973,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const verifiedAdmin = await assertPlatformAdminWrite('crear cursos', user);
       const id = `crs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const createdCourse: Course = {
+        ...courseInput,
+        id,
+        instructorId: verifiedAdmin.uid,
+        instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
+      };
       try {
         await setDoc(doc(db, 'courses', id), {
-          ...courseInput,
-          id,
-          instructorId: verifiedAdmin.uid,
-          instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
+          ...createdCourse,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        return createdCourse;
       } catch (err) {
         handleFirestoreError(err, OperationType.CREATE, `courses/${id}`);
       }
@@ -1532,7 +2016,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (typeof patch.priceCents === 'number') {
         allowedPatch.priceCents = Math.max(0, Math.min(10000000, Math.round(patch.priceCents)));
       }
-      if (patch.currency === 'USD' || patch.currency === 'EUR' || patch.currency === 'MXN') {
+      if (patch.currency === 'DOP' || patch.currency === 'USD' || patch.currency === 'EUR' || patch.currency === 'MXN') {
         allowedPatch.currency = patch.currency;
       }
       if (typeof patch.coverImage === 'string') {
@@ -2038,31 +2522,44 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const { url, name, size } = await uploadAssignmentSubmissionFile(courseId, lessonId, user.uid, file);
 
+      if (url.length > 950000) {
+        throw new Error('El archivo es demasiado grande para guardarse sin Storage. Usa un archivo menor a 700 KB.');
+      }
+
       const id = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const trimmedComment = comment?.trim().slice(0, 2000);
       const submission: AssignmentSubmission = {
         id,
         courseId,
-        courseTitle: course?.title ?? courseId,
+        courseTitle: (course?.title ?? courseId).slice(0, 140),
         lessonId,
-        lessonTitle: lesson?.title ?? lessonId,
+        lessonTitle: (lesson?.title ?? lessonId).slice(0, 200),
         studentId: user.uid,
-        studentName: user.displayName || user.email || 'Estudiante',
-        studentEmail: user.email || '',
+        studentName: (user.displayName || user.email || 'Estudiante').slice(0, 100),
+        studentEmail: (user.email || '').slice(0, 200),
         fileUrl: url,
-        fileName: name,
+        fileName: name.slice(0, 260),
         fileSize: size,
         submittedAt: new Date().toISOString(),
-        comment: comment?.trim(),
+        ...(trimmedComment ? { comment: trimmedComment } : {}),
         status: 'submitted',
-        maxScore: lesson?.assignmentConfig?.maxScore ?? 100,
+        maxScore: Math.max(1, Math.min(1000, Math.round(lesson?.assignmentConfig?.maxScore ?? 100))),
       };
 
       try {
-        await setDoc(doc(db, 'assignmentSubmissions', id), submission);
-      } catch (_err) {
-        const updated = [...loadLocalSubmissions(), submission];
-        saveLocalSubmissions(updated);
-        setAssignmentSubmissions(updated);
+        await setDoc(doc(db, 'assignmentSubmissions', id), {
+          ...submission,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        if (isFirestoreOfflineError(err)) {
+          const updated = [...loadLocalSubmissions(), submission];
+          saveLocalSubmissions(updated);
+          setAssignmentSubmissions(updated);
+        } else {
+          handleFirestoreError(err, OperationType.CREATE, `assignmentSubmissions/${id}`);
+        }
       }
       return submission;
     },
@@ -2075,10 +2572,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!isAdmin) throw new Error('Solo el administrador puede calificar entregas.');
       const patch = {
         grade,
-        feedback: feedback.trim(),
+        feedback: feedback.trim().slice(0, 2000),
         gradedAt: new Date().toISOString(),
-        gradedBy: user.email || user.uid,
+        gradedBy: (user.email || user.uid).slice(0, 200),
         status: (requestResubmit ? 'resubmit_requested' : 'graded') as AssignmentSubmissionStatus,
+        updatedAt: serverTimestamp(),
       };
       try {
         await updateDoc(doc(db, 'assignmentSubmissions', submissionId), patch);
@@ -2100,6 +2598,588 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     },
     [user, isAdmin]
+  );
+
+  const normalizeGiftCardCode = (raw: string): string =>
+    raw.trim().toUpperCase().replace(/\s+/g, '');
+
+  const generateGiftCardCode = (): string => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    let p1 = '';
+    let p2 = '';
+    for (let i = 0; i < 4; i++) {
+      p1 += alphabet[bytes[i] % alphabet.length];
+      p2 += alphabet[bytes[i + 4] % alphabet.length];
+    }
+    return `DBA-${p1}-${p2}`;
+  };
+
+  const createGiftCards = useCallback(
+    async (input: {
+      amountCents: number;
+      currency: CurrencyCode;
+      courseId?: string;
+      courseTitle?: string;
+      singleUse?: boolean;
+      quantity?: number;
+      customCode?: string;
+      expiresAtIso?: string;
+      note?: string;
+    }): Promise<GiftCard[]> => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede generar Gift Cards.');
+      }
+      const verifiedAdmin = await assertPlatformAdminWrite('crear Gift Cards', user);
+
+      const amountCents = Math.round(input.amountCents);
+      if (!Number.isFinite(amountCents) || amountCents < 100 || amountCents > 10000000) {
+        throw new Error('El valor de la Gift Card debe ser entre $1.00 y $100,000.00.');
+      }
+
+      const quantity = Math.max(1, Math.min(20, Math.round(input.quantity ?? 1)));
+      const singleUse = input.singleUse !== false;
+      const customCode = input.customCode ? normalizeGiftCardCode(input.customCode) : '';
+
+      if (customCode) {
+        if (!/^[A-Z0-9_-]{6,64}$/.test(customCode)) {
+          throw new Error('El código personalizado debe tener entre 6 y 64 caracteres (solo letras A-Z, números, "-" o "_").');
+        }
+        if (quantity > 1) {
+          throw new Error('Para generar múltiples códigos en lote, deja el código personalizado vacío.');
+        }
+      }
+
+      let expiresTimestamp: Timestamp | null = null;
+      if (input.expiresAtIso && input.expiresAtIso.trim()) {
+        const expDate = new Date(input.expiresAtIso);
+        if (Number.isNaN(expDate.getTime()) || expDate.getTime() <= Date.now()) {
+          throw new Error('La fecha de expiración debe ser válida y posterior al momento actual.');
+        }
+        expiresTimestamp = Timestamp.fromDate(expDate);
+      }
+
+      const codesToCreate: string[] = [];
+      if (customCode) {
+        const existingSnap = await getDoc(doc(db, 'giftCards', customCode));
+        if (existingSnap.exists()) {
+          throw new Error(`El código "${customCode}" ya existe. Elige otro código.`);
+        }
+        codesToCreate.push(customCode);
+      } else {
+        const seen = new Set<string>();
+        while (codesToCreate.length < quantity) {
+          const candidate = generateGiftCardCode();
+          if (seen.has(candidate)) continue;
+          const existingSnap = await getDoc(doc(db, 'giftCards', candidate));
+          if (!existingSnap.exists()) {
+            seen.add(candidate);
+            codesToCreate.push(candidate);
+          }
+        }
+      }
+
+      const batch = writeBatch(db);
+      const createdList: GiftCard[] = [];
+      const cleanCourseId = input.courseId?.trim() || '';
+      const cleanCourseTitle = input.courseTitle?.trim().slice(0, 140) || '';
+      const cleanNote = input.note?.trim().slice(0, 200) || '';
+
+      for (const code of codesToCreate) {
+        const payload: Record<string, unknown> = {
+          id: code,
+          code,
+          initialAmountCents: amountCents,
+          remainingAmountCents: amountCents,
+          currency: input.currency,
+          courseId: cleanCourseId,
+          ...(cleanCourseTitle ? { courseTitle: cleanCourseTitle } : {}),
+          singleUse,
+          status: 'active',
+          active: true,
+          redemptionCount: 0,
+          ...(expiresTimestamp ? { expiresAt: expiresTimestamp } : {}),
+          ...(cleanNote ? { note: cleanNote } : {}),
+          createdBy: verifiedAdmin.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        batch.set(doc(db, 'giftCards', code), payload);
+        createdList.push({
+          id: code,
+          code,
+          initialAmountCents: amountCents,
+          remainingAmountCents: amountCents,
+          currency: input.currency,
+          courseId: cleanCourseId,
+          courseTitle: cleanCourseTitle || undefined,
+          singleUse,
+          status: 'active',
+          active: true,
+          redemptionCount: 0,
+          expiresAt: expiresTimestamp ?? undefined,
+          note: cleanNote || undefined,
+          createdBy: verifiedAdmin.uid,
+        });
+      }
+
+      try {
+        await batch.commit();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'giftCards');
+      }
+
+      return createdList;
+    },
+    [user, isAdmin]
+  );
+
+  const toggleGiftCardActive = useCallback(
+    async (card: GiftCard) => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede modificar Gift Cards.');
+      }
+      await assertPlatformAdminWrite('actualizar Gift Card', user);
+      if (card.remainingAmountCents <= 0) {
+        throw new Error('Esta Gift Card ya fue canjeada por completo y no puede reactivarse.');
+      }
+      const nextActive = !card.active;
+      try {
+        await updateDoc(doc(db, 'giftCards', card.code), {
+          active: nextActive,
+          status: nextActive ? 'active' : 'disabled',
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `giftCards/${card.code}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
+  const deleteGiftCard = useCallback(
+    async (cardCode: string) => {
+      if (!user || !isAdmin) {
+        throw new Error('Solo el administrador autorizado puede eliminar Gift Cards.');
+      }
+      await assertPlatformAdminWrite('eliminar Gift Card', user);
+      try {
+        await deleteDoc(doc(db, 'giftCards', cardCode));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `giftCards/${cardCode}`);
+      }
+    },
+    [user, isAdmin]
+  );
+
+  const validateGiftCard = useCallback(
+    async (rawCode: string, course?: Course | null): Promise<GiftCardValidationResult> => {
+      const baseInvalid = (
+        reason: string,
+        errorCode: GiftCardValidationErrorCode
+      ): GiftCardValidationResult => ({
+        valid: false,
+        coveredCents: 0,
+        remainingToPayCents: course ? course.priceCents : 0,
+        remainingCardBalanceAfterCents: 0,
+        coversFullCourse: false,
+        reason,
+        errorCode,
+      });
+
+      if (!user) {
+        return baseInvalid(
+          'Inicia sesión con Google para validar y canjear una Gift Card.',
+          'auth_required'
+        );
+      }
+
+      const code = normalizeGiftCardCode(rawCode);
+      if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
+        return baseInvalid(
+          'El código debe tener al menos 6 caracteres (letras y números, ej: DBA-XXXX-XXXX).',
+          'invalid_format'
+        );
+      }
+
+      let snap;
+      try {
+        snap = await getDoc(doc(db, 'giftCards', code));
+      } catch (err) {
+        if (isFirestoreOfflineError(err)) {
+          return baseInvalid(
+            'Sin conexión con el servidor para verificar el código.',
+            'network'
+          );
+        }
+        const fbCode = (err as { code?: string })?.code;
+        if (fbCode === 'permission-denied') {
+          handleFirestoreError(err, OperationType.GET, `giftCards/${code}`);
+        }
+        return baseInvalid('No se pudo verificar el código de Gift Card.', 'network');
+      }
+
+      if (!snap.exists()) {
+        return baseInvalid(
+          'Este código no existe en el sistema. Verifica que esté escrito correctamente.',
+          'not_found'
+        );
+      }
+
+      const card = snap.data() as GiftCard;
+      if (card.status === 'redeemed' || card.remainingAmountCents <= 0) {
+        return baseInvalid(
+          'Esta Gift Card ya fue utilizada y no tiene saldo disponible.',
+          'used'
+        );
+      }
+      if (!card.active || card.status === 'disabled') {
+        return baseInvalid(
+          'Esta Gift Card fue desactivada por el administrador.',
+          'disabled'
+        );
+      }
+
+      const expiresMs = toEpochMs(card.expiresAt);
+      if (expiresMs !== null && Date.now() > expiresMs) {
+        return baseInvalid(
+          'Esta Gift Card ha expirado y ya no puede canjearse.',
+          'expired'
+        );
+      }
+
+      if (course) {
+        if (card.courseId && card.courseId !== course.id) {
+          return baseInvalid(
+            `Esta Gift Card es exclusiva para el curso "${card.courseTitle || card.courseId}".`,
+            'course_mismatch'
+          );
+        }
+        if (card.currency !== course.currency) {
+          return baseInvalid(
+            `Esta Gift Card está emitida en ${card.currency}, pero el curso está en ${course.currency}.`,
+            'currency_mismatch'
+          );
+        }
+        if (enrollments.some((e) => e.courseId === course.id)) {
+          return baseInvalid('Ya estás inscrito en este curso.', 'already_enrolled');
+        }
+        if (course.priceCents <= 0) {
+          return baseInvalid(
+            'Este curso es gratuito; puedes inscribirte directamente sin gastar tu Gift Card.',
+            'free_course'
+          );
+        }
+
+        const coveredCents = Math.min(card.remainingAmountCents, course.priceCents);
+        const remainingToPayCents = Math.max(0, course.priceCents - coveredCents);
+        const remainingCardBalanceAfterCents = card.singleUse
+          ? 0
+          : Math.max(0, card.remainingAmountCents - coveredCents);
+
+        return {
+          valid: true,
+          card,
+          coveredCents,
+          remainingToPayCents,
+          remainingCardBalanceAfterCents,
+          coversFullCourse: remainingToPayCents === 0,
+        };
+      }
+
+      return {
+        valid: true,
+        card,
+        coveredCents: card.remainingAmountCents,
+        remainingToPayCents: 0,
+        remainingCardBalanceAfterCents: 0,
+        coversFullCourse: true,
+      };
+    },
+    [user, enrollments]
+  );
+
+  const redeemGiftCardForCourse = useCallback(
+    async (
+      rawCode: string,
+      course: Course,
+      partialGateway: PaymentGateway = 'stripe'
+    ): Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }> => {
+      if (!user) throw new Error('Inicia sesión para canjear una Gift Card.');
+      if (!user.emailVerified) {
+        throw new Error('Tu cuenta requiere correo verificado (o acceso con Google) para canjear Gift Cards.');
+      }
+
+      // Validar prerrequisitos estrictos igual que en checkout normal
+      if (course.prerequisites && course.prerequisites.length > 0 && !isAdmin) {
+        const unmet = course.prerequisites.filter((prereqId) => {
+          const enr = enrollments.find((e) => e.courseId === prereqId);
+          const hasCert = certificates.some((c) => c.courseId === prereqId);
+          return !((enr && enr.progressPercent >= 100) || hasCert);
+        });
+        if (unmet.length > 0) {
+          const prereqCourse = courses.find((c) => c.id === unmet[0]);
+          throw new Error(
+            `Prerrequisito obligatorio no completado: Debes completar y aprobar primero "${prereqCourse?.title || unmet[0]}".`
+          );
+        }
+      }
+
+      const code = normalizeGiftCardCode(rawCode);
+      if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
+        throw new Error('Formato de código inválido.');
+      }
+
+      // Asegurar que el documento del curso exista en Firestore antes de la transacción
+      const courseRef = doc(db, 'courses', course.id);
+      const courseSnap = await getDoc(courseRef);
+      let resolvedInstructorId =
+        course.instructorId === 'platform-faculty' ? user.uid : course.instructorId;
+      let authoritativePriceCents = course.priceCents;
+      let authoritativeCurrency = course.currency;
+
+      if (!courseSnap.exists()) {
+        if (isAdmin && user.emailVerified) {
+          await assertPlatformAdminWrite('registrar curso en canje', user);
+          await setDoc(courseRef, {
+            ...course,
+            instructorId: resolvedInstructorId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          throw new Error(
+            'El curso aún no está sincronizado en Firestore. Solicita al administrador que inicie sesión para publicarlo.'
+          );
+        }
+      } else {
+        const cData = courseSnap.data() as Course;
+        resolvedInstructorId = String(cData.instructorId || resolvedInstructorId);
+        authoritativePriceCents = Math.max(0, Math.round(Number(cData.priceCents ?? course.priceCents)));
+        authoritativeCurrency =
+          cData.currency === 'DOP' || cData.currency === 'USD' || cData.currency === 'EUR' || cData.currency === 'MXN'
+            ? cData.currency
+            : 'DOP';
+      }
+
+      if (authoritativePriceCents <= 0) {
+        throw new Error('Este curso es gratuito; inscríbete directamente sin gastar tu Gift Card.');
+      }
+
+      const giftCardRef = doc(db, 'giftCards', code);
+      const enrollmentId = `${course.id}_${user.uid}`;
+      const enrollmentRef = doc(db, 'enrollments', enrollmentId);
+
+      let txResult: { payment: PaymentRecord; redemption: GiftCardRedemption };
+      try {
+        txResult = await runTransaction(db, async (tx) => {
+        const [cardSnap, enrSnap] = await Promise.all([tx.get(giftCardRef), tx.get(enrollmentRef)]);
+
+        if (enrSnap.exists()) {
+          throw new Error('Ya estás inscrito en este curso.');
+        }
+        if (!cardSnap.exists()) {
+          throw new Error('Código de Gift Card no encontrado.');
+        }
+
+        const card = cardSnap.data() as GiftCard;
+        if (!card.active || card.status !== 'active') {
+          throw new Error('Esta Gift Card está desactivada o ya no está disponible.');
+        }
+        if (card.remainingAmountCents <= 0) {
+          throw new Error('Esta Gift Card ya no tiene saldo disponible.');
+        }
+        const expMs = toEpochMs(card.expiresAt);
+        if (expMs !== null && Date.now() > expMs) {
+          throw new Error('Esta Gift Card ha expirado.');
+        }
+        if (card.courseId && card.courseId !== course.id) {
+          throw new Error(`Esta Gift Card solo aplica al curso "${card.courseTitle || card.courseId}".`);
+        }
+        if (card.currency !== authoritativeCurrency) {
+          throw new Error(`Moneda incompatible: Gift Card en ${card.currency} vs curso en ${authoritativeCurrency}.`);
+        }
+
+        const appliedCents = Math.min(card.remainingAmountCents, authoritativePriceCents);
+        const remainingPaidCents = Math.max(0, authoritativePriceCents - appliedCents);
+        const nextRemainingCents = card.singleUse
+          ? 0
+          : Math.max(0, card.remainingAmountCents - appliedCents);
+        const nextStatus = nextRemainingCents === 0 ? 'redeemed' : 'active';
+        const nextRedemptionNumber = (card.redemptionCount || 0) + 1;
+
+        const redemptionId = `${code}_${nextRedemptionNumber}`;
+        const paymentId = `pay_gc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        const transactionRef = `gift_${code.slice(0, 14)}_${nextRedemptionNumber}`;
+
+        const studentName = (user.displayName || user.email || 'Estudiante').slice(0, 100);
+        const studentEmail = (user.email || '').slice(0, 200);
+        const gateway: PaymentGateway = remainingPaidCents === 0 ? 'gift_card' : partialGateway;
+
+        const paymentPayload: PaymentRecord = {
+          id: paymentId,
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          studentId: user.uid,
+          instructorId: resolvedInstructorId,
+          amountCents: remainingPaidCents,
+          originalAmountCents: authoritativePriceCents,
+          discountCents: appliedCents,
+          couponCode: code,
+          discountSource: 'gift_card',
+          currency: authoritativeCurrency,
+          gateway,
+          status: 'succeeded',
+          transactionRef,
+          createdAt: serverTimestamp(),
+        };
+
+        const redemptionPayload: GiftCardRedemption = {
+          id: redemptionId,
+          cardCode: code,
+          redemptionNumber: nextRedemptionNumber,
+          studentId: user.uid,
+          studentName,
+          ...(studentEmail ? { studentEmail } : {}),
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          amountAppliedCents: appliedCents,
+          coursePriceCents: authoritativePriceCents,
+          remainingPaidCents,
+          currency: authoritativeCurrency,
+          paymentId,
+          redeemedAt: serverTimestamp(),
+        };
+
+        tx.update(giftCardRef, {
+          remainingAmountCents: nextRemainingCents,
+          status: nextStatus,
+          redeemedBy: user.uid,
+          redeemedAt: serverTimestamp(),
+          redemptionCount: nextRedemptionNumber,
+          updatedAt: serverTimestamp(),
+        });
+
+        tx.set(doc(db, 'giftCardRedemptions', redemptionId), redemptionPayload);
+        tx.set(doc(db, 'payments', paymentId), paymentPayload);
+        tx.set(enrollmentRef, {
+          id: enrollmentId,
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          studentId: user.uid,
+          studentName,
+          instructorId: resolvedInstructorId,
+          completedModuleIds: [],
+          completedLessonIds: [],
+          progressPercent: 0,
+          studyMinutes: 0,
+          status: 'active',
+          enrolledAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        return { payment: paymentPayload, redemption: redemptionPayload };
+      });
+      } catch (err) {
+        const fbCode = (err as { code?: string })?.code;
+        if (fbCode === 'permission-denied') {
+          handleFirestoreError(err, OperationType.WRITE, `giftCards/${code}`);
+        }
+        throw err;
+      }
+
+      // Best-effort calendar deadline event
+      try {
+        const deadlineId = `cal_${course.id}_${Date.now().toString(36)}`;
+        await setDoc(doc(db, 'calendarEvents', deadlineId), {
+          id: deadlineId,
+          ownerId: user.uid,
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          title: `Completar Módulo 1: ${course.title.slice(0, 80)}`,
+          type: 'deadline',
+          dueAtIso: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          completed: false,
+          priority: 'medium',
+          reminderMinutes: privateInfo?.deadlineLeadMinutes ?? 60,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch {
+        // Non-blocking calendar sync
+      }
+
+      triggerPushAlert(
+        'payment',
+        'Gift Card canjeada con éxito',
+        `${course.title} · Código ${code}`
+      );
+
+      return txResult;
+    },
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, triggerPushAlert]
+  );
+
+  const redeemGiftCardCode = useCallback(
+    async (
+      rawCode: string,
+      targetCourse?: Course | null
+    ): Promise<{
+      success: boolean;
+      course: Course;
+      payment: PaymentRecord;
+      redemption: GiftCardRedemption;
+    }> => {
+      const validation = await validateGiftCard(rawCode, targetCourse || null);
+      if (!validation.valid || !validation.card) {
+        throw new Error(validation.reason || 'Código de Gift Card inválido.');
+      }
+
+      const card = validation.card;
+      let resolvedCourse = targetCourse || null;
+
+      if (!resolvedCourse) {
+        if (!card.courseId) {
+          throw new Error(
+            'Esta Gift Card aplica a cualquier curso del catálogo; selecciona el curso al que deseas inscribirte.'
+          );
+        }
+        resolvedCourse = courses.find((c) => c.id === card.courseId) || null;
+        if (!resolvedCourse) {
+          try {
+            const snap = await getDoc(doc(db, 'courses', card.courseId));
+            if (snap.exists()) {
+              resolvedCourse = snap.data() as Course;
+            }
+          } catch (err) {
+            if (!isFirestoreOfflineError(err)) {
+              handleFirestoreError(err, OperationType.GET, `courses/${card.courseId}`);
+            }
+          }
+        }
+        if (!resolvedCourse) {
+          throw new Error(
+            `No se encontró el curso asociado a esta Gift Card (${card.courseTitle || card.courseId}).`
+          );
+        }
+      }
+
+      if (card.remainingAmountCents < resolvedCourse.priceCents) {
+        throw new Error(
+          `El saldo de la Gift Card (${(card.remainingAmountCents / 100).toFixed(2)} ${card.currency}) no cubre el total del curso (${(resolvedCourse.priceCents / 100).toFixed(2)} ${resolvedCourse.currency}). Aplica el código desde la ventana de pago para cubrir la diferencia.`
+        );
+      }
+
+      const result = await redeemGiftCardForCourse(card.code, resolvedCourse);
+      return {
+        success: true,
+        course: resolvedCourse,
+        payment: result.payment,
+        redemption: result.redemption,
+      };
+    },
+    [validateGiftCard, courses, redeemGiftCardForCourse]
   );
 
   const unreadCount = useMemo(
@@ -2178,6 +3258,19 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     submitAssignment,
     gradeAssignment,
     deleteSubmission,
+    giftCards,
+    giftCardRedemptions,
+    createGiftCards,
+    toggleGiftCardActive,
+    deleteGiftCard,
+    validateGiftCard,
+    redeemGiftCardForCourse,
+    redeemGiftCardCode,
+    coupons,
+    createCoupon,
+    toggleCouponActive,
+    deleteCoupon,
+    validateCoupon,
   };
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;

@@ -1,7 +1,8 @@
 export type Language = 'es' | 'en' | 'fr' | 'pt';
 export type ThemeMode = 'light' | 'dark';
 export type UserRole = 'student' | 'instructor';
-export type PaymentGateway = 'stripe' | 'mercadopago' | 'paypal';
+export type CurrencyCode = 'DOP' | 'USD' | 'EUR' | 'MXN';
+export type PaymentGateway = 'stripe' | 'mercadopago' | 'paypal' | 'free' | 'gift_card';
 export type CloudProvider = 'none' | 'google_drive' | 'dropbox' | 'aws_s3' | 'gcs';
 
 export type AppView =
@@ -36,7 +37,7 @@ export interface LessonAssignmentConfig {
   instructions?: string;
   dueDate?: string; // ISO string
   maxScore?: number; // default 100
-  allowedFileTypes?: string[]; // e.g. ['.xlsx', '.xls', '.pdf', '.docx', '.zip']
+  allowedFileTypes?: string | string[]; // e.g. '.xlsx,.pdf,.docx,.zip' or ['.xlsx', '.pdf']
 }
 
 export interface CourseLesson {
@@ -91,7 +92,7 @@ export interface Course {
   category: string;
   level: 'beginner' | 'intermediate' | 'advanced';
   priceCents: number;
-  currency: 'USD' | 'EUR' | 'MXN';
+  currency: CurrencyCode;
   coverImage: string;
   instructorId: string;
   instructorName: string;
@@ -162,9 +163,9 @@ export interface PaymentRecord {
   originalAmountCents?: number;
   discountCents?: number;
   couponCode?: string;
-  discountSource?: 'none' | 'coupon' | 'referral_welcome';
-  currency: 'USD' | 'EUR' | 'MXN';
-  gateway: PaymentGateway | 'free';
+  discountSource?: 'none' | 'coupon' | 'referral_welcome' | 'gift_card';
+  currency: CurrencyCode;
+  gateway: PaymentGateway;
   status: 'succeeded' | 'refunded';
   transactionRef: string;
   createdAt?: unknown;
@@ -288,7 +289,7 @@ export interface Coupon {
   description: string;
   type: CouponType;
   value: number;
-  currency: 'USD' | 'EUR' | 'MXN';
+  currency: CurrencyCode;
   appliesTo: CouponAppliesTo;
   courseIds: string[];
   startsAt?: unknown;
@@ -306,6 +307,7 @@ export interface Coupon {
 export interface CouponRedemption {
   id: string;
   couponCode: string;
+  redemptionNumber?: number;
   userId: string;
   courseId: string;
   orderId?: string;
@@ -343,7 +345,7 @@ export interface CouponValidationResult {
   originalPriceCents: number;
   discountCents: number;
   finalPriceCents: number;
-  currency: 'USD' | 'EUR' | 'MXN';
+  currency: CurrencyCode;
   reason?: string;
   coupon?: Coupon;
 }
@@ -370,5 +372,70 @@ export interface AssignmentSubmission {
   feedback?: string;
   gradedAt?: string; // ISO date string
   gradedBy?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
+export type GiftCardStatus = 'active' | 'redeemed' | 'disabled';
+
+export interface GiftCard {
+  id: string;
+  code: string;
+  initialAmountCents: number;
+  remainingAmountCents: number;
+  currency: CurrencyCode;
+  courseId?: string;
+  courseTitle?: string;
+  singleUse: boolean;
+  status: GiftCardStatus;
+  active: boolean;
+  redemptionCount: number;
+  expiresAt?: unknown;
+  note?: string;
+  redeemedBy?: string;
+  redeemedAt?: unknown;
+  createdBy: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface GiftCardRedemption {
+  id: string;
+  cardCode: string;
+  redemptionNumber: number;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  courseId: string;
+  courseTitle: string;
+  amountAppliedCents: number;
+  coursePriceCents: number;
+  remainingPaidCents: number;
+  currency: CurrencyCode;
+  paymentId: string;
+  redeemedAt?: unknown;
+}
+
+export type GiftCardValidationErrorCode =
+  | 'not_found'
+  | 'used'
+  | 'expired'
+  | 'disabled'
+  | 'invalid_format'
+  | 'course_mismatch'
+  | 'currency_mismatch'
+  | 'already_enrolled'
+  | 'free_course'
+  | 'auth_required'
+  | 'network';
+
+export interface GiftCardValidationResult {
+  valid: boolean;
+  card?: GiftCard;
+  coveredCents: number;
+  remainingToPayCents: number;
+  remainingCardBalanceAfterCents: number;
+  coversFullCourse: boolean;
+  reason?: string;
+  errorCode?: GiftCardValidationErrorCode;
+}

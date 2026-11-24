@@ -484,7 +484,7 @@ async function startServer() {
       }
       const course = courseSnap.data() as { title?: string; instructorId?: string; priceCents?: number; currency?: string };
       const originalAmountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
-      const currency = (course.currency === 'EUR' || course.currency === 'MXN' ? course.currency : 'USD') as 'USD' | 'EUR' | 'MXN';
+      const currency = (course.currency === 'EUR' || course.currency === 'MXN' || course.currency === 'USD' ? course.currency : 'DOP') as 'DOP' | 'USD' | 'EUR' | 'MXN';
 
       // Calcular descuento en servidor
       let discountCents = 0;

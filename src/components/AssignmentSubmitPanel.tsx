@@ -101,7 +101,9 @@ export function AssignmentSubmitPanel({ courseId, lessonId, lessonTitle, config 
     }
   };
 
-  const accept = config.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip';
+  const accept = Array.isArray(config.allowedFileTypes)
+    ? config.allowedFileTypes.join(',')
+    : (config.allowedFileTypes ?? '.xlsx,.pdf,.docx,.zip');
 
   return (
     <div className="mt-6 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-5 space-y-4">

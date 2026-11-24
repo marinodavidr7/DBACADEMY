@@ -63,7 +63,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div id="top" className="min-h-[100dvh] overflow-x-hidden bg-[var(--dba-bg-canvas)] text-[var(--dba-text-primary)]">
       {/* Header — borde a borde, contenedor limitado */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070E1D]/95 backdrop-blur text-slate-100 safe-pt">
+      <header className="sticky top-0 z-40 border-b border-zinc-800/90 bg-[var(--dba-bg-hero)]/95 backdrop-blur text-zinc-100 safe-pt">
         <Container>
           <div className="flex h-16 items-center justify-between gap-8">
             {/* Zone 1: Single-line Brand Logo + Wordmark */}
@@ -98,7 +98,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 onClick={user ? onOpenLearning : onExplore}
-                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
+                className="hidden sm:inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
               >
                 <span>{user ? 'Mi Aprendizaje' : 'Explorar catálogo'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -119,13 +119,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Mobile Drawer */}
         {mobileNavOpen && (
-          <div className="md:hidden border-t border-slate-800 bg-[#070E1D] px-4 py-4 space-y-2">
+          <div className="md:hidden border-t border-zinc-800 bg-[var(--dba-bg-hero)] px-4 py-4 space-y-2">
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileNavOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+                className="block rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
               >
                 {link.label}
               </a>
@@ -139,7 +139,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   if (user) onOpenLearning();
                   else onExplore();
                 }}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] px-4 py-2.5 text-sm font-semibold text-white min-h-[44px]"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2.5 text-sm font-semibold text-[var(--dba-accent-foreground)] min-h-[44px]"
               >
                 <span>{user ? 'Ir a Mi Aprendizaje' : 'Explorar catálogo'}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -180,17 +180,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       <main>
         {/* Hero — fondo de borde a borde, aprovechando el viewport con balance vertical */}
-        <section className="bg-[#070E1D] text-slate-100 border-b border-slate-800/90 py-10 sm:py-12 lg:py-14 flex items-center min-h-[min(calc(100dvh-4rem),660px)]">
+        <section className="bg-[var(--dba-bg-hero)] text-zinc-100 border-b border-zinc-800/90 py-10 sm:py-12 lg:py-14 flex items-center min-h-[min(calc(100dvh-4rem),660px)]">
           <Container prose={false}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12 items-center">
               <div className="flex flex-col justify-center">
-                <p className="text-xs font-semibold tracking-wide text-cyan-300">
+                <p className="text-xs font-semibold tracking-wide text-amber-300">
                   Academia técnica interactiva · DB Academy
                 </p>
                 <h1 className="mt-2.5 font-display text-4xl sm:text-5xl lg:text-[3.25rem] 2xl:text-6xl font-bold tracking-tight text-white leading-[1.08] text-balance">
                   Domina habilidades técnicas con práctica interactiva paso a paso.
                 </h1>
-                <p className="mt-4 max-w-prose text-base leading-relaxed text-slate-300">
+                <p className="mt-4 max-w-prose text-base leading-relaxed text-zinc-300">
                   Rutas estructuradas por nivel, laboratorio interactivo de Excel con Simulador 3D, seguimiento de progreso en tiempo real y certificados verificables.
                 </p>
 
@@ -198,7 +198,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <button
                     type="button"
                     onClick={onExplore}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-6 py-3 text-sm font-semibold text-white transition-colors whitespace-nowrap min-h-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-6 py-3 text-sm font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap min-h-[46px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dba-accent)] active:scale-95"
                   >
                     <span>Empezar gratis</span>
                     <ArrowRight className="w-4 h-4" />
@@ -208,36 +208,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     onClick={() => (user ? onOpenLearning() : void onSignIn())}
                     className={`inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold transition-colors whitespace-nowrap min-h-[46px] focus-visible:outline-none focus-visible:ring-2 active:scale-95 ${
                       user
-                        ? 'bg-[#0052CC] hover:bg-[#0747A6] text-white focus-visible:ring-[#0052CC]'
-                        : 'border border-slate-600 bg-slate-900/60 hover:bg-slate-800 text-white focus-visible:ring-slate-600'
+                        ? 'bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] focus-visible:ring-[var(--dba-accent)]'
+                        : 'border border-zinc-700 bg-zinc-900/70 hover:bg-zinc-800 text-white focus-visible:ring-zinc-600'
                     }`}
                   >
                     <span>{user ? 'Ir a Mi Panel' : 'Iniciar sesión'}</span>
                   </button>
                 </div>
 
-                <div className="mt-6 pt-5 border-t border-slate-800 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-300">
-                  <span className="inline-flex items-center gap-1.5 text-slate-200">
-                    <Check className="w-3.5 h-3.5 text-cyan-300" />
+                <div className="mt-6 pt-5 border-t border-zinc-800 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300">
+                  <span className="inline-flex items-center gap-1.5 text-zinc-200">
+                    <Check className="w-3.5 h-3.5 text-amber-300" />
                     <span>Acceso libre al catálogo</span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-slate-200">
-                    <BookOpen className="w-3.5 h-3.5 text-cyan-300" />
+                  <span className="inline-flex items-center gap-1.5 text-zinc-200">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-300" />
                     <span>Curso gratuito de Excel</span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-slate-200">
-                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-300" />
+                  <span className="inline-flex items-center gap-1.5 text-zinc-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
                     <span>Sincronización multi-dispositivo</span>
                   </span>
                 </div>
               </div>
 
-              <div className="relative h-full min-h-[340px] lg:min-h-[410px] rounded-xl overflow-hidden border border-slate-800 bg-[#0D1930]">
+              <div className="relative h-full min-h-[340px] lg:min-h-[410px] rounded-xl overflow-hidden border border-zinc-800 bg-[var(--dba-bg-hero-surface)]">
                 <ProductPreview />
-                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#070E1D] via-[#070E1D]/85 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[var(--dba-bg-hero)] via-[var(--dba-bg-hero)]/85 to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-5 right-5 flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs font-mono text-cyan-300 uppercase tracking-wider">
+                    <p className="text-xs font-mono text-amber-300 uppercase tracking-wider">
                       Ruta destacada · Gratis
                     </p>
                     <p className="mt-0.5 font-display text-base sm:text-lg font-bold text-white">
@@ -248,7 +248,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectCourse(excelCourse.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/80 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/85 hover:bg-zinc-800 px-3.5 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 active:scale-95"
                     >
                       <span>Ver programa</span>
                       <ArrowRight className="w-3 h-3" />
@@ -261,38 +261,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Stats Strip — fondo de borde a borde, ancho limitado solo en contenido */}
-        <section className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A]">
+        <section className="border-b border-[var(--dba-border)] bg-[var(--dba-bg-surface)]">
           <Container>
-            <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
+            <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-[var(--dba-border)]">
               <div className="p-5 sm:p-6 flex flex-col h-full">
-                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--dba-text-primary)]">
                   {publishedCourses.length}
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                <p className="mt-1 text-xs sm:text-sm text-[var(--dba-text-secondary)] leading-none">
                   Programa activo en catálogo
                 </p>
               </div>
               <div className="p-5 sm:p-6 flex flex-col h-full">
-                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[#0052CC] dark:text-cyan-400">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--dba-accent-ink)]">
                   218+
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                <p className="mt-1 text-xs sm:text-sm text-[var(--dba-text-secondary)] leading-none">
                   Ejercicios interactivos de Excel
                 </p>
               </div>
               <div className="p-5 sm:p-6 flex flex-col h-full">
-                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--dba-text-primary)]">
                   Certificados
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                <p className="mt-1 text-xs sm:text-sm text-[var(--dba-text-secondary)] leading-none">
                   Verificables con firma hash SHA-256
                 </p>
               </div>
               <div className="p-5 sm:p-6 flex flex-col h-full">
-                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+                <p className="font-display text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--dba-text-primary)]">
                   20
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-none">
+                <p className="mt-1 text-xs sm:text-sm text-[var(--dba-text-secondary)] leading-none">
                   Lecciones en el curso de Excel
                 </p>
               </div>
@@ -305,17 +305,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <Container>
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div className="max-w-prose">
-                <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                <p className="text-xs font-semibold text-[var(--dba-accent-ink)]">
                   01. Rutas de aprendizaje
                 </p>
-                <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[var(--dba-text-primary)] text-balance">
                   Trayectorias técnicas desde fundamentos hasta práctica profesional
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={onExplore}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:underline active:scale-95"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--dba-accent-ink)] hover:underline whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:underline active:scale-95"
               >
                 <span>Ver todo el catálogo</span>
                 <ArrowRight className="w-4 h-4" />
@@ -325,8 +325,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Marquee Track: Excel & Analítica */}
               {excelCourse && (
-                <article className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden flex flex-col">
-                  <div className="aspect-[16/9] w-full bg-slate-900 relative overflow-hidden">
+                <article className="lg:col-span-7 rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden flex flex-col">
+                  <div className="aspect-[16/9] w-full bg-zinc-900 relative overflow-hidden">
                     <img
                       src="/assets/images/track_data_analytics_1795271913869.webp"
                       alt="Ruta de Productividad y Analítica en Excel en DB Academy"
@@ -339,8 +339,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     />
                   </div>
                   <div className="p-6 sm:p-7 flex-1 flex flex-col">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                      <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--dba-text-secondary)]">
+                      <span className="font-semibold text-[var(--dba-accent-ink)]">
                         Ruta Principal · {excelCourse.category}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -352,10 +352,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         Simulador 3D incluido
                       </span>
                     </div>
-                    <h3 className="mt-2.5 font-display text-xl font-bold text-slate-900 dark:text-slate-50">
+                    <h3 className="mt-2.5 font-display text-xl font-bold text-[var(--dba-text-primary)]">
                       {excelCourse.title}
                     </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--dba-text-secondary)]">
                       {excelCourse.description}
                     </p>
                     <div className="mt-auto pt-6 flex flex-wrap items-center justify-between gap-4">
@@ -365,7 +365,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectCourse(excelCourse.id)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2.5 text-xs font-semibold text-white transition-colors min-h-[42px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2.5 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[42px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dba-accent-ink)] active:scale-95"
                       >
                         <span>Explorar ruta y temario</span>
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -380,11 +380,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {secondaryTracks.map((track) => (
                   <article
                     key={track.id}
-                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                    className="flex-1 rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-5 flex flex-col justify-between hover:border-[var(--dba-border-strong)] transition-colors"
                   >
                     <div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                        <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--dba-text-secondary)]">
+                        <span className="font-semibold text-[var(--dba-accent-ink)]">
                           {track.category}
                         </span>
                         <span aria-hidden="true">·</span>
@@ -392,21 +392,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <span aria-hidden="true">·</span>
                         <span className="tabular-nums">{track.modules.length} módulos</span>
                       </div>
-                      <h3 className="mt-2 font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                      <h3 className="mt-2 font-display text-base font-bold text-[var(--dba-text-primary)]">
                         {track.title}
                       </h3>
-                      <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
+                      <p className="mt-1.5 text-xs leading-relaxed text-[var(--dba-text-secondary)] line-clamp-2">
                         {track.subtitle}
                       </p>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-                      <span className="font-mono text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                    <div className="mt-4 pt-3 border-t border-[var(--dba-border)] flex items-center justify-between gap-3">
+                      <span className="font-mono text-sm font-bold tabular-nums text-[var(--dba-text-primary)]">
                         {formatPrice(track.priceCents, track.currency)}
                       </span>
                       <button
                         type="button"
                         onClick={() => onSelectCourse(track.id)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline min-h-[36px] focus-visible:outline-none focus-visible:underline active:scale-95"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--dba-accent-ink)] hover:underline min-h-[36px] focus-visible:outline-none focus-visible:underline active:scale-95"
                       >
                         <span>Ver programa</span>
                         <ArrowRight className="w-3 h-3" />
@@ -422,14 +422,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Catálogo Completo Destacado */}
         <section
           id="cursos"
-          className="scroll-mt-20 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-10 sm:py-14"
+          className="scroll-mt-20 border-y border-[var(--dba-border)] bg-[var(--dba-bg-surface)] py-10 sm:py-14"
         >
           <Container>
             <div className="max-w-prose">
-              <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+              <p className="text-xs font-semibold text-[var(--dba-accent-ink)]">
                 02. Catálogo de cursos
               </p>
-              <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+              <h2 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[var(--dba-text-primary)] text-balance">
                 Programas estructurados por módulos y evaluación práctica
               </h2>
             </div>
@@ -438,9 +438,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {publishedCourses.map((course) => (
                 <article
                   key={course.id}
-                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
+                  className="group rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] overflow-hidden flex flex-col transition-colors hover:border-[var(--dba-border-strong)]"
                 >
-                  <div className="aspect-video w-full bg-slate-900 overflow-hidden">
+                  <div className="aspect-video w-full bg-zinc-900 overflow-hidden">
                     {course.coverImage ? (
                       <img
                         src={course.coverImage}
@@ -453,14 +453,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                      <div className="w-full h-full flex items-center justify-center text-zinc-400">
                         <BookOpen className="w-8 h-8" />
                       </div>
                     )}
                   </div>
                   <div className="p-5 flex-1 flex flex-col">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                      <span className="font-semibold text-[#0052CC] dark:text-cyan-300">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--dba-text-secondary)]">
+                      <span className="font-semibold text-[var(--dba-accent-ink)]">
                         {course.category}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -468,20 +468,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums">{course.totalLessons} lecciones</span>
                     </div>
-                    <h3 className="mt-2 font-display text-base font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                    <h3 className="mt-2 font-display text-base font-bold text-[var(--dba-text-primary)] leading-snug">
                       {course.title}
                     </h3>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-2">
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--dba-text-secondary)] line-clamp-2">
                       {course.subtitle}
                     </p>
                     <div className="mt-auto pt-5 flex items-center justify-between gap-3">
-                      <span className="font-mono text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      <span className="font-mono text-sm font-bold tabular-nums text-[var(--dba-text-primary)]">
                         {formatPrice(course.priceCents, course.currency)}
                       </span>
                       <button
                         type="button"
                         onClick={() => onSelectCourse(course.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[40px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3.5 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[40px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dba-accent-ink)] active:scale-95"
                       >
                         <span>Ver programa</span>
                         <ArrowRight className="w-3 h-3" />
@@ -499,21 +499,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <Container>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               <div className="lg:col-span-5 max-w-prose">
-                <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+                <p className="text-xs font-semibold text-[var(--dba-accent-ink)]">
                   03. Metodología DB Academy
                 </p>
-                <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 text-balance">
+                <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-[var(--dba-text-primary)] text-balance">
                   De la teoría al laboratorio en una sola plataforma
                 </h2>
-                <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                <p className="mt-4 text-sm leading-relaxed text-[var(--dba-text-secondary)]">
                   Cada programa combina lecciones guiadas, validación práctica inmediata, seguimiento de avance en tiempo real y emisión automática de certificados al completar el 100% del currículo.
                 </p>
 
-                <div className="mt-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-4 space-y-1.5">
-                  <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                <div className="mt-5 rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-4 space-y-1.5">
+                  <p className="text-xs font-semibold text-[var(--dba-text-primary)]">
                     Progresión guiada por capítulos y módulos
                   </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p className="text-xs text-[var(--dba-text-secondary)] leading-relaxed">
                     Cada capítulo y módulo se desbloquea de forma secuencial al completar sus prácticas y evaluaciones, asegurando dominio real antes de avanzar.
                   </p>
                 </div>
@@ -546,13 +546,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   return (
                     <article
                       key={item.title}
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6"
+                      className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-6"
                     >
-                      <Icon className="w-5 h-5 text-[#0052CC] dark:text-cyan-400" />
-                      <h3 className="mt-4 font-display text-base font-bold text-slate-900 dark:text-slate-100">
+                      <Icon className="w-5 h-5 text-[var(--dba-accent-ink)]" />
+                      <h3 className="mt-4 font-display text-base font-bold text-[var(--dba-text-primary)]">
                         {item.title}
                       </h3>
-                      <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      <p className="mt-2 text-xs leading-relaxed text-[var(--dba-text-secondary)]">
                         {item.body}
                       </p>
                     </article>
@@ -566,16 +566,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Preguntas Frecuentes */}
         <section
           id="preguntas"
-          className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] py-10 sm:py-14"
+          className="scroll-mt-20 border-t border-[var(--dba-border)] bg-[var(--dba-bg-surface)] py-10 sm:py-14"
         >
           <Container prose={true}>
-            <p className="text-xs font-semibold text-[#0052CC] dark:text-cyan-400">
+            <p className="text-xs font-semibold text-[var(--dba-accent-ink)]">
               04. Preguntas frecuentes
             </p>
-            <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-tight text-[var(--dba-text-primary)]">
               Información antes de comenzar
             </h2>
-            <div className="mt-6 divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-[var(--dba-bg-canvas)] dark:bg-[#0B1426] px-5">
+            <div className="mt-6 divide-y divide-[var(--dba-border)] rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] px-5">
               {[
                 {
                   q: '¿Necesito cuenta para explorar los cursos y temarios?',
@@ -591,11 +591,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 },
               ].map((item) => (
                 <details key={item.q} className="group py-4">
-                  <summary className="flex min-h-[28px] cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-slate-900 dark:text-slate-100 [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-[28px] cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-[var(--dba-text-primary)] [&::-webkit-details-marker]:hidden">
                     <span>{item.q}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+                    <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180" />
                   </summary>
-                  <p className="mt-3 text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  <p className="mt-3 text-xs sm:text-sm leading-relaxed text-[var(--dba-text-secondary)]">
                     {item.a}
                   </p>
                 </details>
@@ -605,14 +605,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* Cierre Oscuro CTA — fondo de borde a borde */}
-        <section className="bg-[#070E1D] text-slate-100 py-10 sm:py-12 border-t border-slate-800">
+        <section className="bg-[var(--dba-bg-hero)] text-zinc-100 py-10 sm:py-12 border-t border-zinc-800">
           <Container>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="max-w-prose">
                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-white text-balance">
                   Comienza tu formación técnica hoy en DB Academy
                 </h2>
-                <p className="mt-2 text-sm text-slate-300">
+                <p className="mt-2 text-sm text-zinc-300">
                   Accede con tu cuenta de Google o explora el catálogo abierto desde cualquier dispositivo.
                 </p>
               </div>
@@ -620,7 +620,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button
                   type="button"
                   onClick={user ? onOpenLearning : onExplore}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052CC] active:scale-95"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-5 py-3 text-sm font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--dba-accent)] active:scale-95"
                 >
                   <span>{user ? 'Ir a Mi Aprendizaje' : 'Ver catálogo'}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -629,7 +629,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <button
                     type="button"
                     onClick={() => void onSignIn()}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-600 hover:bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 active:scale-95"
+                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 px-5 py-3 text-sm font-semibold text-white transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600 active:scale-95"
                   >
                     <span>Iniciar sesión</span>
                   </button>
@@ -640,7 +640,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
       </main>
 
-      <footer className="border-t border-slate-800 bg-[#050914] text-slate-400">
+      <footer className="border-t border-zinc-800 bg-[#050507] text-zinc-400">
         <Container>
           <div className="py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -687,16 +687,16 @@ function ProductPreview() {
 
   return (
     <div className="relative w-full h-full flex flex-col">
-      <div className="flex-1 flex flex-col bg-[#0F172A] border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+      <div className="flex-1 flex flex-col bg-[#121216] border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
         {/* Barra superior de ventana */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-[#1E293B]/60">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-[#1A1A20]/90">
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
               <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
               <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
             </div>
-            <span className="ml-2 text-[11px] font-mono text-slate-300">
+            <span className="ml-2 text-[11px] font-mono text-zinc-300">
               Excel_Laboratorio — DB Academy
             </span>
           </div>
@@ -704,22 +704,22 @@ function ProductPreview() {
         </div>
 
         {/* Barra de fórmulas activa */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-800 bg-[#0B1325] font-mono text-xs">
-          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-semibold">D2</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-[#0D0D11] font-mono text-xs">
+          <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 font-semibold">D2</span>
           <span className="text-emerald-400 font-serif italic font-bold">fx</span>
-          <span className="text-cyan-300 truncate">{'=SI(B2>=60;"Aprobado";"Reprobado")'}</span>
+          <span className="text-amber-300 truncate">{'=SI(B2>=60;"Aprobado";"Reprobado")'}</span>
         </div>
 
         {/* Hoja de cálculo con datos completos */}
-        <div className="flex-1 p-3 pb-20 bg-[#070E1D] overflow-hidden flex flex-col">
-          <div className="flex-1 border border-slate-800 rounded-lg bg-[#020617] overflow-hidden">
+        <div className="flex-1 p-3 pb-20 bg-[#0A0A0D] overflow-hidden flex flex-col">
+          <div className="flex-1 border border-zinc-800 rounded-lg bg-[#070709] overflow-hidden">
             <table className="w-full text-xs font-mono">
               <thead>
-                <tr className="bg-[#0F172A] border-b border-slate-800 text-slate-300">
-                  <th className="border-r border-slate-800 px-2 py-1.5 text-center w-8">#</th>
-                  <th className="border-r border-slate-800 px-3 py-1.5 text-left">A · Estudiante</th>
-                  <th className="border-r border-slate-800 px-3 py-1.5 text-center">B · Nota</th>
-                  <th className="border-r border-slate-800 px-3 py-1.5 text-center">C · Asist.</th>
+                <tr className="bg-[#141419] border-b border-zinc-800 text-zinc-300">
+                  <th className="border-r border-zinc-800 px-2 py-1.5 text-center w-8">#</th>
+                  <th className="border-r border-zinc-800 px-3 py-1.5 text-left">A · Estudiante</th>
+                  <th className="border-r border-zinc-800 px-3 py-1.5 text-center">B · Nota</th>
+                  <th className="border-r border-zinc-800 px-3 py-1.5 text-center">C · Asist.</th>
                   <th className="px-3 py-1.5 text-center">D · Estado</th>
                 </tr>
               </thead>
@@ -727,20 +727,20 @@ function ProductPreview() {
                 {rows.map((r, i) => (
                   <tr
                     key={r.row}
-                    className={`border-b border-slate-800/80 text-slate-200 ${
-                      i === 0 ? 'bg-blue-950/30' : i % 2 === 1 ? 'bg-[#0F172A]/40' : ''
+                    className={`border-b border-zinc-800/80 text-zinc-200 ${
+                      i === 0 ? 'bg-amber-500/10' : i % 2 === 1 ? 'bg-[#121216]/60' : ''
                     }`}
                   >
-                    <td className="border-r border-slate-800 px-2 py-2 text-center text-slate-300">
+                    <td className="border-r border-zinc-800 px-2 py-2 text-center text-zinc-400">
                       {r.row}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-left font-sans text-slate-100 truncate">
+                    <td className="border-r border-zinc-800 px-3 py-2 text-left font-sans text-zinc-100 truncate">
                       {r.student}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center text-cyan-300 tabular-nums">
+                    <td className="border-r border-zinc-800 px-3 py-2 text-center text-amber-300 tabular-nums">
                       {r.score}
                     </td>
-                    <td className="border-r border-slate-800 px-3 py-2 text-center text-slate-300 tabular-nums">
+                    <td className="border-r border-zinc-800 px-3 py-2 text-center text-zinc-300 tabular-nums">
                       {r.attendance}
                     </td>
                     <td

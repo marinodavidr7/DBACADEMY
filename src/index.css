@@ -15,36 +15,40 @@
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-    /* DB Academy Design System Tokens */
-    --dba-bg-canvas: #F8FAFC;
+    /* DB Academy Design System Tokens — aligned with official Gold & Obsidian logo */
+    --dba-bg-canvas: #FAF8F2;
     --dba-bg-surface: #FFFFFF;
-    --dba-bg-elevated: #F1F5F9;
-    --dba-bg-hero: #070E1D;
-    --dba-bg-hero-surface: #0D1930;
-    --dba-border: #E2E8F0;
-    --dba-border-strong: #CBD5E1;
-    --dba-text-primary: #0F172A;
-    --dba-text-secondary: #475569;
-    --dba-accent: #0052CC;
-    --dba-accent-hover: #0747A6;
-    --dba-cyan: #0891B2;
+    --dba-bg-elevated: #F3EFE3;
+    --dba-bg-hero: #0B0B0E;
+    --dba-bg-hero-surface: #151519;
+    --dba-border: #E6E0D2;
+    --dba-border-strong: #CFC7B4;
+    --dba-text-primary: #111114;
+    --dba-text-secondary: #524F45;
+    --dba-accent: #F0B501;
+    --dba-accent-hover: #D9A200;
+    --dba-accent-foreground: #0B0B0E;
+    --dba-accent-ink: #946200;
+    --dba-cyan: #B47B00;
     --dba-success: #047857;
     --dba-excel: #107C41;
   }
 
   .dark {
-    --dba-bg-canvas: #070C17;
-    --dba-bg-surface: #0F172A;
-    --dba-bg-elevated: #17233B;
-    --dba-bg-hero: #050914;
-    --dba-bg-hero-surface: #0B1426;
-    --dba-border: #1E293B;
-    --dba-border-strong: #334155;
-    --dba-text-primary: #F8FAFC;
-    --dba-text-secondary: #CBD5E1;
-    --dba-accent: #2563EB;
-    --dba-accent-hover: #3B82F6;
-    --dba-cyan: #06B6D4;
+    --dba-bg-canvas: #0A0A0D;
+    --dba-bg-surface: #121216;
+    --dba-bg-elevated: #1A1A20;
+    --dba-bg-hero: #060608;
+    --dba-bg-hero-surface: #121216;
+    --dba-border: #26262E;
+    --dba-border-strong: #3A3A46;
+    --dba-text-primary: #FAFAFA;
+    --dba-text-secondary: #D4D4D8;
+    --dba-accent: #F0B501;
+    --dba-accent-hover: #F7C948;
+    --dba-accent-foreground: #0A0A0D;
+    --dba-accent-ink: #F5C32E;
+    --dba-cyan: #F5C32E;
     --dba-success: #10B981;
   }
 
@@ -138,7 +142,7 @@
   select:focus-visible,
   textarea:focus-visible,
   summary:focus-visible {
-    outline: 2px solid var(--dba-accent);
+    outline: 2px solid var(--dba-accent-ink);
     outline-offset: 2px;
   }
 }

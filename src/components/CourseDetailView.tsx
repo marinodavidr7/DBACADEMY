@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Gift,
   Layers,
   Lock,
   Pencil,
@@ -17,7 +18,9 @@ import {
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
+import { formatCurrency } from '../utils/currency';
 import { CheckoutModal } from './CheckoutModal';
+import { RedeemGiftCardModal } from './RedeemGiftCardModal';
 import { CourseProgressBar } from './ui/CourseProgressBar';
 
 export const CourseDetailView: React.FC = () => {
@@ -46,6 +49,8 @@ export const CourseDetailView: React.FC = () => {
     setExpandedModuleId(course?.modules[0]?.id ?? null);
   }, [course?.id]);
   const [checkoutCourse, setCheckoutCourse] = useState<Course | null>(null);
+  const [checkoutGiftCardCode, setCheckoutGiftCardCode] = useState('');
+  const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
 
   if (!course) {
@@ -97,7 +102,7 @@ export const CourseDetailView: React.FC = () => {
 
   const formatPrice = (cents: number, currency: Course['currency']) => {
     if (cents === 0) return 'Gratis';
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
+    return formatCurrency(cents, currency);
   };
 
   const handlePrimaryAction = async () => {
@@ -128,19 +133,19 @@ export const CourseDetailView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Dark Technological Course Header */}
-      <section className="rounded-xl bg-[#070E1D] text-slate-100 border border-slate-800/90 p-5 sm:p-6">
+      {/* Dark Brand Course Header */}
+      <section className="rounded-xl bg-[var(--dba-bg-hero)] text-zinc-100 border border-zinc-800/90 p-5 sm:p-6">
         <button
           type="button"
           onClick={() => setActiveView('catalog')}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-300 hover:text-cyan-200 transition-colors min-h-[36px]"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-300 hover:text-amber-200 transition-colors min-h-[36px]"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Volver al catálogo</span>
         </button>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-          <span className="font-semibold text-cyan-300">{course.category}</span>
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-zinc-300">
+          <span className="font-semibold text-amber-300">{course.category}</span>
           <span aria-hidden="true">·</span>
           <span>{levelLabel(course.level)}</span>
           <span aria-hidden="true">·</span>
@@ -223,23 +228,23 @@ export const CourseDetailView: React.FC = () => {
           )}
 
           {/* Descripción y Enfoque */}
-          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-5 space-y-3.5">
-            <h2 className="font-display text-xl 2xl:text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <section className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-5 space-y-3.5">
+            <h2 className="font-display text-xl 2xl:text-2xl font-bold text-[var(--dba-text-primary)]">
               Acerca del programa
             </h2>
-            <p className="text-sm 2xl:text-base leading-relaxed text-slate-600 dark:text-slate-300 max-w-[70ch]">
+            <p className="text-sm 2xl:text-base leading-relaxed text-[var(--dba-text-secondary)] max-w-[70ch]">
               {course.description}
             </p>
 
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+            <div className="pt-4 border-t border-[var(--dba-border)] grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
               {course.modules.map((mod, idx) => (
                 <div key={mod.id} className="flex items-start gap-2.5 text-sm">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                    <p className="font-semibold text-[var(--dba-text-primary)]">
                       0{idx + 1}. {mod.title}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                    <p className="text-xs text-[var(--dba-text-secondary)] tabular-nums">
                       {mod.lessons.length} lecciones · {mod.durationMinutes} min
                     </p>
                   </div>
@@ -251,15 +256,15 @@ export const CourseDetailView: React.FC = () => {
           {/* Temario Detallado */}
           <section className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="font-display text-xl font-bold text-[var(--dba-text-primary)]">
                 Plan de estudios ({course.totalLessons} lecciones)
               </h2>
-              <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-mono tabular-nums text-[var(--dba-text-secondary)]">
                 {course.modules.length} módulos
               </span>
             </div>
 
-            <div className="divide-y divide-slate-200 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
+            <div className="divide-y divide-[var(--dba-border)] rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden">
               {course.modules.map((mod, modIdx) => {
                 const isOpen = expandedModuleId === mod.id;
                 return (
@@ -268,22 +273,22 @@ export const CourseDetailView: React.FC = () => {
                       type="button"
                       onClick={() => setExpandedModuleId(isOpen ? null : mod.id)}
                       aria-expanded={isOpen}
-                      className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-stone-50 dark:hover:bg-zinc-800/40 transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-xs font-mono text-blue-700 dark:text-cyan-400 font-semibold">
+                        <p className="text-xs font-mono text-[var(--dba-accent-ink)] font-semibold">
                           Módulo {modIdx}
                         </p>
-                        <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
+                        <h3 className="text-sm sm:text-base font-semibold text-[var(--dba-text-primary)] mt-0.5">
                           {mod.title}
                         </h3>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="hidden sm:inline text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                        <span className="hidden sm:inline text-xs font-mono tabular-nums text-[var(--dba-text-secondary)]">
                           {mod.lessons.length} lecciones · {mod.durationMinutes} min
                         </span>
                         <ChevronDown
-                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                          className={`w-4 h-4 text-zinc-400 transition-transform ${
                             isOpen ? 'rotate-180' : ''
                           }`}
                         />
@@ -291,7 +296,7 @@ export const CourseDetailView: React.FC = () => {
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B1426]/60 px-5 py-3 grid grid-cols-1 2xl:grid-cols-2 gap-x-6">
+                      <div className="border-t border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] px-5 py-3 grid grid-cols-1 2xl:grid-cols-2 gap-x-6">
                         {mod.lessons.map((lesson) => (
                           <div
                             key={lesson.id}
@@ -320,8 +325,8 @@ export const CourseDetailView: React.FC = () => {
         </div>
 
         {/* Sticky Sidebar Card */}
-        <aside className="xl:sticky xl:top-20 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden">
-          <div className="w-full aspect-[16/10] bg-slate-900 relative overflow-hidden">
+        <aside className="xl:sticky xl:top-20 rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden">
+          <div className="w-full aspect-[16/10] bg-zinc-900 relative overflow-hidden">
             {course.coverImage ? (
               <img
                 src={course.coverImage}
@@ -333,7 +338,7 @@ export const CourseDetailView: React.FC = () => {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <div className="w-full h-full flex items-center justify-center text-zinc-400">
                 <BookOpen className="w-10 h-10" />
               </div>
             )}
@@ -341,10 +346,10 @@ export const CourseDetailView: React.FC = () => {
 
           <div className="p-6 space-y-5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-medium text-[var(--dba-text-secondary)]">
                 Acceso al programa
               </span>
-              <span className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-50">
+              <span className="text-2xl font-bold font-mono tabular-nums text-[var(--dba-text-primary)]">
                 {formatPrice(course.priceCents, course.currency)}
               </span>
             </div>
@@ -364,7 +369,7 @@ export const CourseDetailView: React.FC = () => {
               className={`w-full inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition-colors min-h-[44px] ${
                 prereqCourses.length > 0 && !prereqsMet && !isAdmin
                   ? 'border border-amber-300 dark:border-amber-700 bg-amber-600 hover:bg-amber-700 text-white'
-                  : 'bg-[#0052CC] hover:bg-[#0747A6] disabled:opacity-60 text-white'
+                  : 'bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-60 text-[var(--dba-accent-foreground)]'
               }`}
             >
               {prereqCourses.length > 0 && !prereqsMet && !isAdmin ? (
@@ -393,6 +398,17 @@ export const CourseDetailView: React.FC = () => {
               )}
             </button>
 
+            {!isEnrolled && !hasInstructorAccess && course.priceCents > 0 && prereqsMet && (
+              <button
+                type="button"
+                onClick={() => setShowRedeemModal(true)}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--dba-border-strong)] bg-[var(--dba-bg-canvas)] hover:bg-stone-100 dark:hover:bg-zinc-800 px-5 py-2.5 text-xs font-semibold text-[var(--dba-text-primary)] transition-colors min-h-[40px]"
+              >
+                <Gift className="w-4 h-4 text-[var(--dba-accent-ink)]" />
+                <span>¿Tienes una Gift Card? Canjear código</span>
+              </button>
+            )}
+
             {isAdmin && (
               <button
                 type="button"
@@ -407,26 +423,26 @@ export const CourseDetailView: React.FC = () => {
               </button>
             )}
 
-            <ul className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+            <ul className="pt-4 border-t border-[var(--dba-border)] space-y-3 text-xs text-[var(--dba-text-secondary)]">
               {prereqCourses.length > 0 && (
                 <li className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                  <BookOpen className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
                   <span>
                     Prerrequisito:{' '}
-                    <strong className="font-semibold text-slate-800 dark:text-slate-200">
+                    <strong className="font-semibold text-[var(--dba-text-primary)]">
                       {prereqCourses.map((p) => p.title.split(':')[0]).join(', ')}
                     </strong>
                   </span>
                 </li>
               )}
               <li className="flex items-center gap-2.5">
-                <Layers className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <Layers className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
                 <span className="tabular-nums">
                   {course.modules.length} módulos · {course.totalLessons} lecciones
                 </span>
               </li>
               <li className="flex items-center gap-2.5">
-                <Clock className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <Clock className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
                 <span className="tabular-nums">{totalHours} horas de estudio estimadas</span>
               </li>
               {isExcelCourse && (
@@ -436,11 +452,11 @@ export const CourseDetailView: React.FC = () => {
                 </li>
               )}
               <li className="flex items-center gap-2.5">
-                <Award className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <Award className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
                 <span>Certificado PDF verificable al completar</span>
               </li>
               <li className="flex items-center gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
                 <span>Sincronización multi-dispositivo en tiempo real</span>
               </li>
             </ul>
@@ -451,11 +467,33 @@ export const CourseDetailView: React.FC = () => {
       {checkoutCourse && (
         <CheckoutModal
           course={checkoutCourse}
-          onClose={() => setCheckoutCourse(null)}
+          initialGiftCardCode={checkoutGiftCardCode}
+          onClose={() => {
+            setCheckoutCourse(null);
+            setCheckoutGiftCardCode('');
+          }}
           onSuccess={(courseId) => {
             setCheckoutCourse(null);
+            setCheckoutGiftCardCode('');
             setSelectedCourseId(courseId);
             setActiveView('learning');
+          }}
+        />
+      )}
+
+      {showRedeemModal && (
+        <RedeemGiftCardModal
+          initialCourse={course}
+          onClose={() => setShowRedeemModal(false)}
+          onEnrolled={(courseId) => {
+            setShowRedeemModal(false);
+            setSelectedCourseId(courseId);
+            setActiveView('learning');
+          }}
+          onContinuePartialCheckout={(targetCourse, code) => {
+            setShowRedeemModal(false);
+            setCheckoutGiftCardCode(code);
+            setCheckoutCourse(targetCourse);
           }}
         />
       )}

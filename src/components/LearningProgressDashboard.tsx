@@ -403,35 +403,35 @@ export const LearningProgressDashboard: React.FC<LearningProgressDashboardProps>
     };
   }, [courseStats, activeCourse?.id, moduleScope, totals]);
 
-  const axisTickColor = isDark ? '#94A3B8' : '#475569';
-  const gridColor = isDark ? '#1E293B' : '#E2E8F0';
-  const primaryBarColor = isDark ? '#3B82F6' : '#0052CC';
+  const axisTickColor = isDark ? '#A1A1AA' : '#524F45';
+  const gridColor = isDark ? '#26262E' : '#E6E0D2';
+  const primaryBarColor = isDark ? '#F0B501' : '#C48800';
   const completedBarColor = isDark ? '#10B981' : '#047857';
-  const idleBarColor = isDark ? '#475569' : '#94A3B8';
-  const studyTimeColor = isDark ? '#06B6D4' : '#0891B2';
-  const estimatedTrackColor = isDark ? '#1E293B' : '#CBD5E1';
+  const idleBarColor = isDark ? '#52525B' : '#A8A29E';
+  const studyTimeColor = isDark ? '#F5C32E' : '#946200';
+  const estimatedTrackColor = isDark ? '#26262E' : '#E6E0D2';
 
   return (
     <section
       aria-label="Dashboard de progreso del estudiante"
-      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden"
+      className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden"
     >
       {/* Top Toolbar */}
-      <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="px-4 py-3.5 border-b border-[var(--dba-border)] flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-[#0052CC] dark:text-cyan-400 shrink-0" />
-            <h2 className="font-display text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100">
+            <BarChart3 className="w-4 h-4 text-[var(--dba-accent-ink)] shrink-0" />
+            <h2 className="font-display text-sm sm:text-base font-bold text-[var(--dba-text-primary)]">
               Dashboard de Mi Aprendizaje
             </h2>
           </div>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+          <p className="mt-0.5 text-xs text-[var(--dba-text-secondary)] font-mono tabular-nums">
             {totals.totalCourses} cursos · {totals.totalCompletedModules}/{totals.totalModules} módulos ·{' '}
             {formatDuration(totals.totalStudyMinutes)} invertidos
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-[#070E1D] border border-slate-200 dark:border-slate-800 self-start md:self-auto shrink-0">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-[var(--dba-bg-canvas)] border border-[var(--dba-border)] self-start md:self-auto shrink-0">
           {(
             [
               { id: 'all', label: `Todos (${courseStats.length})` },
@@ -847,34 +847,34 @@ export const LearningProgressDashboard: React.FC<LearningProgressDashboardProps>
                     onClick={() => onSelectCourse(row.courseId)}
                     className={`cursor-pointer transition-colors ${
                       row.isActive
-                        ? 'bg-blue-50/60 dark:bg-blue-950/20'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        ? 'bg-amber-50/70 dark:bg-amber-500/10'
+                        : 'hover:bg-stone-50 dark:hover:bg-zinc-800/40'
                     }`}
                   >
-                    <td className="py-2.5 px-4 font-medium text-slate-900 dark:text-slate-100 max-w-[260px]">
+                    <td className="py-2.5 px-4 font-medium text-[var(--dba-text-primary)] max-w-[260px]">
                       <span className="block truncate">{row.title}</span>
                     </td>
                     <td className="py-2.5 px-3 min-w-[140px]">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                        <div className="flex-1 h-1.5 rounded-full bg-stone-200 dark:bg-zinc-800 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
                               row.progressPercent >= 100
                                 ? 'bg-emerald-600 dark:bg-emerald-500'
-                                : 'bg-[#0052CC] dark:bg-blue-500'
+                                : 'bg-[var(--dba-accent)]'
                             }`}
                             style={{ width: `${row.progressPercent}%` }}
                           />
                         </div>
-                        <span className="font-mono tabular-nums font-semibold text-slate-900 dark:text-slate-100 w-9 text-right">
+                        <span className="font-mono tabular-nums font-semibold text-[var(--dba-text-primary)] w-9 text-right">
                           {row.progressPercent}%
                         </span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--dba-text-secondary)]">
                       {row.completedModules}/{row.totalModules}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--dba-text-secondary)]">
                       {formatDuration(row.studyMinutes)}
                     </td>
                     <td className="py-2.5 px-4 text-right whitespace-nowrap">
@@ -884,7 +884,7 @@ export const LearningProgressDashboard: React.FC<LearningProgressDashboardProps>
                           <span>Completado</span>
                         </span>
                       ) : row.status === 'in_progress' ? (
-                        <span className="inline-flex items-center gap-1 font-medium text-[#0052CC] dark:text-blue-400">
+                        <span className="inline-flex items-center gap-1 font-medium text-[var(--dba-accent-ink)]">
                           <Clock className="w-3.5 h-3.5" />
                           <span>En progreso</span>
                         </span>

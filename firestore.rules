@@ -102,7 +102,7 @@ service cloud.firestore {
         && data.category is string && data.category.size() >= 2 && data.category.size() <= 60
         && data.level in ['beginner', 'intermediate', 'advanced']
         && data.priceCents is number && data.priceCents >= 0 && data.priceCents <= 10000000
-        && data.currency in ['USD', 'EUR', 'MXN']
+        && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
         && (!('coverImage' in data) || (data.coverImage is string && data.coverImage.size() <= 300000))
         && isValidId(data.instructorId)
         && data.instructorName is string && data.instructorName.size() >= 1 && data.instructorName.size() <= 100
@@ -164,9 +164,9 @@ service cloud.firestore {
         && (!('originalAmountCents' in data) || (data.originalAmountCents is number && data.originalAmountCents >= 0 && data.originalAmountCents <= 10000000))
         && (!('discountCents' in data) || (data.discountCents is number && data.discountCents >= 0 && data.discountCents <= 10000000))
         && (!('couponCode' in data) || data.couponCode == null || (data.couponCode is string && data.couponCode.size() >= 1 && data.couponCode.size() <= 64))
-        && (!('discountSource' in data) || data.discountSource == null || data.discountSource in ['none', 'coupon', 'referral_welcome'])
-        && data.currency in ['USD', 'EUR', 'MXN']
-        && data.gateway in ['stripe', 'mercadopago', 'paypal', 'free']
+        && (!('discountSource' in data) || data.discountSource == null || data.discountSource in ['none', 'coupon', 'referral_welcome', 'gift_card'])
+        && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
+        && data.gateway in ['stripe', 'mercadopago', 'paypal', 'free', 'gift_card']
         && data.status in ['succeeded', 'refunded']
         && data.transactionRef is string && data.transactionRef.size() >= 4 && data.transactionRef.size() <= 100
         && data.createdAt is timestamp;
@@ -319,6 +319,164 @@ service cloud.firestore {
         && data.published is bool
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidAssignmentSubmission(data) {
+      return data.keys().hasAll([
+          'id', 'courseId', 'courseTitle', 'lessonId', 'lessonTitle',
+          'studentId', 'studentName', 'studentEmail', 'fileUrl', 'fileName',
+          'fileSize', 'submittedAt', 'status', 'maxScore', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'courseId', 'courseTitle', 'lessonId', 'lessonTitle',
+          'studentId', 'studentName', 'studentEmail', 'fileUrl', 'fileName',
+          'fileSize', 'submittedAt', 'comment', 'status', 'maxScore',
+          'grade', 'feedback', 'gradedAt', 'gradedBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.courseId)
+        && data.courseTitle is string && data.courseTitle.size() >= 1 && data.courseTitle.size() <= 140
+        && isValidId(data.lessonId)
+        && data.lessonTitle is string && data.lessonTitle.size() >= 1 && data.lessonTitle.size() <= 200
+        && isValidId(data.studentId)
+        && data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100
+        && data.studentEmail is string && data.studentEmail.size() <= 200
+        && data.fileUrl is string && data.fileUrl.size() >= 1 && data.fileUrl.size() <= 950000
+        && data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 260
+        && data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 104857600
+        && data.submittedAt is string && data.submittedAt.size() >= 10 && data.submittedAt.size() <= 64
+        && (!('comment' in data) || (data.comment is string && data.comment.size() <= 2000))
+        && data.status in ['submitted', 'graded', 'resubmit_requested']
+        && data.maxScore is number && data.maxScore >= 1 && data.maxScore <= 1000
+        && (!('grade' in data) || (data.grade is number && data.grade >= 0 && data.grade <= data.maxScore))
+        && (!('feedback' in data) || (data.feedback is string && data.feedback.size() <= 2000))
+        && (!('gradedAt' in data) || (data.gradedAt is string && data.gradedAt.size() >= 10 && data.gradedAt.size() <= 64))
+        && (!('gradedBy' in data) || (data.gradedBy is string && data.gradedBy.size() >= 1 && data.gradedBy.size() <= 200))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGiftCardCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 64 && code.matches('^[A-Z0-9_\\-]+$');
+    }
+
+    function isValidGiftCard(data) {
+      return data.keys().hasAll([
+          'id', 'code', 'initialAmountCents', 'remainingAmountCents', 'currency',
+          'singleUse', 'status', 'active', 'redemptionCount', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'code', 'initialAmountCents', 'remainingAmountCents', 'currency',
+          'courseId', 'courseTitle', 'singleUse', 'status', 'active', 'redemptionCount',
+          'expiresAt', 'note', 'redeemedBy', 'redeemedAt', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidGiftCardCode(data.id)
+        && isValidGiftCardCode(data.code)
+        && data.id == data.code
+        && data.initialAmountCents is number && data.initialAmountCents >= 100 && data.initialAmountCents <= 10000000
+        && data.remainingAmountCents is number && data.remainingAmountCents >= 0 && data.remainingAmountCents <= data.initialAmountCents
+        && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
+        && (!('courseId' in data) || data.courseId == '' || isValidId(data.courseId))
+        && (!('courseTitle' in data) || (data.courseTitle is string && data.courseTitle.size() <= 140))
+        && data.singleUse is bool
+        && data.status in ['active', 'redeemed', 'disabled']
+        && data.active is bool
+        && data.redemptionCount is number && data.redemptionCount >= 0 && data.redemptionCount <= 10000
+        && (!('expiresAt' in data) || data.expiresAt == null || data.expiresAt is timestamp)
+        && (!('note' in data) || (data.note is string && data.note.size() <= 200))
+        && (!('redeemedBy' in data) || data.redeemedBy == null || isValidId(data.redeemedBy))
+        && (!('redeemedAt' in data) || data.redeemedAt == null || data.redeemedAt is timestamp)
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGiftCardRedemption(data) {
+      return data.keys().hasAll([
+          'id', 'cardCode', 'redemptionNumber', 'studentId', 'studentName',
+          'courseId', 'courseTitle', 'amountAppliedCents', 'coursePriceCents',
+          'remainingPaidCents', 'currency', 'paymentId', 'redeemedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'cardCode', 'redemptionNumber', 'studentId', 'studentName',
+          'studentEmail', 'courseId', 'courseTitle', 'amountAppliedCents',
+          'coursePriceCents', 'remainingPaidCents', 'currency', 'paymentId', 'redeemedAt'
+        ])
+        && isValidCompositeId(data.id)
+        && isValidGiftCardCode(data.cardCode)
+        && data.redemptionNumber is number && data.redemptionNumber >= 1 && data.redemptionNumber <= 10000
+        && isValidId(data.studentId)
+        && data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100
+        && (!('studentEmail' in data) || (data.studentEmail is string && data.studentEmail.size() <= 200))
+        && isValidId(data.courseId)
+        && data.courseTitle is string && data.courseTitle.size() >= 1 && data.courseTitle.size() <= 140
+        && data.amountAppliedCents is number && data.amountAppliedCents > 0 && data.amountAppliedCents <= 10000000
+        && data.coursePriceCents is number && data.coursePriceCents >= 0 && data.coursePriceCents <= 10000000
+        && data.remainingPaidCents is number && data.remainingPaidCents >= 0 && data.remainingPaidCents <= 10000000
+        && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
+        && isValidId(data.paymentId)
+        && data.redeemedAt is timestamp;
+    }
+
+    function isValidCouponCode(code) {
+      return code is string && code.size() >= 3 && code.size() <= 64 && code.matches('^[A-Z0-9_\\-]+$');
+    }
+
+    function isValidCoupon(data) {
+      return data.keys().hasAll([
+          'id', 'code', 'description', 'type', 'value', 'currency',
+          'appliesTo', 'courseIds', 'maxPerUser', 'redemptionCount',
+          'active', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'code', 'description', 'type', 'value', 'currency',
+          'appliesTo', 'courseIds', 'startsAt', 'expiresAt', 'maxRedemptions',
+          'maxPerUser', 'minPurchaseCents', 'redemptionCount',
+          'active', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidCouponCode(data.id)
+        && isValidCouponCode(data.code)
+        && data.id == data.code
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 240
+        && data.type in ['percent', 'fixed']
+        && data.value is number && data.value >= 1 && data.value <= 10000000
+        && (data.type == 'fixed' || data.value <= 100)
+        && data.currency in ['DOP', 'USD', 'EUR', 'MXN']
+        && data.appliesTo in ['all', 'courses']
+        && data.courseIds is list && data.courseIds.size() <= 50
+        && (data.courseIds.size() == 0 || data.courseIds[0] is string)
+        && (!('startsAt' in data) || data.startsAt == null || data.startsAt is timestamp)
+        && (!('expiresAt' in data) || data.expiresAt == null || data.expiresAt is timestamp)
+        && (!('maxRedemptions' in data) || data.maxRedemptions == null || (data.maxRedemptions is number && data.maxRedemptions >= 1 && data.maxRedemptions <= 1000000))
+        && data.maxPerUser is number && data.maxPerUser >= 1 && data.maxPerUser <= 1000
+        && (!('minPurchaseCents' in data) || data.minPurchaseCents == null || (data.minPurchaseCents is number && data.minPurchaseCents >= 0 && data.minPurchaseCents <= 10000000))
+        && data.redemptionCount is number && data.redemptionCount >= 0 && data.redemptionCount <= 1000000
+        && data.active is bool
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCouponRedemption(data) {
+      return data.keys().hasAll([
+          'id', 'couponCode', 'redemptionNumber', 'userId', 'courseId',
+          'orderId', 'discountCents', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'couponCode', 'redemptionNumber', 'userId', 'courseId',
+          'orderId', 'discountCents', 'status', 'createdAt'
+        ])
+        && isValidCompositeId(data.id)
+        && isValidCouponCode(data.couponCode)
+        && data.redemptionNumber is number && data.redemptionNumber >= 1 && data.redemptionNumber <= 1000000
+        && isValidId(data.userId)
+        && isValidId(data.courseId)
+        && isValidId(data.orderId)
+        && data.discountCents is number && data.discountCents >= 0 && data.discountCents <= 10000000
+        && data.status in ['pending', 'confirmed', 'refunded']
+        && data.createdAt is timestamp;
     }
 
     // -------------------------------------------------------------------------
@@ -600,17 +758,96 @@ service cloud.firestore {
       allow delete: if isValidId(exerciseId) && isAdmin();
     }
 
+    match /assignmentSubmissions/{submissionId} {
+      allow get: if isValidId(submissionId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow create: if isValidId(submissionId) && isVerified()
+        && isValidAssignmentSubmission(incoming())
+        && incoming().id == submissionId
+        && incoming().studentId == request.auth.uid
+        && incoming().status == 'submitted'
+        && !('grade' in incoming())
+        && !('feedback' in incoming())
+        && !('gradedAt' in incoming())
+        && !('gradedBy' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/courses/$(incoming().courseId));
+      allow update: if isValidId(submissionId) && isAdmin()
+        && isValidAssignmentSubmission(incoming())
+        && incoming().id == existing().id
+        && incoming().courseId == existing().courseId
+        && incoming().lessonId == existing().lessonId
+        && incoming().studentId == existing().studentId
+        && incoming().submittedAt == existing().submittedAt
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'grade', 'feedback', 'gradedAt', 'gradedBy', 'status', 'updatedAt'
+        ]);
+      allow delete: if isValidId(submissionId) && isAdmin();
+    }
+
     // -------------------------------------------------------------------------
-    // Cupones, redenciones y referidos: solo admin/servidor (Admin SDK bypass)
+    // Cupones y redenciones atómicas (sin necesidad de Admin SDK)
     // -------------------------------------------------------------------------
     match /coupons/{couponId} {
-      allow read: if isAdmin();
-      allow write: if false;
+      allow get: if isValidCouponCode(couponId) && isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isValidCouponCode(couponId) && isAdmin()
+        && isValidCoupon(incoming())
+        && incoming().id == couponId
+        && incoming().code == couponId
+        && incoming().redemptionCount == 0
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidCouponCode(couponId) && isVerified()
+        && isValidCoupon(incoming())
+        && incoming().id == existing().id
+        && incoming().code == existing().code
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().active == true
+            && (!('startsAt' in existing()) || existing().startsAt == null || (existing().startsAt is timestamp && request.time >= existing().startsAt))
+            && (!('expiresAt' in existing()) || existing().expiresAt == null || (existing().expiresAt is timestamp && request.time <= existing().expiresAt))
+            && (!('maxRedemptions' in existing()) || existing().maxRedemptions == null || existing().redemptionCount < existing().maxRedemptions)
+            && incoming().redemptionCount == existing().redemptionCount + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['redemptionCount', 'updatedAt'])
+            && existsAfter(/databases/$(database)/documents/couponRedemptions/$(couponId + '_' + string(incoming().redemptionCount)))
+          )
+        );
+      allow delete: if isValidCouponCode(couponId) && isAdmin();
     }
 
     match /couponRedemptions/{redemptionId} {
-      allow read: if isAdmin();
-      allow write: if false;
+      allow get: if isValidCompositeId(redemptionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow create: if isValidCompositeId(redemptionId) && isVerified()
+        && isValidCouponRedemption(incoming())
+        && incoming().id == redemptionId
+        && redemptionId == (incoming().couponCode + '_' + string(incoming().redemptionNumber))
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'confirmed'
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/courses/$(incoming().courseId))
+        && existsAfter(/databases/$(database)/documents/payments/$(incoming().orderId))
+        && getAfter(/databases/$(database)/documents/coupons/$(incoming().couponCode)).data.redemptionCount == incoming().redemptionNumber;
+      allow update: if isValidCompositeId(redemptionId) && isAdmin()
+        && isValidCouponRedemption(incoming())
+        && incoming().id == existing().id
+        && incoming().couponCode == existing().couponCode
+        && incoming().redemptionNumber == existing().redemptionNumber
+        && incoming().userId == existing().userId
+        && incoming().courseId == existing().courseId
+        && incoming().orderId == existing().orderId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isValidCompositeId(redemptionId) && isAdmin();
     }
 
     match /referrals/{referralId} {
@@ -621,6 +858,86 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Gift Cards y Canjes Atómicos (sin necesidad de Admin SDK)
+    // -------------------------------------------------------------------------
+    match /giftCards/{cardId} {
+      allow get: if isValidGiftCardCode(cardId) && isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isValidGiftCardCode(cardId) && isAdmin()
+        && isValidGiftCard(incoming())
+        && incoming().id == cardId
+        && incoming().code == cardId
+        && incoming().remainingAmountCents == incoming().initialAmountCents
+        && incoming().status == 'active'
+        && incoming().active == true
+        && incoming().redemptionCount == 0
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidGiftCardCode(cardId) && isVerified()
+        && isValidGiftCard(incoming())
+        && incoming().id == existing().id
+        && incoming().code == existing().code
+        && incoming().initialAmountCents == existing().initialAmountCents
+        && incoming().currency == existing().currency
+        && incoming().singleUse == existing().singleUse
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().active == true
+            && existing().status == 'active'
+            && existing().remainingAmountCents > 0
+            && (!('expiresAt' in existing()) || existing().expiresAt == null || (existing().expiresAt is timestamp && request.time <= existing().expiresAt))
+            && incoming().redeemedBy == request.auth.uid
+            && incoming().redeemedAt == request.time
+            && incoming().redemptionCount == existing().redemptionCount + 1
+            && incoming().remainingAmountCents >= 0
+            && incoming().remainingAmountCents < existing().remainingAmountCents
+            && (
+              (existing().singleUse == true && incoming().remainingAmountCents == 0 && incoming().status == 'redeemed') ||
+              (existing().singleUse == false && (
+                (incoming().remainingAmountCents == 0 && incoming().status == 'redeemed') ||
+                (incoming().remainingAmountCents > 0 && incoming().status == 'active')
+              ))
+            )
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'remainingAmountCents', 'status', 'redeemedBy', 'redeemedAt', 'redemptionCount', 'updatedAt'
+            ])
+            && existsAfter(/databases/$(database)/documents/giftCardRedemptions/$(cardId + '_' + string(incoming().redemptionCount)))
+          )
+        );
+      allow delete: if isValidGiftCardCode(cardId) && isAdmin();
+    }
+
+    match /giftCardRedemptions/{redemptionId} {
+      allow get: if isValidCompositeId(redemptionId) && isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().studentId == request.auth.uid || isAdmin());
+      allow create: if isValidCompositeId(redemptionId) && isVerified()
+        && isValidGiftCardRedemption(incoming())
+        && incoming().id == redemptionId
+        && redemptionId == (incoming().cardCode + '_' + string(incoming().redemptionNumber))
+        && incoming().studentId == request.auth.uid
+        && incoming().redeemedAt == request.time
+        && exists(/databases/$(database)/documents/courses/$(incoming().courseId))
+        && !exists(/databases/$(database)/documents/enrollments/$(incoming().courseId + '_' + request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/enrollments/$(incoming().courseId + '_' + request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/payments/$(incoming().paymentId))
+        && (!('courseId' in get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data)
+            || get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.courseId == ''
+            || get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.courseId == incoming().courseId)
+        && incoming().amountAppliedCents <= get(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.remainingAmountCents
+        && incoming().coursePriceCents == get(/databases/$(database)/documents/courses/$(incoming().courseId)).data.priceCents
+        && (incoming().amountAppliedCents + incoming().remainingPaidCents) >= incoming().coursePriceCents
+        && getAfter(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.redemptionCount == incoming().redemptionNumber
+        && getAfter(/databases/$(database)/documents/giftCards/$(incoming().cardCode)).data.redeemedBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if isValidCompositeId(redemptionId) && isAdmin();
     }
   }
 }

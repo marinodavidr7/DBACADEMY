@@ -62,6 +62,7 @@ import type { FormulaMode, SimulatorExternalPreset } from './ExcelSimulator3D';
 import { CourseProgressBar } from './ui/CourseProgressBar';
 import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
 import { GradesPanel } from './GradesPanel';
+import { FormattedTheoryContent } from './FormattedTheoryContent';
 
 const ExcelTopicSimulator = lazy(() =>
   import('./ExcelTopicSimulator').then((m) => ({ default: m.ExcelTopicSimulator }))
@@ -809,7 +810,7 @@ export const CoursePlayerView: React.FC = () => {
                   setSelectedCourseId(unmetPrereq.id);
                   setActiveView('learning');
                 }}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-5 py-2.5 text-sm font-semibold text-white transition-colors min-h-[44px]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-5 py-2.5 text-sm font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[44px]"
               >
                 <span>Ir a {unmetPrereq.title.split(':')[0]}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -914,14 +915,14 @@ export const CoursePlayerView: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {/* Compact Integrated Student Header + Controls (edge-to-edge on <480px) */}
-          <section className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-slate-800/90 bg-[#070E1D] text-slate-100 px-4 py-3.5 sm:p-4 space-y-3">
+          <section className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-zinc-800/90 bg-[var(--dba-bg-hero)] text-zinc-100 px-4 py-3.5 sm:p-4 space-y-3">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 min-w-0">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-cyan-300">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-amber-300">
                     <span>Panel · {user.displayName || user.email}</span>
-                    <span className="text-slate-500">·</span>
-                    <span className="font-mono tabular-nums text-slate-300">
+                    <span className="text-zinc-500">·</span>
+                    <span className="font-mono tabular-nums text-zinc-300">
                       {activeEnrollment.studyMinutes} {t('studyMinutes')}
                     </span>
                   </div>
@@ -932,15 +933,15 @@ export const CoursePlayerView: React.FC = () => {
 
                 {/* Compact Inline KPIs */}
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
-                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-300 mr-1.5">Cursos</span>
+                  <div className="rounded-lg border border-zinc-800 bg-[var(--dba-bg-hero-surface)] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-zinc-300 mr-1.5">Cursos</span>
                     <span className="text-xs font-bold font-mono tabular-nums text-white">
                       {enrolledCourses.length}
                     </span>
                   </div>
-                  <div className="rounded-lg border border-slate-800 bg-[#0D1930] px-2.5 py-1 text-center">
-                    <span className="text-[10px] text-slate-300 mr-1.5">Progreso</span>
-                    <span className="text-xs font-bold font-mono tabular-nums text-cyan-300">
+                  <div className="rounded-lg border border-zinc-800 bg-[var(--dba-bg-hero-surface)] px-2.5 py-1 text-center">
+                    <span className="text-[10px] text-zinc-300 mr-1.5">Progreso</span>
+                    <span className="text-xs font-bold font-mono tabular-nums text-amber-300">
                       {effectiveProgressPercent}%
                     </span>
                   </div>
@@ -1147,9 +1148,9 @@ export const CoursePlayerView: React.FC = () => {
         className={`grid grid-cols-1 ${zenMode ? '' : 'lg:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]'} gap-4 xl:gap-5 items-start`}
       >
         <div className="min-w-0 space-y-4">
-          <div className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] overflow-hidden">
+          <div className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden">
             {/* Compact Lesson Header */}
-            <div className="relative bg-[#070E1D] border-b border-slate-800 px-4 py-4 sm:p-5 overflow-hidden">
+            <div className="relative bg-[var(--dba-bg-hero)] border-b border-zinc-800 px-4 py-4 sm:p-5 overflow-hidden">
               <img
                 src={activeCourse.coverImage}
                 alt={currentLesson.title}
@@ -1159,14 +1160,14 @@ export const CoursePlayerView: React.FC = () => {
                 referrerPolicy="no-referrer"
                 className="absolute inset-y-0 right-0 w-1/2 h-full object-cover opacity-20 pointer-events-none select-none"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#070E1D] via-[#070E1D]/95 to-[#070E1D]/60 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[var(--dba-bg-hero)] via-[var(--dba-bg-hero)]/95 to-[var(--dba-bg-hero)]/60 pointer-events-none" />
               <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1.5 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-cyan-300 font-semibold">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-amber-300 font-semibold">
                     <PlayCircle className="w-4 h-4 shrink-0" />
                     <span className="min-w-0">{currentLesson.module.title}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono tabular-nums text-slate-200">
+                    <span className="font-mono tabular-nums text-zinc-200">
                       {currentLesson.durationMinutes} min
                     </span>
                     {isExcelCourse && (
@@ -1425,12 +1426,11 @@ export const CoursePlayerView: React.FC = () => {
                                 const txt = textBuf.join('\n').trim();
                                 if (txt) {
                                   nodes.push(
-                                    <p
+                                    <FormattedTheoryContent
                                       key={`txt-${segIdx}-${nodes.length}`}
-                                      className={`whitespace-pre-line ${zenMode ? 'text-[15px] leading-7' : 'text-sm leading-relaxed'}`}
-                                    >
-                                      {txt}
-                                    </p>
+                                      text={txt}
+                                      zenMode={zenMode}
+                                    />
                                   );
                                 }
                                 textBuf = [];
@@ -2055,7 +2055,7 @@ export const CoursePlayerView: React.FC = () => {
                     } ${
                       isLessonDone
                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700'
-                        : 'bg-[#0052CC] hover:bg-[#0747A6] text-white'
+                        : 'bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)]'
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4 shrink-0" />

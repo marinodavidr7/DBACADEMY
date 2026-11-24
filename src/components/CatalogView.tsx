@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, Check, Lock, Pencil, Play, Search, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Gift, Lock, Pencil, Play, Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
+import { formatCurrency } from '../utils/currency';
 import { CheckoutModal } from './CheckoutModal';
+import { RedeemGiftCardModal } from './RedeemGiftCardModal';
 import { CourseProgressBar } from './ui/CourseProgressBar';
 
 const KNOWN_TECHNOLOGIES: readonly string[] = [
@@ -75,6 +77,8 @@ export const CatalogView: React.FC = () => {
   const [selectedTech, setSelectedTech] = useState('all');
   const [selectedInstructor, setSelectedInstructor] = useState('all');
   const [checkoutCourse, setCheckoutCourse] = useState<Course | null>(null);
+  const [checkoutGiftCardCode, setCheckoutGiftCardCode] = useState('');
+  const [showRedeemModal, setShowRedeemModal] = useState(false);
 
   const visibleCourses = useMemo(
     () => courses.filter((c) => c.published || isAdmin),
@@ -170,32 +174,40 @@ export const CatalogView: React.FC = () => {
 
   const formatPrice = (cents: number, currency: Course['currency']) => {
     if (cents === 0) return 'Gratis';
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(cents / 100);
+    return formatCurrency(cents, currency);
   };
 
   return (
     <div className="space-y-5">
-      {/* Dark Technological Catalog Header */}
-      <section className="rounded-xl border border-slate-800/90 bg-[#070E1D] text-slate-100 overflow-hidden">
+      {/* Dark Brand Catalog Header */}
+      <section className="rounded-xl border border-zinc-800/90 bg-[var(--dba-bg-hero)] text-zinc-100 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
           <div className="lg:col-span-8 p-5 sm:p-6 lg:p-7 flex flex-col justify-center">
-            <p className="text-xs font-semibold tracking-wide text-cyan-300">
+            <p className="text-xs font-semibold tracking-wide text-amber-300">
               {t('brand')} · Catálogo técnico
             </p>
             <h1 className="mt-1.5 font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight text-balance">
               {t('heroTitle')}
             </h1>
-            <p className="mt-2 text-sm text-slate-300 leading-relaxed max-w-2xl">
+            <p className="mt-2 text-sm text-zinc-300 leading-relaxed max-w-2xl">
               {t('heroSubtitle')}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <a
                 href="#catalog-grid"
-                className="inline-flex items-center gap-2 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[40px]"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap min-h-[40px]"
               >
                 <span>{t('exploreCatalog')}</span>
                 <ArrowRight className="w-4 h-4" />
               </a>
+              <button
+                type="button"
+                onClick={() => setShowRedeemModal(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-400/50 bg-zinc-900/80 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-amber-300 transition-colors whitespace-nowrap min-h-[40px]"
+              >
+                <Gift className="w-4 h-4" />
+                <span>Canjear Gift Card</span>
+              </button>
               {isAdmin && (
                 <button
                   type="button"
@@ -203,7 +215,7 @@ export const CatalogView: React.FC = () => {
                     setWorkspaceRole('instructor');
                     setActiveView('instructor');
                   }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 hover:bg-slate-800 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[40px]"
                 >
                   <span>{t('openInstructor')}</span>
                 </button>
@@ -211,7 +223,7 @@ export const CatalogView: React.FC = () => {
             </div>
           </div>
 
-          <div className="lg:col-span-4 relative min-h-[170px] lg:min-h-full bg-[#0D1930]">
+          <div className="lg:col-span-4 relative min-h-[170px] lg:min-h-full bg-[var(--dba-bg-hero-surface)]">
             <img
               src="/assets/images/track_data_analytics_1795271913869.webp"
               alt="Laboratorio de Excel y Analítica de DB Academy"
@@ -221,9 +233,9 @@ export const CatalogView: React.FC = () => {
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#070E1D]/90 via-[#070E1D]/25 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--dba-bg-hero)]/90 via-[var(--dba-bg-hero)]/25 to-transparent" />
             <div className="absolute bottom-3.5 left-4 right-4 text-white">
-              <p className="text-[11px] font-mono text-cyan-300">Programa destacado</p>
+              <p className="text-[11px] font-mono text-amber-300">Programa destacado</p>
               <p className="text-xs sm:text-sm font-semibold text-white mt-0.5">
                 Cursos Excel · Simulador 3D Interactivo
               </p>
@@ -234,10 +246,10 @@ export const CatalogView: React.FC = () => {
 
       {/* Filter Toolbar */}
       <section id="catalog-grid" className="space-y-3.5">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-3.5 sm:p-4 space-y-3">
+        <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] p-3.5 sm:p-4 space-y-3">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div role="search" className="relative flex-1 min-w-0">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={search}
@@ -249,7 +261,7 @@ export const CatalogView: React.FC = () => {
                 }}
                 aria-label={t('searchCourses')}
                 placeholder={t('searchCourses')}
-                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] pl-10 pr-11 py-2.5 text-base sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[44px]"
+                className="w-full rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] pl-10 pr-11 py-2.5 text-base sm:text-sm text-[var(--dba-text-primary)] placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-[var(--dba-accent-ink)] min-h-[44px]"
               />
               {search && (
                 <button
@@ -257,7 +269,7 @@ export const CatalogView: React.FC = () => {
                   onClick={() => setSearch('')}
                   aria-label="Limpiar búsqueda"
                   title="Limpiar búsqueda"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-zinc-500 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-100 hover:bg-stone-200/60 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -265,16 +277,16 @@ export const CatalogView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] overflow-x-auto max-w-full">
+              <div className="flex items-center gap-1 p-1 rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] overflow-x-auto max-w-full">
                 {categories.map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
                       selectedCategory === cat
-                        ? 'bg-[#0052CC] text-white'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                        ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)]'
+                        : 'text-[var(--dba-text-secondary)] hover:bg-stone-200/60 dark:hover:bg-zinc-800'
                     }`}
                   >
                     {cat === 'all' ? t('allCategories') : cat}
@@ -286,7 +298,7 @@ export const CatalogView: React.FC = () => {
                 value={selectedLevel}
                 onChange={(e) => setSelectedLevel(e.target.value)}
                 aria-label={t('allLevels')}
-                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[40px]"
+                className="rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] px-3 py-2 text-xs font-medium text-[var(--dba-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--dba-accent-ink)] min-h-[40px]"
               >
                 <option value="all">{t('allLevels')}</option>
                 <option value="beginner">{t('beginner')}</option>
@@ -299,7 +311,7 @@ export const CatalogView: React.FC = () => {
                   value={selectedInstructor}
                   onChange={(e) => setSelectedInstructor(e.target.value)}
                   aria-label="Filtrar por instructor"
-                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-[#0B1220] px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#0052CC] min-h-[40px]"
+                  className="rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] px-3 py-2 text-xs font-medium text-[var(--dba-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--dba-accent-ink)] min-h-[40px]"
                 >
                   <option value="all">Todos los instructores</option>
                   {instructors.map((inst) => (
@@ -337,8 +349,8 @@ export const CatalogView: React.FC = () => {
                     onClick={() => setSelectedTech(active ? 'all' : tech)}
                     className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                       active
-                        ? 'bg-[#0052CC] text-white'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)] font-semibold'
+                        : 'text-[var(--dba-text-secondary)] hover:bg-stone-100 dark:hover:bg-zinc-800'
                     }`}
                   >
                     {tech}
@@ -347,7 +359,7 @@ export const CatalogView: React.FC = () => {
               })}
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-[var(--dba-text-secondary)]">
               <span className="font-mono tabular-nums">
                 {filtered.length} de {visibleCourses.length} cursos
               </span>
@@ -355,7 +367,7 @@ export const CatalogView: React.FC = () => {
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="font-semibold text-[#0052CC] dark:text-cyan-400 hover:underline whitespace-nowrap"
+                  className="font-semibold text-[var(--dba-accent-ink)] hover:underline whitespace-nowrap"
                 >
                   Limpiar filtros
                 </button>
@@ -401,9 +413,9 @@ export const CatalogView: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.24, delay: Math.min(idx * 0.05, 0.25), ease: 'easeOut' }}
                   whileHover={{ y: -2 }}
-                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] overflow-hidden flex flex-col transition-colors hover:border-slate-300 dark:hover:border-slate-700"
+                  className="group rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden flex flex-col transition-colors hover:border-[var(--dba-border-strong)]"
                 >
-                  <div className="aspect-video w-full bg-slate-900 relative overflow-hidden">
+                  <div className="aspect-video w-full bg-zinc-900 relative overflow-hidden">
                     {course.coverImage ? (
                       <img
                         src={course.coverImage}
@@ -416,7 +428,7 @@ export const CatalogView: React.FC = () => {
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-slate-400">
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-400">
                         <BookOpen className="w-10 h-10" />
                       </div>
                     )}
@@ -424,8 +436,8 @@ export const CatalogView: React.FC = () => {
 
                   <div className="p-4 sm:p-5 flex-1 flex flex-col">
                     {/* Unboxed Typographic Metadata (Zero-Pill Rule) */}
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-semibold text-[#0052CC] dark:text-cyan-400">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--dba-text-secondary)]">
+                      <span className="font-semibold text-[var(--dba-accent-ink)]">
                         {course.category}
                       </span>
                       <span aria-hidden="true">·</span>
@@ -570,7 +582,7 @@ export const CatalogView: React.FC = () => {
                                 setCheckoutCourse(course);
                               }
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
                           >
                             <span>
                               {course.priceCents === 0 ? 'Inscribirse gratis' : t('enrollNow')}
@@ -591,11 +603,32 @@ export const CatalogView: React.FC = () => {
       {checkoutCourse && (
         <CheckoutModal
           course={checkoutCourse}
-          onClose={() => setCheckoutCourse(null)}
+          initialGiftCardCode={checkoutGiftCardCode}
+          onClose={() => {
+            setCheckoutCourse(null);
+            setCheckoutGiftCardCode('');
+          }}
           onSuccess={(courseId) => {
             setCheckoutCourse(null);
+            setCheckoutGiftCardCode('');
             setSelectedCourseId(courseId);
             setActiveView('learning');
+          }}
+        />
+      )}
+
+      {showRedeemModal && (
+        <RedeemGiftCardModal
+          onClose={() => setShowRedeemModal(false)}
+          onEnrolled={(courseId) => {
+            setShowRedeemModal(false);
+            setSelectedCourseId(courseId);
+            setActiveView('learning');
+          }}
+          onContinuePartialCheckout={(course, code) => {
+            setShowRedeemModal(false);
+            setCheckoutGiftCardCode(code);
+            setCheckoutCourse(course);
           }}
         />
       )}

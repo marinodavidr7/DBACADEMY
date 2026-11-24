@@ -4,6 +4,13 @@ import { usePlatform } from '../context/PlatformContext';
 import type { Certificate } from '../types';
 import { exportCertificatePdf, formatCertificateDate } from '../utils/export';
 import { generateCertificateQrDataUrl, getCertificateVerificationUrl } from '../utils/qr';
+import {
+  DAVID_SIGNATURE_DOT,
+  DAVID_SIGNATURE_STROKES,
+  DAVID_SIGNATURE_VIEWBOX,
+  DAVID_SIGNER_NAME,
+  DAVID_SIGNER_TITLE,
+} from '../utils/signature';
 
 interface CertificateDocumentProps {
   certificate: Certificate;
@@ -27,102 +34,123 @@ export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
   }, [certificate.id, certificate.verificationCode]);
 
   return (
-    <div className="relative w-full rounded-xl bg-[#F8FAFC] text-slate-900 p-3 sm:p-5 shadow-lg border border-slate-300 overflow-hidden select-none">
-      {/* Outer Navy Frame */}
-      <div className="relative border-[3px] border-slate-900 p-1.5 sm:p-2">
-        {/* Inner Gold Accent Frame */}
-        <div className="relative border-[1.5px] border-amber-500 bg-white/95 px-5 py-6 sm:px-9 sm:py-8 text-center">
-          {/* Top Blue Accent Bar */}
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-[#0052CC]" />
+    <div className="relative w-full rounded-xl bg-gradient-to-b from-[#FAFBFD] via-white to-[#F1F5F9] text-[#0F172A] px-6 py-8 sm:px-12 sm:py-10 shadow-md border border-slate-200 overflow-hidden select-none text-center">
+      {isSample && (
+        <span className="absolute top-3.5 right-3.5 rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+          Vista previa de diseño
+        </span>
+      )}
 
-          {isSample && (
-            <span className="absolute top-3 right-3 rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
-              Vista previa de diseño
-            </span>
-          )}
+      {/* Official Centered Logo */}
+      <div className="flex justify-center">
+        <img
+          src="/assets/aistudio/logo-db-academy-light.png"
+          alt="DB Academy"
+          referrerPolicy="no-referrer"
+          className="h-20 sm:h-24 w-auto object-contain"
+        />
+      </div>
 
-          {/* Official Transparent Logo */}
-          <div className="flex justify-center pt-1">
-            <img
-              src="/assets/aistudio/logo-db-academy-light.png"
-              alt="DB Academy"
-              referrerPolicy="no-referrer"
-              className="h-16 sm:h-20 w-auto object-contain"
+      {/* Main Certificate Title */}
+      <h2 className="mt-3 font-display text-lg sm:text-2xl font-extrabold uppercase tracking-wide text-[#0F172A] text-balance">
+        Certificado Oficial de Finalización
+      </h2>
+
+      {/* Recipient & Completion Copy */}
+      <p className="mt-4 text-xs sm:text-sm text-slate-600">
+        Se certifica que / This certifies that
+      </p>
+
+      <h3 className="mt-1.5 font-display text-2xl sm:text-4xl font-bold tracking-tight text-[#0F172A] text-balance">
+        {certificate.studentName}
+      </h3>
+
+      <p className="mt-3 text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
+        ha completado satisfactoriamente el 100% de los módulos, prácticas y evaluaciones del programa:
+      </p>
+
+      <p className="mt-2.5 font-display text-base sm:text-xl font-bold text-[#0F172A] max-w-2xl mx-auto text-balance">
+        {certificate.courseTitle}
+      </p>
+
+      {/* 2-Column Signature (David) & Issue Date */}
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-14 max-w-2xl mx-auto items-end">
+        <div className="flex flex-col items-center">
+          <svg
+            viewBox={DAVID_SIGNATURE_VIEWBOX}
+            fill="none"
+            role="img"
+            aria-label={`Firma de ${DAVID_SIGNER_NAME}`}
+            className="h-11 sm:h-12 w-auto -mb-1 pointer-events-none"
+          >
+            {DAVID_SIGNATURE_STROKES.map((s, idx) => (
+              <path
+                key={idx}
+                d={s.d}
+                stroke={s.stroke}
+                strokeWidth={s.strokeWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={s.opacity}
+              />
+            ))}
+            <circle
+              cx={DAVID_SIGNATURE_DOT.cx}
+              cy={DAVID_SIGNATURE_DOT.cy}
+              r={DAVID_SIGNATURE_DOT.r}
+              fill={DAVID_SIGNATURE_DOT.fill}
             />
-          </div>
-
-          <p className="mt-3 text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-[#0052CC]">
-            Certificado Oficial de Finalización
+          </svg>
+          <p className="text-sm sm:text-base font-semibold text-[#0F172A] truncate max-w-full">
+            {DAVID_SIGNER_NAME}
           </p>
-          <div className="mx-auto mt-2 h-px w-48 bg-slate-200" />
-
-          <p className="mt-4 text-xs sm:text-sm text-slate-600">
-            Se certifica que / This certifies that
-          </p>
-
-          <h3 className="mt-2 font-display text-2xl sm:text-4xl font-bold tracking-tight text-slate-900 text-balance">
-            {certificate.studentName}
-          </h3>
-
-          <p className="mt-3 text-xs sm:text-sm text-slate-600 max-w-xl mx-auto">
-            ha completado satisfactoriamente el 100% de los módulos, prácticas y evaluaciones del programa:
-          </p>
-
-          <p className="mt-2.5 font-display text-base sm:text-xl font-bold text-slate-900 max-w-2xl mx-auto text-balance">
-            {certificate.courseTitle}
-          </p>
-
-          {/* Signatures + Verification Code + Scannable Verification QR */}
-          <div className="mt-7 flex flex-col md:flex-row items-center md:items-end justify-between gap-5 pt-2">
-            <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 items-end flex-1">
-              <div className="border-t border-slate-300 pt-2">
-                <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                  {certificate.instructorName}
-                </p>
-                <p className="text-[11px] text-slate-500">Instructor Titular</p>
-              </div>
-
-              <div className="border-t border-slate-300 pt-2">
-                <p className="text-xs sm:text-sm font-bold text-slate-900">
-                  {formatCertificateDate(certificate.issuedAt)}
-                </p>
-                <p className="text-[11px] text-slate-500">Fecha de Emisión</p>
-              </div>
-
-              <div className="border-t border-slate-300 pt-2">
-                <p className="text-xs sm:text-sm font-bold font-mono text-[#0052CC] truncate">
-                  {certificate.verificationCode}
-                </p>
-                <p className="text-[11px] text-slate-500">Código de Verificación</p>
-              </div>
-            </div>
-
-            <div className="shrink-0 flex flex-col items-center">
-              <div className="rounded-lg border border-slate-300 bg-white p-1.5 shadow-xs">
-                {qrDataUrl ? (
-                  <img
-                    src={qrDataUrl}
-                    alt={`Código QR para verificar certificado ${certificate.verificationCode}`}
-                    referrerPolicy="no-referrer"
-                    className="w-20 h-20 sm:w-22 sm:h-22 object-contain"
-                  />
-                ) : (
-                  <div className="w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center bg-slate-100 text-slate-500">
-                    <QrCode className="w-8 h-8" />
-                  </div>
-                )}
-              </div>
-              <span className="mt-1 text-[9.5px] font-bold uppercase tracking-wider text-slate-700">
-                Escanea para verificar
-              </span>
-            </div>
-          </div>
-
-          <p className="mt-5 text-[10px] font-mono text-slate-400 truncate text-center md:text-left">
-            DB Academy · Firma Digital SHA-256: {certificate.hashSignature}
+          <div className="mt-1.5 w-full max-w-[240px] border-t border-slate-400" />
+          <p className="mt-1.5 text-xs text-slate-600 truncate max-w-full">
+            {DAVID_SIGNER_TITLE}
           </p>
         </div>
+
+        <div className="flex flex-col items-center">
+          <p className="text-sm sm:text-base font-semibold text-[#0F172A]">
+            {formatCertificateDate(certificate.issuedAt)}
+          </p>
+          <div className="mt-1.5 w-full max-w-[240px] border-t border-slate-400" />
+          <p className="mt-1.5 text-xs text-slate-600">Fecha de Emisión</p>
+        </div>
       </div>
+
+      {/* Centered Verification Code + Scannable QR */}
+      <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="text-center sm:text-left space-y-0.5">
+          <p className="text-xs text-slate-600">Código de Verificación</p>
+          <p className="text-sm sm:text-base font-bold font-mono tracking-wide text-[#0F172A]">
+            {certificate.verificationCode}
+          </p>
+          <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#0F172A]">
+            Escanea para verificar
+          </p>
+        </div>
+
+        <div className="shrink-0 rounded-md border border-slate-200 bg-white p-1.5 shadow-xs">
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt={`Código QR para verificar certificado ${certificate.verificationCode}`}
+              referrerPolicy="no-referrer"
+              className="w-20 h-20 sm:w-22 sm:h-22 object-contain"
+            />
+          ) : (
+            <div className="w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center bg-slate-100 text-slate-500">
+              <QrCode className="w-8 h-8" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Centered SHA-256 Signature */}
+      <p className="mt-6 text-[10px] sm:text-[11px] font-mono text-slate-500 break-all">
+        DB Academy Firma Digital SHA-256 {certificate.hashSignature}
+      </p>
     </div>
   );
 };

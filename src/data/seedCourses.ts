@@ -10,7 +10,7 @@ export const EXCEL_BASICO_COURSE: Course = {
   category: 'Productividad',
   level: 'beginner',
   priceCents: 0,
-  currency: 'USD',
+  currency: 'DOP',
   coverImage: '/assets/images/course_excel_basico_1795186770853.webp',
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
@@ -729,61 +729,29 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: 'Operadores Aritméticos, Comparación, Concatenación y de Referencia usados en fórmulas, con jerarquía y chuleta adaptada del contenido html original.',
           content:
-            '=== OPERADORES ARITMÉTICOS ===\n' +
-            'Todas las fórmulas necesitan el signo igual (=) al inicio. Excel siempre debe saber que lo que viene es un cálculo, no texto.\n\n' +
-            '+ Suma: =5+3 → 8\n' +
-            '- Resta: =10-4 → 6\n' +
-            '* Multiplicación: =6*7 → 42\n' +
-            '/ División: =20/4 → 5\n' +
-            '^ Potencia: =2^3 → 8\n' +
-            '% Porcentaje: =25% → 0.25 (o aplica formato General: 0.25).\n\n' +
-            '=== OPERADORES DE COMPARACIÓN ===\n' +
-            'Devuelven VERDADERO o FALSO. Son la base de SI().\n\n' +
-            '= Igual: =5=5 → VERDADERO\n' +
-            '> Mayor que: =5>3 → VERDADERO\n' +
-            '< Menor que: =5<3 → FALSO\n' +
-            '>= Mayor o igual: =5>=5 → VERDADERO\n' +
-            '<= Menor o igual: =5<=3 → FALSO\n' +
-            '<> Distinto: =5<>3 → VERDADERO\n\n' +
-            '=== CONCATENACIÓN (&) ===\n' +
-            'El operador & une texto, como pegar cadenas con cola.\n\n' +
-            '="Hola"&"Mundo" → "HolaMundo"\n' +
-            '="Juan"&"Pérez" → "JuanPérez"\n' +
-            '="Total: "&100 → "Total: 100"\n\n' +
-            '=== OPERADORES DE REFERENCIA ===\n' +
-            'Dicen qué celdas usar. Los operadores clásicos: : (rango), ␣ (intersección), , (unión), ! (otra hoja).\n\n' +
-            '=SUMA(A1:A5) Rango continuo\n' +
-            '=A1:C3 B2:D4 Intersección (incluye B2:C3)\n' +
-            '=SUMA(A1:B2,C1:D2) Unión de rangos\n' +
-            '=Hoja2!A1 Otra hoja (el nombre de la hoja y ! preceden la referencia)\n\n' +
-            '=== ORDEN DE EVALUACIÓN ===\n' +
-            'Ejemplo =2+3*4^2. Excel lo evalúa a 512: potencias primero, luego multiplicación/división, luego suma/resta. Usa paréntesis para forzar el orden que tú quieras: =(2+3)*4 → 20.\n\n' +
-            'PRÁCTICAS — ARITMÉTICOS (6):\n' +
-            '1. =5+3 → 8\n' +
-            '2. =10-4 → 6\n' +
-            '3. =6*7 → 42\n' +
-            '4. =20/4 → 5\n' +
-            '5. =2^3 → 8\n' +
-            '6. =25% o =0.25 → 0.25\n\n' +
-            'PRÁCTICAS — COMPARACIÓN (6):\n' +
-            '1. =5=5 → VERDADERO\n' +
-            '2. =5>3 → VERDADERO\n' +
-            '3. =5<3 → FALSO\n' +
-            '4. =5>=5 → VERDADERO\n' +
-            '5. =5<=3 → FALSO\n' +
-            '6. =5<>3 → VERDADERO\n\n' +
-            'PRÁCTICAS — CONCATENACIÓN (4):\n' +
-            '1. ="A"&"B" → "AB"\n' +
-            '2. ="Juan"&"Pérez" → "JuanPérez"\n' +
-            '3. A1="Juan"; B1="Pérez" → =A1&" "&B1 → "Juan Pérez"\n' +
-            '4. ="Total: "&100 → "Total: 100"\n\n' +
-            'PRÁCTICAS — REFERENCIA (6):\n' +
-            '1. A1:A5 = 10,20,30,40,50 → =SUMA(A1:A5) → 150\n' +
-            '2. =A1:C3 B2:D4 intersección → incluye B2:C3\n' +
-            '3. =SUMA(A1:B2,C1:D2) → suma el rango unido\n' +
-            '4. Con Hoja2 existente y =Hoja2!A1 → lee el valor de otra hoja\n' +
-            '5. =SUMA(B2:B10 B4:B8) → SUMA con intersección de rango B4:B8\n' +
-            '6. =A1&Hoja2!A1 → concatena valor de A1 y celda de Hoja2',
+            '### Operadores aritméticos\n' +
+            'Toda fórmula comienza con el signo igual (`=`) para indicar a Excel que debe ejecutar un cálculo y no guardar texto.\n' +
+            '• **Suma (`+`)**: `=5+3` → `8`\n' +
+            '• **Resta (`-`)**: `=10-4` → `6`\n' +
+            '• **Multiplicación (`*`)**: `=6*7` → `42`\n' +
+            '• **División (`/`)**: `=20/4` → `5`\n' +
+            '• **Potencia (`^`)**: `=2^3` → `8`\n' +
+            '• **Porcentaje (`%`)**: `=25%` equivale a `0.25`\n\n' +
+            '### Operadores de comparación\n' +
+            'Comparan dos valores y devuelven `VERDADERO` o `FALSO`. Son la base de funciones lógicas como `=SI()`.\n' +
+            '• `=` Igual (`=5=5` → `VERDADERO`)\n' +
+            '• `>` Mayor que / `<` Menor que\n' +
+            '• `>=` Mayor o igual / `<=` Menor o igual\n' +
+            '• `<>` Distinto de (`=5<>3` → `VERDADERO`)\n\n' +
+            '### Concatenación (`&`) y Referencia (`:`, `,`, `;`, `!`)\n' +
+            '• **Concatenación (`&`)**: Une textos o valores, por ejemplo `="Total: "&100` → `"Total: 100"` o `=A1&" "&B1`.\n' +
+            '• **Rango (`:`)**: Define un bloque continuo (`=SUMA(A1:A5)`).\n' +
+            '• **Unión (`;` o `,`)**: Combina rangos separados (`=SUMA(A1:B2; C1:D2)`).\n' +
+            '• **Intersección (espacio)**: Celdas en común entre dos rangos (`=A1:C3 B2:D4` → `B2:C3`).\n' +
+            '• **Otra hoja (`!`)**: `=Hoja2!A1`.\n\n' +
+            '### Orden de evaluación (Jerarquía)\n' +
+            'Excel resuelve primero paréntesis `()`, luego potencias `^`, después multiplicación/división (`*`, `/`) y al final suma/resta (`+`, `-`). Ejemplo: `=(2+3)*4` da `20`, mientras que `=2+3*4` da `14`.\n\n' +
+            'Dirígete a la pestaña **Prácticas** para resolver los ejercicios interactivos y descargar las hojas de trabajo.',
           materials: [
             {
               id: 'mat-img-tipos-operadores-35',
@@ -815,48 +783,16 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 25,
           summary: 'Operaciones aritméticas con SUMA, RESTA (operador -) y PRODUCTO: ~10 ejercicios por función y explicaciones clave de que se suman las celdas.',
           content:
-            '=== SUMA: =SUMA(rango) ===\n' +
-            'SUMA(A1:A10) suma lo que hay DENTRO de las celdas del rango. Regla clave del curso: se suman las celdas, no los datos. No sumes literalmente datos en la fórmula (por ejemplo =SUMA(10+20+30)); siempre referencia celdas para que Excel recalcule si cambian.\n' +
-            'Datos de ejemplo: A1=5, A2=7, A3=8, A4=10 → =SUMA(A1:A4) → 30.\n\n' +
-            'PRÁCTICAS — SUMA (10 ejercicios):\n' +
-            '1. A1=2, A2=3, A3=5 → =SUMA(A1:A3)  (10)\n' +
-            '2. B1:B5 = 10,20,30,15,5 → =SUMA(B1:B5)  (70)\n' +
-            '3. A1:A4 = 10,20,30,40 → =SUMA(A1:A4)\n' +
-            '4. A1=1, A2=2, A3=3, A4=4, A5=5 → =SUMA(A1:A5)\n' +
-            '5. A2:A5 = 3,6,9,12 → =SUMA(A2:A5)\n' +
-            '6. A1=4, A2=5, A3=6 y A5=7 → =SUMA(A1:A3; A5)  (22)\n' +
-            '7. A1=100, A2=200, A3=300 → =SUMA(A1:A3)\n' +
-            '8. A1=0, A2=5, A3=0, A4=7 → =SUMA(A1:A4)\n' +
-            '9. B2:B6 = 2,4,6,8,10 → =SUMA(B2:B6)\n' +
-            '10. A1=15, A2=25, A3=35, A4=45 → =SUMA(A1:A4)\n\n' +
-            '=== RESTA: operador - entre celdas ===\n' +
-            'RESTA usando el operador - entre dos celdas o entre una celda y un valor: =A1-A2 resta el contenido de A2 de A1.\n' +
-            'Datos de ejemplo: A1=100, A2=37 → =A1-A2 (63).\n\n' +
-            'PRÁCTICAS — RESTA (10 ejercicios):\n' +
-            '1. A1=50, A2=20 → =A1-A2 (30)\n' +
-            '2. A1=100, A2=37 → =A1-A2\n' +
-            '3. A1=90, A2=40 → =A1-A2\n' +
-            '4. A1=75, A2=25 → =A1-A2\n' +
-            '5. A1=120, A2=45 → =A1-A2\n' +
-            '6. A1=200, A2=30 → =A1-A2\n' +
-            '7. A1=88, A2=33 → =A1-A2\n' +
-            '8. A1=60, A2=15 → =A1-A2\n' +
-            '9. A1=105, A2=50 → =A1-A2\n' +
-            '10. A1=67, A2=58 → =A1-A2\n\n' +
-            '=== PRODUCTO: =PRODUCTO(rango) ===\n' +
-            'PRODUCTO(rango) multiplica los valores de las celdas del rango que le indicas.\n' +
-            'Datos de ejemplo: A1=2, A2=3, A3=4 → =PRODUCTO(A1:A3) (24).\n\n' +
-            'PRÁCTICAS — PRODUCTO (10 ejercicios):\n' +
-            '1. A1=2, A2=3, A3=4 → =PRODUCTO(A1:A3) (24)\n' +
-            '2. A1=5, A2=2, A3=3 → =PRODUCTO(A1:A3)\n' +
-            '3. A1=1, A2=2, A3=3, A4=4 → =PRODUCTO(A1:A4)\n' +
-            '4. A1=2, A2=5, A3=10 → =PRODUCTO(A1:A3)\n' +
-            '5. A2:A5 = 2,3,4,5 → =PRODUCTO(A2:A5)\n' +
-            '6. A1=3, A2=3, A3=3 → =PRODUCTO(A1:A3)\n' +
-            '7. A1=7, A2=2, A3=1 → =PRODUCTO(A1:A3)\n' +
-            '8. A1=10, A2=2, A3=3, A4=4 → =PRODUCTO(A1:A4)\n' +
-            '9. A1=6, A2=1, A3=2, A4=3 → =PRODUCTO(A1:A4)\n' +
-            '10. A1=2, A2=2, A3=5, A4=2 → =PRODUCTO(A1:A4)',
+            '### 1. SUMA: `=SUMA(rango)`\n' +
+            'Suma todos los valores numéricos contenidos dentro del rango especificado. **Regla clave:** referencia siempre celdas (`=SUMA(A1:A4)`), nunca escribas números fijos dentro de la fórmula (`=SUMA(10+20)`), así Excel recalcula automáticamente si cambian los datos.\n' +
+            '• **Ejemplo:** Si `B2:B4` contiene `10`, `5` y `2`, `=SUMA(B2:B4)` devuelve `17`. También puedes sumar celdas no contiguas separando con `;`: `=SUMA(A1:A3; A5)`.\n\n' +
+            '### 2. RESTA con operador `-`\n' +
+            'En Excel no existe una función `RESTA()`: se utiliza el operador aritmético `-` entre celdas.\n' +
+            '• **Ejemplo:** Con `A1 = 100` y `A2 = 37`, la fórmula `=A1-A2` devuelve `63`.\n\n' +
+            '### 3. PRODUCTO: `=PRODUCTO(rango)`\n' +
+            'Multiplica entre sí todos los números de un rango o lista de argumentos, ignorando textos o celdas vacías.\n' +
+            '• **Ejemplo:** Con `B2:B4` = `10`, `5` y `2`, `=PRODUCTO(B2:B4)` calcula `10 × 5 × 2 = 100`.\n\n' +
+            'Para poner en práctica estas tres operaciones, abre la pestaña **Prácticas** de esta lección.',
           materials: [
             {
               id: 'mat-img-suma-resta-producto-41',
@@ -884,7 +820,12 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "Redondeo preciso de decimales con =REDONDEAR, =REDONDEAR.MAS, =REDONDEAR.MENOS.",
           content:
-            "=== REDONDEAR, REDONDEAR.MAS, REDONDEAR.MENOS ===\nUsa ; como separador en Excel B\u00e1sico.\n=REDONDEAR(n\u00famero; n\u00fam_decimales): cambia el valor real almacenado.\n=REDONDEAR.MAS(n\u00famero; n\u00fam_decimales): redondea hacia arriba (alej\u00e1ndose de cero).\n=REDONDEAR.MENOS(n\u00famero; n\u00fam_decimales): redondea hacia cero.\n\nPR\u00c1CTICAS \u2014 REDONDEAR (3):\n1. A1=10.567 \u2192 =REDONDEAR(A1; 0)  (11)\n2. A1=10.567 \u2192 =REDONDEAR(A1; 2)  (10.57)\n3. A1=-10.567 \u2192 =REDONDEAR(A1; 0)  (-11)\n\nPR\u00c1CTICAS \u2014 REDONDEAR.MAS (2):\n1. A1=10.1 \u2192 =REDONDEAR.MAS(A1; 0)  (11)\n2. A1=-10.1 \u2192 =REDONDEAR.MAS(A1; 0)  (-11)\n\nPR\u00c1CTICAS \u2014 REDONDEAR.MENOS (2):\n1. A1=10.9 \u2192 =REDONDEAR.MENOS(A1; 0)  (10)\n2. A1=-10.9 \u2192 =REDONDEAR.MENOS(A1; 0)  (-10)",
+            '### Control real del redondeo vs. formato visual\n' +
+            'Reducir decimales desde la barra de herramientas solo cambia **cómo se ve** el número, pero conserva todos los decimales internos en los cálculos. Para modificar el **valor real almacenado**, usa funciones de redondeo (con `;` como separador de argumentos):\n\n' +
+            '• **`=REDONDEAR(número; núm_decimales)`**: Redondeo estándar al dígito más cercano (5 o más sube). Ejemplo: `=REDONDEAR(15.678; 1)` → `15.7`.\n' +
+            '• **`=REDONDEAR.MAS(número; núm_decimales)`**: Siempre redondea alejándose de cero (hacia arriba en positivos, hacia más negativo en negativos). Ejemplo: `=REDONDEAR.MAS(10.1; 0)` → `11`.\n' +
+            '• **`=REDONDEAR.MENOS(número; núm_decimales)`**: Siempre redondea acercándose a cero. Ejemplo: `=REDONDEAR.MENOS(10.9; 0)` → `10`.\n\n' +
+            'Visita la pestaña **Prácticas** para completar los ejercicios interactivos y descargar el libro de práctica.',
           materials: [
             {
               id: 'mat-img-redondeo-funciones-42',
@@ -904,7 +845,15 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: "Funciones para extraer partes enteras, restos y potencias: =ENTERO, =TRUNCAR, =RESIDUO, =POTENCIA, =RAIZ, =ABS.",
           content:
-            "=== ENTERO, TRUNCAR, RESIDUO ===\n=ENTERO(n\u00famero): entero inferior m\u00e1s cercano.\n=TRUNCAR(n\u00famero; [n\u00fam_decimales]): quita decimales sin redondear.\n=RESIDUO(n\u00famero; divisor): resto de la divisi\u00f3n.\n\nPR\u00c1CTICAS \u2014 ENTERO (3):\n1. A1=2.7 \u2192 =ENTERO(A1)  (2)\n2. A1=-2.7 \u2192 =ENTERO(A1)  (-3)\n3. A1=7.9 \u2192 =ENTERO(A1)  (7)\n\nPR\u00c1CTICAS \u2014 TRUNCAR (3):\n1. A1=-2.7 \u2192 =TRUNCAR(A1)  (-2)\n2. A1=9.99 \u2192 =TRUNCAR(A1)  (9)\n3. A1=7 \u2192 =TRUNCAR(A1)  (7)\n\nPR\u00c1CTICAS \u2014 RESIDUO (3):\n1. A1=7 \u2192 =RESIDUO(A1; 3)  (1)\n2. A1=100 \u2192 =RESIDUO(A1; 30)  (10)\n3. A1=15 \u2192 =RESIDUO(A1; 4)  (3)\n\n=== POTENCIA, RAIZ, ABS ===\n=POTENCIA(base; exponente) equivale al operador ^.\n=RAIZ(n\u00famero): ra\u00edz cuadrada.\n=ABS(n\u00famero): magnitud absoluta sin signo negativo.\n\nPR\u00c1CTICAS \u2014 POTENCIA (2):\n1. A1=2, A2=3 \u2192 =POTENCIA(A1; A2)  (8)\n2. A1=9 \u2192 =POTENCIA(A1; 2)  (81)\n\nPR\u00c1CTICAS \u2014 RAIZ (2):\n1. A1=16 \u2192 =RAIZ(A1)  (4)\n2. A1=25 \u2192 =RAIZ(A1)  (5)\n\nPR\u00c1CTICAS \u2014 ABS (2):\n1. A1=-5 \u2192 =ABS(A1)  (5)\n2. A1=-7.2 \u2192 =ABS(A1)  (7.2)",
+            '### Extracción de enteros y restos\n' +
+            '• **`=ENTERO(número)`**: Redondea hacia abajo al entero inferior más cercano. En positivos quita decimales (`=ENTERO(2.7)` → `2`), pero en negativos baja un entero (`=ENTERO(-2.7)` → `-3`).\n' +
+            '• **`=TRUNCAR(número; [núm_decimales])`**: Corta los decimales sin redondear (`=TRUNCAR(-2.7)` → `-2`; `=TRUNCAR(15.678; 1)` → `15.6`).\n' +
+            '• **`=RESIDUO(número; divisor)`**: Devuelve únicamente el resto entero de una división (`=RESIDUO(10; 3)` → `1`). Muy útil para detectar números pares o múltiplos.\n\n' +
+            '### Potencias, raíces y magnitud\n' +
+            '• **`=POTENCIA(base; exponente)`**: Eleva una base a una potencia, equivalente al operador `^` (`=POTENCIA(5; 2)` → `25`).\n' +
+            '• **`=RAIZ(número)`**: Calcula la raíz cuadrada de un número positivo (`=RAIZ(25)` → `5`).\n' +
+            '• **`=ABS(número)`**: Devuelve el valor absoluto sin signo negativo (`=ABS(-45)` → `45`).\n\n' +
+            'Pon a prueba cada función en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-matematicas-exactas-43',
@@ -924,7 +873,12 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "Medidas de tendencia central: =PROMEDIO, =MEDIANA, =MODA.UNO.",
           content:
-            "=== PROMEDIO, MEDIANA, MODA ===\nPROMEDIO: suma / cantidad.\nMEDIANA: valor central del conjunto.\nMODA.UNO: valor m\u00e1s frecuente.\n\nPR\u00c1CTICAS \u2014 PROMEDIO (3):\n1. A1:A4 = 2,4,6,8 \u2192 =PROMEDIO(A1:A4)  (5)\n2. A1:A3 = 1,2,3 \u2192 =PROMEDIO(A1:A3)  (2)\n3. A1:A5 = 10,20,30,40,50 \u2192 =PROMEDIO(A1:A5)  (30)\n\nPR\u00c1CTICAS \u2014 MEDIANA (3):\n1. A1:A4 = 2,4,6,8 \u2192 =MEDIANA(A1:A4)  (5)\n2. A1:A5 = 1,2,3,4,5 \u2192 =MEDIANA(A1:A5)  (3)\n3. A1:A6 = 2,2,5,5,8,8 \u2192 =MEDIANA(A1:A6)  (5)\n\nPR\u00c1CTICAS \u2014 MODA.UNO (3):\n1. A1:A4 = 2,2,3,3 \u2192 =MODA.UNO(A1:A4)  (2)\n2. A1:A5 = 7,7,7,1,2 \u2192 =MODA.UNO(A1:A5)  (7)\n3. A1:A3 = 4,4,4 \u2192 =MODA.UNO(A1:A3)  (4)",
+            '### Tres formas de resumir un conjunto de datos\n' +
+            'Sobre un mismo rango numérico `A1:E1` con valores `10, 10, 20, 40, 70`, cada medida responde a una pregunta distinta:\n\n' +
+            '• **`=PROMEDIO(rango)`**: Suma todos los números y divide entre cuántos hay (`150 / 5 = 30`). Sensible a valores extremos muy altos o bajos.\n' +
+            '• **`=MEDIANA(rango)`**: Ordena los datos y toma exactamente el valor central (`20`). Si la cantidad es par, promedia los dos del medio.\n' +
+            '• **`=MODA.UNO(rango)`**: Identifica el valor que aparece con mayor frecuencia en el rango (`10`).\n\n' +
+            'Practica calculando estas medidas en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-tendencia-central-44',
@@ -944,7 +898,15 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: "Extremos globales y filtrados por criterios: =MAX/=MIN, =MAX.SI.CONJUNTO/=MAXIFS, =MIN.SI.CONJUNTO/=MINIFS.",
           content:
-            "=== MAX, MIN ===\n=MAX(rango): valor mayor num\u00e9rico.\n=MIN(rango): valor menor num\u00e9rico.\n\n=== MAX.SI.CONJUNTO / MIN.SI.CONJUNTO (espa\u00f1ol) y MAXIFS / MINIFS (ingl\u00e9s) ===\nFormato: =MAXIFS(rango_max; rango_criterio; criterio). En Excel B\u00e1sico usamos ;.\n\nPR\u00c1CTICAS \u2014 MAX (2):\n1. A1:A5 = 5,2,9,3,7 \u2192 =MAX(A1:A5)  (9)\n2. A1:A3 = 10,20,30 \u2192 =MAX(A1:A3)  (30)\n\nPR\u00c1CTICAS \u2014 MIN (2):\n1. A1:A5 = 5,2,9,3,7 \u2192 =MIN(A1:A5)  (2)\n2. A1:A3 = 10,20,30 \u2192 =MIN(A1:A3)  (10)\n\nPR\u00c1CTICAS \u2014 MAXIFS (3):\n1. B1:B5 = 100,50,200,20,80; A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d \u2192 =MAXIFS(B1:B5; A1:A5; \u201cVenta\u201d)  (200)\n2. C1:C4 = 5,5,8,8; D1:D4 = \u201cA\u201d,\u201cA\u201d,\u201cB\u201d,\u201cB\u201d \u2192 =MAXIFS(C1:C4; D1:D4; \u201cA\u201d)  (5)\n3. A1:A5 = 1,1,2,2,3 \u2192 =MAXIFS(A1:A5; A1:A5; \u201c>1\u201d)  (3)\n\nPR\u00c1CTICAS \u2014 MINIFS (3):\n1. B1:B5 = 100,50,200,20,80; A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d \u2192 =MINIFS(B1:B5; A1:A5; \u201cVenta\u201d)  (20)\n2. A1:A4 = 4,2,6,8; B1:B4 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cB\u201d \u2192 =MINIFS(A1:A4; B1:B4; \u201cA\u201d)  (2)\n3. A1:A3 = 5,5,8 \u2192 =MINIFS(A1:A3; A1:A3; \u201c>0\u201d)  (5)",
+            '### Extremos globales: `MAX` y `MIN`\n' +
+            '• **`=MAX(rango)`**: Devuelve el valor numérico más grande del rango (`=MAX(5; 2; 9)` → `9`).\n' +
+            '• **`=MIN(rango)`**: Devuelve el valor numérico más pequeño del rango (`=MIN(5; 2; 9)` → `2`).\n\n' +
+            '### Extremos condicionales: `MAX.SI.CONJUNTO` / `MAXIFS` y `MIN.SI.CONJUNTO` / `MINIFS`\n' +
+            'Encuentran el máximo o mínimo únicamente entre las filas que cumplen uno o más criterios:\n' +
+            '• **Sintaxis:** `=MAX.SI.CONJUNTO(rango_máximo; rango_criterio1; criterio1; ...)` (o `=MAXIFS(...)` en Excel en inglés).\n' +
+            '• **Ejemplo:** Si `B1:B5` tiene montos y `A1:A5` tiene categorías, `=MAX.SI.CONJUNTO(B1:B5; A1:A5; "Venta")` devuelve el monto más alto únicamente dentro de `"Venta"`.\n' +
+            '• Para el menor condicional se sigue exactamente el mismo orden con `=MIN.SI.CONJUNTO(...)` / `=MINIFS(...)`.\n\n' +
+            'Completa los 15 ejercicios correspondientes en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-max-min-ifs-45',
@@ -964,7 +926,12 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "Conteo de celdas num\u00e9ricas, no vac\u00edas y espacios en blanco.",
           content:
-            "=== CONTAR, CONTARA, CONTAR.BLANCO ===\nCONTAR: solo n\u00fameros o fechas.\nCONTARA: cualquier celda no vac\u00eda (texto, n\u00fameros, f\u00f3rmulas).\nCONTAR.BLANCO: celdas vac\u00edas.\n\nPR\u00c1CTICAS \u2014 CONTAR (3):\n1. A1:A5 = 2,3,,4, \u2192 =CONTAR(A1:A5)  (3)\n2. A1:A5 = \u201ca\u201d,\u201cb\u201d,5,6,\u201c\u201d \u2192 =CONTAR(A1:A5)  (2)\n3. A1:A4 = 1,2,3,4 \u2192 =CONTAR(A1:A4)  (4)\n\nPR\u00c1CTICAS \u2014 CONTARA (3):\n1. A1:A4 = 2,3,,4 \u2192 =CONTARA(A1:A4)  (3)\n2. A1:A3 = \u201ca\u201d,\u201c\u201d,\u201cb\u201d \u2192 =CONTARA(A1:A3)  (3)\n3. A1:A3 = 1,2,3 \u2192 =CONTARA(A1:A3)  (3)\n\nPR\u00c1CTICAS \u2014 CONTAR.BLANCO (3):\n1. A1:A4 = 2,3,,4 \u2192 =CONTAR.BLANCO(A1:A4)  (1)\n2. A1:A3 = \u201ca\u201d,\u201c\u201d,\u201cb\u201d \u2192 =CONTAR.BLANCO(A1:A3)  (1)\n3. A1:A4 = 1,2,3,4 \u2192 =CONTAR.BLANCO(A1:A4)  (0)",
+            '### Cómo cuenta Excel según el tipo de contenido\n' +
+            'No todas las funciones de conteo cuentan lo mismo. Sobre un rango `A1:A5` con dos números, dos textos y una celda realmente vacía:\n\n' +
+            '• **`=CONTAR(rango)`**: Cuenta únicamente celdas con **números o fechas** (resultado: `2`). Ignora textos y celdas vacías.\n' +
+            '• **`=CONTARA(rango)`**: Cuenta **cualquier celda no vacía**, incluyendo texto, números, fechas, errores o fórmulas que devuelven `""` (resultado: `4`).\n' +
+            '• **`=CONTAR.BLANCO(rango)`**: Cuenta exclusivamente **celdas vacías** (resultado: `1`).\n\n' +
+            'Realiza las prácticas interactivas de conteo en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-conteo-basico-46',
@@ -984,7 +951,14 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: "Conteo condicional simple y multicriterio con ;, comodines * y ?.",
           content:
-            "=== CONTAR.SI, CONTAR.SI.CONJUNTO ===\nCONTAR.SI(rango; criterio).\nCONTAR.SI.CONJUNTO permite pares de rango/criterio.\n\nPR\u00c1CTICAS \u2014 CONTAR.SI (5):\n1. A1:A5 = 10,20,30,5,40 \u2192 =CONTAR.SI(A1:A5; \u201c>=20\u201d)  (3)\n2. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d \u2192 =CONTAR.SI(A1:A5; \u201cA\u201d)  (3)\n3. A1:A5 = 10,20,30,5,40 \u2192 =CONTAR.SI(A1:A5; \u201c<10\u201d)  (1)\n4. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d \u2192 =CONTAR.SI(A1:A5; \u201cR*\u201d)  (5)\n5. A1:A5 = 2,2,2,2,2 \u2192 =CONTAR.SI(A1:A5; 2)  (5)\n\nPR\u00c1CTICAS \u2014 CONTAR.SI.CONJUNTO (5):\n1. A1:A6 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cOtra\u201d,\u201cVenta\u201d; B1:B6 = 10,20,30,40,50,60 \u2192 =CONTAR.SI.CONJUNTO(A1:A6; B1:B6; \u201c>40\u201d)  (3)\n2. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d; B1:B5 = 1,2,3,4,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; \u201cA\u201d)  (3)\n3. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cOtro\u201d,\u201cOtro\u201d,\u201cOtro\u201d; B1:B5 = 5,5,5,5,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; \u201cOtro\u201d)  (3)\n4. A1:A5 = 2,2,2,2,2; B1:B5 = 1,2,3,4,5 \u2192 =CONTAR.SI.CONJUNTO(A1:A5; B1:B5; 1)  (2)\n5. A1:A6 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d; B1:B6 = 10,10,10,10,10,10 \u2192 =CONTAR.SI.CONJUNTO(A1:A6; B1:B6; 10)  (6)",
+            '### Conteo con una condición: `=CONTAR.SI(rango; criterio)`\n' +
+            'Cuenta cuántas celdas dentro de un rango cumplen una condición específica. Los criterios de texto o comparación (`">=20"`, `"Norte"`) siempre van entre comillas:\n' +
+            '• **Ejemplo numérico:** `=CONTAR.SI(A1:A5; ">=20")` cuenta las celdas con valor mayor o igual a 20.\n' +
+            '• **Comodines de texto:** Usa `*` para cualquier cantidad de caracteres (`"R*"` coincide con todo texto que empiece con R) y `?` para un solo carácter.\n\n' +
+            '### Conteo con múltiples condiciones: `=CONTAR.SI.CONJUNTO(rango1; criterio1; rango2; criterio2; ...)`\n' +
+            'Cuenta únicamente las filas que cumplen **todos los criterios simultáneamente** (lógica **Y**). Cada rango debe tener exactamente el mismo número de filas.\n' +
+            '• **Ejemplo:** `=CONTAR.SI.CONJUNTO(A2:A10; "Norte"; B2:B10; "Activo")` cuenta solo los registros que son de la zona Norte y además están Activos.\n\n' +
+            'Pon a prueba ambos casos en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-contar-si-47',
@@ -1024,7 +998,16 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 20,
           summary: "Suma segmentada con criterios; usa ; en Excel B\u00e1sico.",
           content:
-            "=== SUMAR.SI, SUMAR.SI.CONJUNTO ===\nSUMAR.SI(rango_criterio; criterio; [rango_suma]).\nSUMAR.SI.CONJUNTO(rango_suma; rango_criterio1; criterio1; ...).\n\nPR\u00c1CTICAS \u2014 SUMAR.SI (5):\n1. A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cVenta\u201d,\u201cOtra\u201d; B1:B5 = 10,20,30,40,50 \u2192 =SUMAR.SI(A1:A5; \u201cVenta\u201d; B1:B5)  (70)\n2. A1:A5 = \u201cPep\u201d,\u201cPep\u201d,\u201cPep\u201d,\u201cJua\u201d,\u201cPep\u201d \u2192 =SUMAR.SI(A1:A5; \u201cPep\u201d)  (5)\n3. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d,\u201cRaro\u201d; B1:B5 = 2,4,6,8,10 \u2192 =SUMAR.SI(A1:A5; \u201cRar*\u201d; B1:B5)  (30)\n4. A1:A4 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cX\u201d \u2192 =SUMAR.SI(A1:A4; \u201cX\u201d)  (3)\n5. A1:A5 = 10,20,30,5,40; B1:B5 = 100,200,300,400,500 \u2192 =SUMAR.SI(B1:B5; \u201c>100\u201d)  (800)\n\nPR\u00c1CTICAS \u2014 SUMAR.SI.CONJUNTO (5):\n1. A1:A6 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cOtra\u201d,\u201cVenta\u201d; B1:B6 = 10,20,30,40,50,60 \u2192 =SUMAR.SI.CONJUNTO(B1:B6; A1:A6; \u201cVenta\u201d)  (210)\n2. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d; B1:B5 = 1,2,3,4,5 \u2192 =SUMAR.SI.CONJUNTO(B1:B5; A1:A5; \u201cA\u201d)  (6)\n3. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cOtro\u201d,\u201cOtro\u201d,\u201cOtro\u201d; B1:B5 = 5,5,5,5,5 \u2192 =SUMAR.SI.CONJUNTO(B1:B5; A1:A5; \u201cOtro\u201d)  (15)\n4. A1:A5 = 2,2,2,2,2; B1:B5 = 1,2,3,4,5 \u2192 =SUMAR.SI.CONJUNTO(B1:B5; A1:A5; 2)  (10)\n5. A1:A6 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d; B1:B6 = 10,10,10,10,10,10 \u2192 =SUMAR.SI.CONJUNTO(B1:B6; A1:A6; 10)  (60)",
+            '### 1. Suma con un criterio: `=SUMAR.SI(rango_criterio; criterio; [rango_suma])`\n' +
+            'Suma valores únicamente de las filas que cumplen la condición indicada:\n' +
+            '• **`rango_criterio`**: Columna donde Excel evalúa la condición (ej. `A2:A5` con áreas).\n' +
+            '• **`criterio`**: Condición entre comillas si es texto u operador (`"Norte"`, `">100"`, `"Rar*"`).\n' +
+            '• **`[rango_suma]`**: Columna con los números a sumar (ej. `B2:B5`). Si se omite, suma el mismo `rango_criterio`.\n' +
+            '• **Ejemplo:** `=SUMAR.SI(A2:A5; "Norte"; B2:B5)` suma solo los montos de la fila donde aparece `"Norte"`.\n\n' +
+            '### 2. Suma con múltiples criterios: `=SUMAR.SI.CONJUNTO(rango_suma; rango_criterio1; criterio1; ...)`\n' +
+            '**¡Cuidado con el orden de los argumentos!** A diferencia de `SUMAR.SI`, aquí el **rango que se va a sumar va primero**, seguido de los pares de rango y criterio.\n' +
+            '• **Ejemplo:** `=SUMAR.SI.CONJUNTO(C2:C10; A2:A10; "Norte"; B2:B10; "Pagado")` suma la columna `C` solo cuando el área es `"Norte"` y el estado es `"Pagado"`.\n\n' +
+            'Resuelve los 15 ejercicios paso a paso y descarga las plantillas en la pestaña **Prácticas**.',
         },
         {
           id: 'les-excel-4-9',
@@ -1052,7 +1035,13 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "Promedios segmentados con =PROMEDIO.SI y =PROMEDIO.SI.CONJUNTO.",
           content:
-            "=== PROMEDIO.SI, PROMEDIO.SI.CONJUNTO ===\nSiguiendo la l\u00f3gica de SUMAR.SI.\n\nPR\u00c1CTICAS \u2014 PROMEDIO.SI (5):\n1. A1:A5 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cVenta\u201d,\u201cOtra\u201d; B1:B5 = 10,20,30,40,50 \u2192 =PROMEDIO.SI(A1:A5; \u201cVenta\u201d; B1:B5)  (20)\n2. A1:A5 = \u201cPep\u201d,\u201cPep\u201d,\u201cPep\u201d,\u201cJua\u201d,\u201cPep\u201d \u2192 =PROMEDIO.SI(A1:A5; \u201cPep\u201d)  (1.25)\n3. A1:A4 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cX\u201d \u2192 =PROMEDIO.SI(A1:A4; \u201cX\u201d)  (2)\n4. A1:A5 = 10,20,30,5,40; B1:B5 = 100,200,300,400,500 \u2192 =PROMEDIO.SI(B1:B5; \u201c>100\u201d)  (400)\n5. A1:A5 = \u201cA\u201d,\u201cB\u201d,\u201cA\u201d,\u201cC\u201d,\u201cA\u201d; B1:B5 = 1,2,3,4,5 \u2192 =PROMEDIO.SI(B1:B5; A1:A5; \u201cA\u201d)  (2)\n\nPR\u00c1CTICAS \u2014 PROMEDIO.SI.CONJUNTO (5):\n1. A1:A6 = \u201cVenta\u201d,\u201cVenta\u201d,\u201cVenta\u201d,\u201cOtra\u201d,\u201cOtra\u201d,\u201cVenta\u201d; B1:B6 = 10,20,30,40,50,60 \u2192 =PROMEDIO.SI.CONJUNTO(B1:B6; A1:A6; \u201cVenta\u201d)  (70)\n2. A1:A5 = \u201cRaro\u201d,\u201cRaro\u201d,\u201cOtro\u201d,\u201cOtro\u201d,\u201cOtro\u201d; B1:B5 = 5,5,5,5,5 \u2192 =PROMEDIO.SI.CONJUNTO(B1:B5; A1:A5; \u201cOtro\u201d)  (5)\n3. A1:A4 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d; B1:B4 = 10,20,30,40 \u2192 =PROMEDIO.SI.CONJUNTO(B1:B4; A1:A4; 10)  (10)\n4. A1:A5 = 2,2,2,2,2; B1:B5 = 1,2,3,4,5 \u2192 =PROMEDIO.SI.CONJUNTO(B1:B5; A1:A5; 2)  (5)\n5. A1:A6 = \u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d,\u201cX\u201d,\u201cY\u201d; B1:B6 = 10,10,10,10,10,10 \u2192 =PROMEDIO.SI.CONJUNTO(B1:B6; A1:A6; 10)  (10)",
+            '### 1. Promedio con una condición: `=PROMEDIO.SI(rango_criterio; criterio; [rango_promedio])`\n' +
+            'Calcula la media aritmética únicamente de las celdas que cumplen el criterio indicado (ignorando las demás filas y evitando dividir entre el total de la tabla).\n' +
+            '• **Ejemplo:** Si en `A2:A5` hay departamentos y en `B2:B5` ventas (`100` y `80` para `"Ventas"`), `=PROMEDIO.SI(A2:A5; "Ventas"; B2:B5)` calcula `(100 + 80) / 2 = 90`.\n\n' +
+            '### 2. Promedio multicriterio: `=PROMEDIO.SI.CONJUNTO(rango_promedio; rango_criterio1; criterio1; ...)`\n' +
+            'Al igual que `SUMAR.SI.CONJUNTO`, coloca primero el rango numérico a promediar y después los pares de `rango_criterio; criterio`.\n' +
+            '• **Nota:** Si ninguna fila cumple todas las condiciones, devuelve `#¡DIV/0!` (puedes envolverla con `=SI.ERROR(...)` cuando sea necesario).\n\n' +
+            'Practica esta función en la pestaña **Prácticas**.',
         },
         {
           id: 'les-excel-4-10',
@@ -1060,7 +1049,15 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "Agregaciones din\u00e1micas respetando filtros AutoFiltro (SUBTOTAL / SUBTOTALES).",
           content:
-            "=== SUBTOTALES (SUBTOTAL) ===\nSUBTOTALES(n\u00fam_funci\u00f3n; ref1).\n\nPR\u00c1CTICAS \u2014 SUBTOTALES (3):\n1. A1:A5 = 10,20,30,40,50; AutoFiltro filtra 30 \u2192 =SUBTOTALES(9; A1:A5) \n2. A1:A5 = 2,4,6,8,10; AutoFiltro filtra 10 \u2192 =SUBTOTALES(2; A1:A5)\n3. A1:A5 = 100,200,300,400,500; AutoFiltro filtra 300,400 \u2192 =SUBTOTALES(9; A1:A5)",
+            '### ¿Por qué usar `=SUBTOTALES(...)` en lugar de `=SUMA(...)`?\n' +
+            'Cuando activas un **AutoFiltro** en una tabla, `=SUMA(A2:A20)` sigue sumando las filas que quedaron ocultas por el filtro. En cambio, **`=SUBTOTALES(núm_función; ref1)`** calcula únicamente sobre las **filas visibles**.\n\n' +
+            '### Códigos de función más utilizados\n' +
+            '• **`1`**: `PROMEDIO`\n' +
+            '• **`2`**: `CONTAR`\n' +
+            '• **`3`**: `CONTARA`\n' +
+            '• **`4`** / **`5`**: `MAX` / `MIN`\n' +
+            '• **`9`**: `SUMA` (el más común: `=SUBTOTALES(9; B2:B50)`)\n\n' +
+            'Ponlo a prueba con tablas filtradas en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-subtotales-filtro-410',
@@ -1080,7 +1077,12 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 10,
           summary: "Generaci\u00f3n de n\u00fameros aleatorios y enteros en intervalo.",
           content:
-            "=== ALEATORIO, ALEATORIO.ENTRE ===\nALEATORIO(): decimales entre 0 y 1.\nALEATORIO.ENTRE(inferior; superior): enteros en intervalo cerrado.\n\nPR\u00c1CTICAS (3):\n1. A1=ALEATORIO() \u2192 decimales entre 0 y 1.\n2. A1=ALEATORIO.ENTRE(1; 6) \u2192 1, 2, 3, 4, 5 o 6 (dado).\n3. B1:B10 con 10 celdas \u2192 =ALEATORIO.ENTRE(1; 3) refleja din\u00e1micamente.",
+            '### Generación de valores dinámicos\n' +
+            '• **`=ALEATORIO()`**: No lleva argumentos. Genera un número decimal uniforme mayor o igual a `0` y menor que `1` (ej. `0.4829`).\n' +
+            '• **`=ALEATORIO.ENTRE(inferior; superior)`**: Devuelve un número entero aleatorio dentro del intervalo cerrado especificado (por ejemplo, `=ALEATORIO.ENTRE(1; 6)` simula el lanzamiento de un dado).\n\n' +
+            '### Comportamiento de recálculo\n' +
+            'Son funciones **volátiles**: cada vez que editas cualquier celda o pulsas la tecla `F9`, generan nuevos valores automáticamente. Si deseas fijar los números generados para que no cambien más, copia las celdas y usa **Pegado especial → Valores**.\n\n' +
+            'Explora los ejercicios en la pestaña **Prácticas**.',
           materials: [
             {
               id: 'mat-img-aleatorio-funciones-411',
@@ -1119,7 +1121,16 @@ export const EXCEL_BASICO_COURSE: Course = {
           durationMinutes: 15,
           summary: "SI(prueba_l\u00f3gica; valor_si_verdadero; valor_si_falso), anidaci\u00f3n y Y/O.",
           content:
-            "=== SI ===\n=SI(prueba_l\u00f3gica; valor_si_verdadero; [valor_si_falso])\n\nPR\u00c1CTICAS \u2014 SI (5):\n1. A1=80 \u2192 =SI(A1>=60; \u201cAprobado\u201d; \u201cReprobado\u201d)\n2. A1=52 \u2192 =SI(A1>=60; \u201cAprobado\u201d; \u201cReprobado\u201d)\n3. A1=\u201cVenta\u201d,B1=100 \u2192 =SI(A1=\u201cVenta\u201d; B1*10; 0)\n4. A1=\u201cPep\u201d,B1=30 \u2192 =SI(A1=\u201cPep\u201d; B1*2; B1)\n5. A1=\u201cX\u201d \u2192 =SI(A1=\u201cX\u201d; \u201cIniciado\u201d; IF(A1=\u201cY\u201d; \u201cPaso 2\u201d; \u201cSin verificar\u201d))\n\nPR\u00c1CTICAS \u2014 SI anidado/Y (5):\n1. A1=85,B1=\u201cSecundaria\u201d \u2192 =SI(A1>=90; \u201cExcelente\u201d; SI(A1>=80; \u201cMuy bien\u201d; \u201cAprobado\u201d))\n2. A1=75,B1=\u201cI\u201d \u2192 =SI(A1>=70; SI(B1=\u201cI\u201d; \u201cInstitucional\u201d; \u201cAceptado\u201d); \u201cDesaprobado\u201d)\n3. A1=5,B1=\u201cM\u201d \u2192 =SI(Y(A1>0; B1=\u201cM\u201d); \u201cCorrecto\u201d; \u201cIncorrecto\u201d)\n4. A1=\u201ca\u201d,B1=\u201cb\u201d \u2192 =SI(O(A1=\u201ca\u201d; B1=\u201cb\u201d); \u201cCorrecto\u201d; \u201cIncorrecto\u201d)\n5. A1=90,B1=1 \u2192 =SI(Y(A1>=85; B1=1); \u201cPremio\u201d; IF(B1=0; \u201cSin premio\u201d; \u201cPrecauci\u00f3n\u201d))",
+            '### Estructura de la decisión lógica: `=SI(prueba_lógica; valor_si_verdadero; [valor_si_falso])`\n' +
+            'Evalúa una condición (`A1>=60`) y toma uno de dos caminos posibles:\n' +
+            '• **`prueba_lógica`**: Expresión que devuelve `VERDADERO` o `FALSO` (ej. `A1>=60`, `B1="Pagado"`).\n' +
+            '• **`valor_si_verdadero`**: Resultado devuelto cuando la condición se cumple (ej. `"Aprobado"` o una fórmula como `B1*0.10`).\n' +
+            '• **`[valor_si_falso]`**: Resultado devuelto cuando la condición no se cumple (ej. `"Reprobado"`).\n\n' +
+            '### Combinaciones clave: `SI` anidado, `Y()` y `O()`\n' +
+            '• **Anidación:** Coloca otro `SI()` en el tercer argumento para evaluar múltiples escalas: `=SI(A1>=90; "Excelente"; SI(A1>=70; "Aprobado"; "Reprobado"))`.\n' +
+            '• **`Y(cond1; cond2)`**: Exige que **todas** las condiciones sean verdaderas (`=SI(Y(A1>=85; B1="Activo"); "Bono"; "Sin bono")`).\n' +
+            '• **`O(cond1; cond2)`**: Basta con que **al menos una** condición sea verdadera.\n\n' +
+            'Practica casos reales de evaluación y reglas de negocio en la pestaña **Prácticas**.',
         }
       ]
     }  ],
@@ -1134,7 +1145,7 @@ export const EXCEL_INTERMEDIO_COURSE: Course = {
   category: 'Productividad',
   level: 'intermediate',
   priceCents: 0,
-  currency: 'USD',
+  currency: 'DOP',
   coverImage: '',
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
@@ -1153,7 +1164,7 @@ export const EXCEL_AVANZADO_COURSE: Course = {
   category: 'Productividad',
   level: 'advanced',
   priceCents: 0,
-  currency: 'USD',
+  currency: 'DOP',
   coverImage: '',
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
