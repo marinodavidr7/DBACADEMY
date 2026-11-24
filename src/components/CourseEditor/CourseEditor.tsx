@@ -685,7 +685,7 @@ function renderSyncStatusBadge(
 ): { dotClass: string; text: string; icon: React.ReactNode } {
   if (status === 'saving') {
     return {
-      dotClass: 'bg-blue-500 animate-pulse',
+      dotClass: 'bg-blue-500',
       text: labels.saving,
       icon: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />,
     };
@@ -747,8 +747,26 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   const [uploadingCover, setUploadingCover] = useState(false);
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
 
+  const [isXlViewport, setIsXlViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1280px)').matches : true
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    const onChange = () => {
+      setIsXlViewport(mq.matches);
+      if (mq.matches) setIndexOpen(false);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   const courseRef = useRef<Course | null>(course);
   courseRef.current = course;
+  const createdCourseRef = useRef<Course | null>(null);
+  if (course && createdCourseRef.current?.id === course.id) {
+    createdCourseRef.current = null;
+  }
   const onCreateRef = useRef(onCreate);
   onCreateRef.current = onCreate;
   const onUpdateRef = useRef(onUpdate);
@@ -779,9 +797,15 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     };
   }, [initCourseSync, resetCourseSync]);
 
-  const effectiveStatus: CourseSyncStatus =
-    courseSyncState.status === 'idle' ? 'saved' : courseSyncState.status;
   const dirty = courseSyncState.dirtyRevision > courseSyncState.savedRevision;
+  const effectiveStatus: CourseSyncStatus =
+    courseSyncState.status === 'error'
+      ? 'error'
+      : courseSyncState.status === 'saving'
+        ? 'saving'
+        : dirty
+          ? 'unsaved'
+          : 'saved';
   const error = courseSyncState.error ?? '';
 
   const selectedModuleIndex = useMemo(
@@ -804,22 +828,42 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     [publishIssues, input.modules]
   );
 
+  const clearSaveStatusToasts = useCallback(() => {
+    setToasts((prev) =>
+      prev.some((item) => item.kind === 'save-status')
+        ? prev.filter((item) => item.kind !== 'save-status')
+        : prev
+    );
+  }, []);
+
   const pushToast = useCallback(
     (
       message: string,
-      options?: { variant?: ToastItem['variant']; actionLabel?: string; onAction?: () => void }
+      options?: {
+        variant?: ToastItem['variant'];
+        kind?: ToastItem['kind'];
+        actionLabel?: string;
+        onAction?: () => void;
+      }
     ) => {
       const id = newId('toast');
-      setToasts((prev) => [
-        ...prev,
-        {
-          id,
-          message,
-          variant: options?.variant,
-          actionLabel: options?.actionLabel,
-          onAction: options?.onAction,
-        },
-      ]);
+      setToasts((prev) => {
+        const base =
+          options?.kind === 'save-status'
+            ? prev.filter((item) => item.kind !== 'save-status')
+            : prev;
+        return [
+          ...base,
+          {
+            id,
+            message,
+            variant: options?.variant,
+            kind: options?.kind,
+            actionLabel: options?.actionLabel,
+            onAction: options?.onAction,
+          },
+        ];
+      });
       window.setTimeout(() => {
         setToasts((prev) => prev.filter((item) => item.id !== id));
       }, 6000);
@@ -834,9 +878,10 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
   const updateInput = useCallback(
     (updater: (prev: CourseInput) => CourseInput) => {
       setInput(updater);
-      markCourseUnsaved(courseRef.current?.id ?? tempCourseIdRef.current);
+      clearSaveStatusToasts();
+      markCourseUnsaved(courseRef.current?.id ?? createdCourseRef.current?.id ?? tempCourseIdRef.current);
     },
-    [markCourseUnsaved]
+    [clearSaveStatusToasts, markCourseUnsaved]
   );
 
   const handleUpdateField = useCallback(
@@ -1040,13 +1085,14 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
     async (origin: 'auto' | 'manual' = 'manual', options?: { silent?: boolean }) => {
       if (!canEdit) return;
       const currentInput = latestInputRef.current;
-      const activeCourse = courseRef.current;
+      const activeCourse = courseRef.current ?? createdCourseRef.current;
 
-      if (!activeCourse && currentInput.title.trim().length < 3) {
+      if (currentInput.title.trim().length < 3) {
         if (origin === 'manual' && !options?.silent) {
-          const msg = 'Escribe un título de al menos 3 caracteres antes de guardar el nuevo curso.';
-          setCourseSyncError(msg, tempCourseIdRef.current);
-          pushToast(msg, { variant: 'error' });
+          const msg = 'Escribe un título de al menos 3 caracteres antes de guardar el curso.';
+          clearSaveStatusToasts();
+          setCourseSyncError(msg, activeCourse?.id ?? tempCourseIdRef.current);
+          pushToast(msg, { variant: 'error', kind: 'save-status' });
         }
         return;
       }
@@ -1058,6 +1104,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       }
 
       inFlightSaveRef.current = true;
+      clearSaveStatusToasts();
       const targetRevision = getCourseSyncSnapshot().dirtyRevision;
 
       try {
@@ -1065,14 +1112,20 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
           ...module,
           durationMinutes: module.lessons.reduce((acc, lesson) => acc + (Number(lesson.durationMinutes) || 0), 0),
         }));
+        const trimmedTitle = currentInput.title.trim();
+        const trimmedSubtitle = currentInput.subtitle.trim();
+        const safeSubtitle =
+          trimmedSubtitle.length >= 3 ? trimmedSubtitle.slice(0, 240) : trimmedTitle.slice(0, 240);
+        const safeDescription =
+          currentInput.description.trim().length >= 10
+            ? currentInput.description.trim().slice(0, 2000)
+            : `${safeSubtitle} — Programa de formación técnica en tiempo real.`.slice(0, 2000);
+
         const payload: CourseInput = {
           ...currentInput,
-          title: currentInput.title.trim(),
-          subtitle: currentInput.subtitle.trim(),
-          description:
-            currentInput.description.trim().length >= 10
-              ? currentInput.description.trim()
-              : `${currentInput.subtitle.trim() || currentInput.title.trim()} — Programa de formación técnica en tiempo real.`,
+          title: trimmedTitle,
+          subtitle: safeSubtitle,
+          description: safeDescription,
           modules: normalizedModules,
           modulesCount: normalizedModules.length,
           totalLessons: normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0),
@@ -1081,24 +1134,28 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
         if (activeCourse) {
           await onUpdateRef.current(activeCourse.id, payload, { targetRevision });
         } else {
-          await onCreateRef.current(payload, { targetRevision });
+          const created = await onCreateRef.current(payload, { targetRevision });
+          if (created) {
+            createdCourseRef.current = created;
+          }
         }
 
         const syncAfter = getCourseSyncSnapshot();
         if (syncAfter.dirtyRevision > syncAfter.savedRevision) {
-          // Newer edits arrived while Firestore write was in-flight: queue follow-up save instead of claiming saved.
+          clearSaveStatusToasts();
           pendingSaveOriginRef.current =
             pendingSaveOriginRef.current === 'manual' || origin === 'manual' ? 'manual' : 'auto';
         } else if (syncAfter.status === 'saved' && origin === 'manual' && !options?.silent) {
-          pushToast(labels.actions.saved, { variant: 'success' });
+          pushToast(labels.actions.saved, { variant: 'success', kind: 'save-status' });
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : labels.actions.saveError;
+        clearSaveStatusToasts();
         if (getCourseSyncSnapshot().status !== 'error') {
           setCourseSyncError(msg, activeCourse?.id ?? tempCourseIdRef.current);
         }
         if (origin === 'manual' && !options?.silent) {
-          pushToast(labels.actions.saveError, { variant: 'error' });
+          pushToast(labels.actions.saveError, { variant: 'error', kind: 'save-status' });
         }
       } finally {
         inFlightSaveRef.current = false;
@@ -1109,7 +1166,15 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
         }
       }
     },
-    [canEdit, getCourseSyncSnapshot, setCourseSyncError, labels.actions.saved, labels.actions.saveError, pushToast]
+    [
+      canEdit,
+      clearSaveStatusToasts,
+      getCourseSyncSnapshot,
+      setCourseSyncError,
+      labels.actions.saved,
+      labels.actions.saveError,
+      pushToast,
+    ]
   );
 
   // Autoguardado con debounce tras ediciones sin sobrescribir estados de guardado activos.
@@ -1359,10 +1424,12 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="hidden xl:block xl:sticky xl:top-20 xl:h-[calc(100dvh-7rem)]">{indexNode}</div>
+        {isXlViewport && (
+          <div className="xl:sticky xl:top-20 xl:h-[calc(100dvh-7rem)]">{indexNode}</div>
+        )}
 
         <AnimatePresence>
-          {indexOpen && (
+          {!isXlViewport && indexOpen && (
             <motion.div
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}

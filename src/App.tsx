@@ -32,6 +32,7 @@ import { RedeemGiftCardModal } from './components/RedeemGiftCardModal';
 import { BrandLogo } from './components/ui/BrandLogo';
 import { PageContainer } from './components/ui/PageContainer';
 import { PlatformProvider, usePlatform } from './context/PlatformContext';
+import { FIREBASE_AUTH_SETTINGS_URL } from './firebase';
 import { LANGUAGE_LABELS } from './i18n/translations';
 import type { AppView, Language } from './types';
 
@@ -505,7 +506,7 @@ const AppShell: React.FC = () => {
                     <span className="block break-words">{authError}</span>
                     {authError.includes('Authorized domains') && (
                       <a
-                        href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                        href={FIREBASE_AUTH_SETTINGS_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 font-semibold underline hover:text-red-900 dark:hover:text-red-100"

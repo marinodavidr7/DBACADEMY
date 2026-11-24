@@ -6,6 +6,7 @@ export interface ToastItem {
   id: string;
   message: string;
   variant?: 'success' | 'error' | 'info';
+  kind?: 'save-status' | 'info';
   actionLabel?: string;
   onAction?: () => void;
 }

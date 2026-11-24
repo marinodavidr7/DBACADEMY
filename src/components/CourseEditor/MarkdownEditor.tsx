@@ -139,7 +139,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<MarkdownTab>('edit');
-  const [split, setSplit] = useState(false);
+  const [split, setSplit] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1536px)').matches : false
+  );
   const [showImagePanel, setShowImagePanel] = useState(false);
   const [imgUrl, setImgUrl] = useState('');
   const [imgAlt, setImgAlt] = useState('');
@@ -149,7 +151,6 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1536px)');
     const update = () => setSplit(mq.matches);
-    update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);
   }, []);
@@ -160,7 +161,12 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
       const el = textareaRef.current;
       if (!el) return;
       el.style.height = 'auto';
-      el.style.height = `${Math.max(180, el.scrollHeight + 2)}px`;
+      const targetHeight = Math.max(180, el.scrollHeight + 2);
+      if (Math.abs(targetHeight - el.offsetHeight) > 2) {
+        el.style.height = `${targetHeight}px`;
+      } else {
+        el.style.height = `${el.offsetHeight}px`;
+      }
     });
     return () => window.cancelAnimationFrame(rafId);
   }, [value, split, tab]);

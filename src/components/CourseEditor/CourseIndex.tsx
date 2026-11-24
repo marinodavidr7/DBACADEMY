@@ -80,6 +80,7 @@ interface LessonRowProps {
   onDragOverTarget: (moduleId: string, index: number) => void;
   onDropLesson: (moduleId: string, index: number) => void;
   onDragLeaveTarget: () => void;
+  onDragEnd: () => void;
 }
 
 const CourseIndexLessonRow: React.FC<LessonRowProps> = memo(({
@@ -99,6 +100,7 @@ const CourseIndexLessonRow: React.FC<LessonRowProps> = memo(({
   onDragOverTarget,
   onDropLesson,
   onDragLeaveTarget,
+  onDragEnd,
 }) => {
   const incomplete = !lesson.content.trim() && lesson.type !== 'video';
   const strippedTitle = useMemo(() => stripManualPrefix(lesson.title), [lesson.title]);
@@ -106,16 +108,26 @@ const CourseIndexLessonRow: React.FC<LessonRowProps> = memo(({
   return (
     <div
       draggable={canEdit}
-      onDragStart={() => onDragStartLesson(moduleId, lessonIndex)}
+      onDragStart={(event) => {
+        if ((event.target as HTMLElement | null)?.closest('button')) {
+          event.preventDefault();
+          return;
+        }
+        event.stopPropagation();
+        onDragStartLesson(moduleId, lessonIndex);
+      }}
       onDragOver={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onDragOverTarget(moduleId, lessonIndex);
       }}
       onDrop={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onDropLesson(moduleId, lessonIndex);
       }}
       onDragLeave={onDragLeaveTarget}
+      onDragEnd={onDragEnd}
       className={`group flex items-center gap-2 rounded-md px-2 py-1.5 ${
         selected
           ? 'bg-blue-600 text-white'
@@ -237,6 +249,7 @@ interface ModuleCardProps {
   onDragOverLesson: (moduleId: string, index: number) => void;
   onDropLesson: (moduleId: string, index: number) => void;
   onDragLeaveTarget: () => void;
+  onDragEnd: () => void;
 }
 
 const CourseIndexModuleCard: React.FC<ModuleCardProps> = memo(({
@@ -267,6 +280,7 @@ const CourseIndexModuleCard: React.FC<ModuleCardProps> = memo(({
   onDragOverLesson,
   onDropLesson,
   onDragLeaveTarget,
+  onDragEnd,
 }) => {
   const strippedModuleTitle = useMemo(() => stripManualPrefix(module.title), [module.title]);
   const materials = useMemo(
@@ -277,7 +291,13 @@ const CourseIndexModuleCard: React.FC<ModuleCardProps> = memo(({
   return (
     <div
       draggable={canEdit}
-      onDragStart={() => onDragStartModule(module.id)}
+      onDragStart={(event) => {
+        if ((event.target as HTMLElement | null)?.closest('button')) {
+          event.preventDefault();
+          return;
+        }
+        onDragStartModule(module.id);
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         onDragOverModule(module.id, moduleIndex);
@@ -287,6 +307,7 @@ const CourseIndexModuleCard: React.FC<ModuleCardProps> = memo(({
         onDropModule(moduleIndex);
       }}
       onDragLeave={onDragLeaveTarget}
+      onDragEnd={onDragEnd}
       className={`rounded-lg border transition-colors ${
         isModuleDropTarget
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
@@ -387,6 +408,7 @@ const CourseIndexModuleCard: React.FC<ModuleCardProps> = memo(({
               onDragOverTarget={onDragOverLesson}
               onDropLesson={onDropLesson}
               onDragLeaveTarget={onDragLeaveTarget}
+              onDragEnd={onDragEnd}
             />
           ))}
           {canEdit && lessons.length > 0 && (
@@ -500,6 +522,12 @@ export const CourseIndex: React.FC<CourseIndexProps> = memo(({
     setDropTarget(null);
   }, []);
 
+  const handleDragEnd = useCallback(() => {
+    setDragModuleId(null);
+    setDragLesson(null);
+    setDropTarget(null);
+  }, []);
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#111827]">
       <div className="border-b border-slate-200 dark:border-slate-700 p-4">
@@ -561,6 +589,7 @@ export const CourseIndex: React.FC<CourseIndexProps> = memo(({
                 onDragOverLesson={handleDragOverLesson}
                 onDropLesson={handleLessonDrop}
                 onDragLeaveTarget={handleDragLeaveTarget}
+                onDragEnd={handleDragEnd}
               />
             );
           })}

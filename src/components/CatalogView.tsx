@@ -225,19 +225,19 @@ export const CatalogView: React.FC = () => {
 
           <div className="lg:col-span-4 relative min-h-[170px] lg:min-h-full bg-[var(--dba-bg-hero-surface)]">
             <img
-              src="/assets/images/track_data_analytics_1795271913869.webp"
-              alt="Laboratorio de Excel y Analítica de DB Academy"
-              width={1200}
-              height={896}
+              src="/assets/images/course_system_architecture_1795146988857.webp"
+              alt="Campus Técnico Multidisciplinario de DB Academy"
+              width={1280}
+              height={714}
               decoding="async"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[var(--dba-bg-hero)]/90 via-[var(--dba-bg-hero)]/25 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--dba-bg-hero)]/90 via-[var(--dba-bg-hero)]/35 to-transparent" />
             <div className="absolute bottom-3.5 left-4 right-4 text-white">
-              <p className="text-[11px] font-mono text-amber-300">Programa destacado</p>
+              <p className="text-[11px] font-mono text-amber-300">Campus Técnico DB Academy</p>
               <p className="text-xs sm:text-sm font-semibold text-white mt-0.5">
-                Cursos Excel · Simulador 3D Interactivo
+                Ingeniería · Datos · Diseño · Productividad
               </p>
             </div>
           </div>

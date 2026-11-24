@@ -32,6 +32,7 @@ import {
   auth,
   AUTHORIZED_ADMIN_EMAIL,
   db,
+  FIREBASE_PROJECT_ID,
   googleProvider,
   handleFirestoreError,
   isAuthorizedAdminEmail,
@@ -53,6 +54,7 @@ import type {
   CouponType,
   CouponValidationResult,
   Course,
+  CourseModule,
   CourseSyncState,
   CurrencyCode,
   CustomExcelExercise,
@@ -270,7 +272,7 @@ function formatGoogleAuthError(err: unknown): string {
   const host = typeof window !== 'undefined' ? window.location.hostname : 'este dominio';
   if (code === 'auth/unauthorized-domain') {
     const extra = host !== 'dbacademy.vercel.app' ? ' (y dbacademy.vercel.app)' : '';
-    return `El dominio "${host}" aún no está autorizado en Firebase Authentication (proyecto river-pipe-m6tvw). Agrega "${host}"${extra} en Firebase Console → Authentication → Settings → Authorized domains.`;
+    return `El dominio "${host}" aún no está autorizado en Firebase Authentication (proyecto ${FIREBASE_PROJECT_ID}). Agrega "${host}"${extra} en Firebase Console → Authentication → Settings → Authorized domains.`;
   }
   if (code === 'auth/operation-not-allowed') {
     return 'El inicio de sesión con Google no está habilitado en Firebase Authentication.';
@@ -877,12 +879,23 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               (existingExcelData.title && existingExcelData.title.includes('eliminado')) ||
               !existingExcelData.modulesCount)
           );
+          const needsExcelPriceMigration = Boolean(
+            existingExcelData &&
+              existingExcelData.priceCents === 0 &&
+              localStorage.getItem('db_academy_excel_price_600_v1') !== '1'
+          );
           const excelMergeResult = existingExcelSnap && !needsExcelReset
             ? mergeSeedLessonsIntoCourse(existingExcelSnap.data() as Course)
             : null;
           const canUpdateExistingExcel = Boolean(existingExcelSnap && excelMergeResult?.changed);
 
-          if (missingCourses.length > 0 || coursesToDelete.length > 0 || canUpdateExistingExcel || needsExcelReset) {
+          if (
+            missingCourses.length > 0 ||
+            coursesToDelete.length > 0 ||
+            canUpdateExistingExcel ||
+            needsExcelReset ||
+            needsExcelPriceMigration
+          ) {
             const batch = writeBatch(db);
             for (const docSnap of coursesToDelete) {
               batch.delete(docSnap.ref);
@@ -901,16 +914,26 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 instructorId: firebaseUser.uid,
                 updatedAt: serverTimestamp(),
               });
-            } else if (canUpdateExistingExcel && excelMergeResult) {
-              batch.update(doc(db, 'courses', EXCEL_BASICO_COURSE.id), {
-                modulesCount: excelMergeResult.course.modulesCount,
-                totalLessons: excelMergeResult.course.totalLessons,
-                modules: excelMergeResult.course.modules,
+            } else if (canUpdateExistingExcel || needsExcelPriceMigration) {
+              const excelUpdatePayload: Record<string, unknown> = {
                 updatedAt: serverTimestamp(),
-              });
+              };
+              if (canUpdateExistingExcel && excelMergeResult) {
+                excelUpdatePayload.modulesCount = excelMergeResult.course.modulesCount;
+                excelUpdatePayload.totalLessons = excelMergeResult.course.totalLessons;
+                excelUpdatePayload.modules = excelMergeResult.course.modules;
+              }
+              if (needsExcelPriceMigration) {
+                excelUpdatePayload.priceCents = EXCEL_BASICO_COURSE.priceCents;
+                excelUpdatePayload.currency = EXCEL_BASICO_COURSE.currency;
+              }
+              batch.update(doc(db, 'courses', EXCEL_BASICO_COURSE.id), excelUpdatePayload);
             }
             try {
               await withRetry(() => batch.commit());
+              if (needsExcelPriceMigration || needsExcelReset) {
+                localStorage.setItem('db_academy_excel_price_600_v1', '1');
+              }
             } catch (err) {
               if (!isFirestoreOfflineError(err)) {
                 handleFirestoreError(err, OperationType.WRITE, 'courses');
@@ -1088,15 +1111,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const applyCoursesDocs = (docs: Array<{ data: () => unknown }>) => {
       if (docs.length > 0) {
+        const priceMigrated = localStorage.getItem('db_academy_excel_price_600_v1') === '1';
         const loaded = docs
-          .map((d) => mergeSeedLessonsIntoCourse(d.data() as Course).course)
+          .map((d) => {
+            const mergedCourse = mergeSeedLessonsIntoCourse(d.data() as Course).course;
+            if (!priceMigrated && mergedCourse.id === EXCEL_BASICO_COURSE.id && mergedCourse.priceCents === 0) {
+              return {
+                ...mergedCourse,
+                priceCents: EXCEL_BASICO_COURSE.priceCents,
+                currency: EXCEL_BASICO_COURSE.currency,
+              };
+            }
+            return mergedCourse;
+          })
           .filter((c) => !REMOVED_SEED_COURSE_IDS.includes(c.id));
         const loadedIds = new Set(loaded.map((c) => c.id));
         const merged = [
           ...loaded,
           ...SEED_COURSES.filter((s) => !loadedIds.has(s.id)),
         ];
-        // Cursos Excel eliminados por ahora: no se mutan precios ni listados
         setCourses(merged);
       } else {
         setCourses(SEED_COURSES);
@@ -2127,6 +2160,88 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user, enrollments, certificates, sendWs, triggerPushAlert]
   );
 
+  const verifyCoursePersisted = useCallback(
+    async (
+      courseRef: ReturnType<typeof doc>,
+      expected: {
+        title?: string;
+        subtitle?: string;
+        description?: string;
+        priceCents?: number;
+        published?: boolean;
+        modules?: CourseModule[];
+      }
+    ) => {
+      const verifiedSnap = await getDoc(courseRef);
+      if (!verifiedSnap.exists()) {
+        throw new Error('El servidor no confirmó la creación del documento del curso.');
+      }
+      const persisted = verifiedSnap.data() as Course;
+      if (typeof expected.title === 'string' && persisted.title !== expected.title) {
+        throw new Error('El servidor no confirmó el título actualizado del curso.');
+      }
+      if (typeof expected.subtitle === 'string' && persisted.subtitle !== expected.subtitle) {
+        throw new Error('El servidor no confirmó el subtítulo actualizado del curso.');
+      }
+      if (typeof expected.description === 'string' && persisted.description !== expected.description) {
+        throw new Error('El servidor no confirmó la descripción actualizada del curso.');
+      }
+      if (typeof expected.priceCents === 'number' && persisted.priceCents !== expected.priceCents) {
+        throw new Error('El servidor no confirmó el precio actualizado del curso.');
+      }
+      if (typeof expected.published === 'boolean' && persisted.published !== expected.published) {
+        throw new Error('El servidor no confirmó el estado de publicación del curso.');
+      }
+      if (Array.isArray(expected.modules)) {
+        const persistedModules = Array.isArray(persisted.modules) ? persisted.modules : [];
+        if (persistedModules.length !== expected.modules.length) {
+          throw new Error('El servidor no confirmó todos los módulos del curso.');
+        }
+        for (let i = 0; i < expected.modules.length; i += 1) {
+          const expMod = expected.modules[i];
+          const perMod = persistedModules[i];
+          if (!perMod || perMod.id !== expMod.id) {
+            throw new Error('El servidor no confirmó la estructura de módulos del curso.');
+          }
+          if ((perMod.quizEnabled ?? true) !== (expMod.quizEnabled ?? true)) {
+            throw new Error('El servidor no confirmó el estado de evaluación del módulo.');
+          }
+          const expQuestions = expMod.questions ?? [];
+          const perQuestions = perMod.questions ?? [];
+          if (perQuestions.length !== expQuestions.length) {
+            throw new Error('El servidor no confirmó todas las preguntas de evaluación.');
+          }
+          for (let q = 0; q < expQuestions.length; q += 1) {
+            if (
+              perQuestions[q]?.id !== expQuestions[q]?.id ||
+              (perQuestions[q]?.prompt ?? '') !== (expQuestions[q]?.prompt ?? '') ||
+              (perQuestions[q]?.options?.length ?? 0) !== (expQuestions[q]?.options?.length ?? 0) ||
+              (perQuestions[q]?.correctIndexes?.length ?? 0) !== (expQuestions[q]?.correctIndexes?.length ?? 0)
+            ) {
+              throw new Error('El servidor no confirmó una de las preguntas modificadas.');
+            }
+          }
+          const expLessons = expMod.lessons ?? [];
+          const perLessons = perMod.lessons ?? [];
+          if (perLessons.length !== expLessons.length) {
+            throw new Error('El servidor no confirmó todas las lecciones del módulo.');
+          }
+          for (let l = 0; l < expLessons.length; l += 1) {
+            if (
+              perLessons[l]?.id !== expLessons[l]?.id ||
+              (perLessons[l]?.title ?? '') !== (expLessons[l]?.title ?? '') ||
+              (perLessons[l]?.content?.length ?? 0) !== (expLessons[l]?.content?.length ?? 0) ||
+              (perLessons[l]?.materials?.length ?? 0) !== (expLessons[l]?.materials?.length ?? 0)
+            ) {
+              throw new Error('El servidor no confirmó el contenido de una lección modificada.');
+            }
+          }
+        }
+      }
+    },
+    []
+  );
+
   const createCourse = useCallback(
     async (
       courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>,
@@ -2146,16 +2261,25 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const id = `crs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       try {
         const verifiedAdmin = await assertPlatformAdminWrite('crear cursos', user);
+        const courseRef = doc(db, 'courses', id);
         const createdCourse: Course = {
           ...courseInput,
           id,
           instructorId: verifiedAdmin.uid,
           instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
         };
-        await setDoc(doc(db, 'courses', id), {
+        await setDoc(courseRef, {
           ...createdCourse,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+        });
+        await verifyCoursePersisted(courseRef, {
+          title: createdCourse.title,
+          subtitle: createdCourse.subtitle,
+          description: createdCourse.description,
+          priceCents: createdCourse.priceCents,
+          published: createdCourse.published,
+          modules: createdCourse.modules,
         });
         const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
         const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
@@ -2177,7 +2301,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.CREATE, `courses/${id}`);
       }
     },
-    [user, isAdmin, commitCourseSync]
+    [user, isAdmin, commitCourseSync, verifyCoursePersisted]
   );
 
   const updateCourse = useCallback(
@@ -2236,8 +2360,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             .slice(0, 20);
         }
 
+        let expectedModules: CourseModule[] | undefined;
         if (Array.isArray(patch.modules) && patch.modules.length > 0) {
           const modulesSlice = patch.modules.slice(0, 12);
+          expectedModules = modulesSlice;
           allowedPatch.modules = modulesSlice;
           allowedPatch.modulesCount = modulesSlice.length;
           allowedPatch.totalLessons = Math.max(
@@ -2269,6 +2395,15 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
         }
 
+        await verifyCoursePersisted(courseRef, {
+          title: typeof allowedPatch.title === 'string' ? allowedPatch.title : undefined,
+          subtitle: typeof allowedPatch.subtitle === 'string' ? allowedPatch.subtitle : undefined,
+          description: typeof allowedPatch.description === 'string' ? allowedPatch.description : undefined,
+          priceCents: typeof allowedPatch.priceCents === 'number' ? allowedPatch.priceCents : undefined,
+          published: typeof allowedPatch.published === 'boolean' ? allowedPatch.published : undefined,
+          modules: expectedModules,
+        });
+
         const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
         const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
         commitCourseSync((prev) => ({
@@ -2289,7 +2424,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.UPDATE, `courses/${courseId}`);
       }
     },
-    [user, isAdmin, commitCourseSync]
+    [user, isAdmin, commitCourseSync, verifyCoursePersisted]
   );
 
   const deleteCourse = useCallback(
@@ -3724,103 +3859,198 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [notifications]
   );
 
-  const value: PlatformContextValue = {
-    user,
-    authReady,
-    isAdmin,
-    profile,
-    privateInfo,
-    theme,
-    language,
-    t,
-    activeView,
-    setActiveView,
-    zenMode,
-    setZenMode,
-    toggleZenMode,
-    selectedCourseId,
-    setSelectedCourseId,
-    workspaceRole,
-    setWorkspaceRole,
-    courses,
-    customExercises,
-    enrollments,
-    instructorEnrollments,
-    payments,
-    instructorPayments,
-    certificates,
-    instructorCertificates,
-    forumThreads,
-    calendarEvents,
-    encryptedNotes,
-    apiKeys,
-    notifications,
-    unreadCount,
-    connectedDevicesCount,
-    wsConnected,
-    e2eeFingerprint,
-    authError,
-    clearAuthError,
-    toggleTheme,
-    setLanguage,
-    signInWithGoogle,
-    signInWithEmail,
-    signInAsAdmin,
-    logout,
-    enrollWithPayment,
-    getLemonSqueezyStatus,
-    createLemonSqueezyCheckout,
-    verifyAndCompleteLemonSqueezyCheckout,
-    lemonSqueezyBanner,
-    clearLemonSqueezyBanner,
-    completeLesson,
-    courseSyncState,
-    getCourseSyncSnapshot,
-    initCourseSync,
-    markCourseUnsaved,
-    setCourseSyncError,
-    resetCourseSync,
-    createCourse,
-    updateCourse,
-    deleteCourse,
-    createCustomExercise,
-    deleteCustomExercise,
-    createForumThread,
-    addForumReply,
-    upvoteForumThread,
-    toggleForumThreadState,
-    createCalendarEvent,
-    toggleCalendarEventComplete,
-    deleteCalendarEvent,
-    updateNotificationPrefs,
-    triggerPushAlert,
-    markAllNotificationsRead,
-    saveEncryptedNote,
-    deleteEncryptedNote,
-    syncCloudBackup,
-    createApiKey,
-    toggleApiKey,
-    deleteApiKey,
-    refreshVaultFingerprint,
-    assignmentSubmissions,
-    submitAssignment,
-    gradeAssignment,
-    deleteSubmission,
-    giftCards,
-    giftCardRedemptions,
-    createGiftCards,
-    toggleGiftCardActive,
-    deleteGiftCard,
-    validateGiftCard,
-    subscribeToGiftCard,
-    redeemGiftCardForCourse,
-    redeemGiftCardCode,
-    coupons,
-    createCoupon,
-    toggleCouponActive,
-    deleteCoupon,
-    validateCoupon,
-  };
+  const value: PlatformContextValue = useMemo(
+    () => ({
+      user,
+      authReady,
+      isAdmin,
+      profile,
+      privateInfo,
+      theme,
+      language,
+      t,
+      activeView,
+      setActiveView,
+      zenMode,
+      setZenMode,
+      toggleZenMode,
+      selectedCourseId,
+      setSelectedCourseId,
+      workspaceRole,
+      setWorkspaceRole,
+      courses,
+      customExercises,
+      enrollments,
+      instructorEnrollments,
+      payments,
+      instructorPayments,
+      certificates,
+      instructorCertificates,
+      forumThreads,
+      calendarEvents,
+      encryptedNotes,
+      apiKeys,
+      notifications,
+      unreadCount,
+      connectedDevicesCount,
+      wsConnected,
+      e2eeFingerprint,
+      authError,
+      clearAuthError,
+      toggleTheme,
+      setLanguage,
+      signInWithGoogle,
+      signInWithEmail,
+      signInAsAdmin,
+      logout,
+      enrollWithPayment,
+      getLemonSqueezyStatus,
+      createLemonSqueezyCheckout,
+      verifyAndCompleteLemonSqueezyCheckout,
+      lemonSqueezyBanner,
+      clearLemonSqueezyBanner,
+      completeLesson,
+      courseSyncState,
+      getCourseSyncSnapshot,
+      initCourseSync,
+      markCourseUnsaved,
+      setCourseSyncError,
+      resetCourseSync,
+      createCourse,
+      updateCourse,
+      deleteCourse,
+      createCustomExercise,
+      deleteCustomExercise,
+      createForumThread,
+      addForumReply,
+      upvoteForumThread,
+      toggleForumThreadState,
+      createCalendarEvent,
+      toggleCalendarEventComplete,
+      deleteCalendarEvent,
+      updateNotificationPrefs,
+      triggerPushAlert,
+      markAllNotificationsRead,
+      saveEncryptedNote,
+      deleteEncryptedNote,
+      syncCloudBackup,
+      createApiKey,
+      toggleApiKey,
+      deleteApiKey,
+      refreshVaultFingerprint,
+      assignmentSubmissions,
+      submitAssignment,
+      gradeAssignment,
+      deleteSubmission,
+      giftCards,
+      giftCardRedemptions,
+      createGiftCards,
+      toggleGiftCardActive,
+      deleteGiftCard,
+      validateGiftCard,
+      subscribeToGiftCard,
+      redeemGiftCardForCourse,
+      redeemGiftCardCode,
+      coupons,
+      createCoupon,
+      toggleCouponActive,
+      deleteCoupon,
+      validateCoupon,
+    }),
+    [
+      user,
+      authReady,
+      isAdmin,
+      profile,
+      privateInfo,
+      theme,
+      language,
+      t,
+      activeView,
+      zenMode,
+      toggleZenMode,
+      selectedCourseId,
+      workspaceRole,
+      courses,
+      customExercises,
+      enrollments,
+      instructorEnrollments,
+      payments,
+      instructorPayments,
+      certificates,
+      instructorCertificates,
+      forumThreads,
+      calendarEvents,
+      encryptedNotes,
+      apiKeys,
+      notifications,
+      unreadCount,
+      connectedDevicesCount,
+      wsConnected,
+      e2eeFingerprint,
+      authError,
+      clearAuthError,
+      toggleTheme,
+      setLanguage,
+      signInWithGoogle,
+      signInWithEmail,
+      signInAsAdmin,
+      logout,
+      enrollWithPayment,
+      getLemonSqueezyStatus,
+      createLemonSqueezyCheckout,
+      verifyAndCompleteLemonSqueezyCheckout,
+      lemonSqueezyBanner,
+      clearLemonSqueezyBanner,
+      completeLesson,
+      courseSyncState,
+      getCourseSyncSnapshot,
+      initCourseSync,
+      markCourseUnsaved,
+      setCourseSyncError,
+      resetCourseSync,
+      createCourse,
+      updateCourse,
+      deleteCourse,
+      createCustomExercise,
+      deleteCustomExercise,
+      createForumThread,
+      addForumReply,
+      upvoteForumThread,
+      toggleForumThreadState,
+      createCalendarEvent,
+      toggleCalendarEventComplete,
+      deleteCalendarEvent,
+      updateNotificationPrefs,
+      triggerPushAlert,
+      markAllNotificationsRead,
+      saveEncryptedNote,
+      deleteEncryptedNote,
+      syncCloudBackup,
+      createApiKey,
+      toggleApiKey,
+      deleteApiKey,
+      refreshVaultFingerprint,
+      assignmentSubmissions,
+      submitAssignment,
+      gradeAssignment,
+      deleteSubmission,
+      giftCards,
+      giftCardRedemptions,
+      createGiftCards,
+      toggleGiftCardActive,
+      deleteGiftCard,
+      validateGiftCard,
+      subscribeToGiftCard,
+      redeemGiftCardForCourse,
+      redeemGiftCardCode,
+      coupons,
+      createCoupon,
+      toggleCouponActive,
+      deleteCoupon,
+      validateCoupon,
+    ]
+  );
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;
 };

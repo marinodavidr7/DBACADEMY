@@ -9,7 +9,7 @@ export const EXCEL_BASICO_COURSE: Course = {
     'Curso práctico paso a paso diseñado para dominar la pantalla de Excel, la cuadrícula bidimensional, tipos de datos y edición, formato desde la pestaña Inicio, fórmulas con operadores y referencias relativas y absolutas con F4, cálculo del ITBIS del 18% y las 13 funciones matemáticas y estadísticas fundamentales.',
   category: 'Productividad',
   level: 'beginner',
-  priceCents: 0,
+  priceCents: 60000,
   currency: 'DOP',
   coverImage: '/assets/images/course_excel_basico_1795186770853.webp',
   instructorId: 'platform-faculty',

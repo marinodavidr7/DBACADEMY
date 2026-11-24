@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { FIREBASE_AUTH_SETTINGS_URL } from '../firebase';
 import { BrandLogo } from './ui/BrandLogo';
 
 export const AuthGateNotice: React.FC = () => {
@@ -132,7 +133,7 @@ export const AuthGateNotice: React.FC = () => {
                   <span className="block">{authError || platformAuthError}</span>
                   {(authError || platformAuthError || '').includes('Authorized domains') && (
                     <a
-                      href="https://console.firebase.google.com/project/river-pipe-m6tvw/authentication/settings"
+                      href={FIREBASE_AUTH_SETTINGS_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-block font-semibold underline hover:text-red-900 dark:hover:text-red-100"

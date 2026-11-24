@@ -30,6 +30,9 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const storage = getStorage(app);
 
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+export const FIREBASE_AUTH_SETTINGS_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+
 export const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
 
 export function isAuthorizedAdminEmail(email?: string | null): boolean {
