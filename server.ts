@@ -589,7 +589,7 @@ function convertCourseCentsToStoreCents(
   return Math.max(50, Math.round(amountCents));
 }
 
-async function startServer() {
+export function createApp(): express.Express {
   const app = express();
   app.use(
     express.json({
@@ -2145,8 +2145,12 @@ async function startServer() {
   });
 
   const generatedCoversDir = path.resolve(__dirname, 'public', 'generated-covers');
-  fs.mkdirSync(generatedCoversDir, { recursive: true });
-  app.use('/generated-covers', express.static(generatedCoversDir));
+  try {
+    fs.mkdirSync(generatedCoversDir, { recursive: true });
+    app.use('/generated-covers', express.static(generatedCoversDir));
+  } catch {
+    // En entornos serverless read-only (Vercel) public/generated-covers no es escribible.
+  }
 
   app.post('/api/v1/courses/generate-cover', async (req, res) => {
     try {
@@ -2246,6 +2250,11 @@ async function startServer() {
     });
   });
 
+  return app;
+}
+
+async function startServer() {
+  const app = createApp();
   const server = http.createServer(app);
 
   if (!isProduction) {
@@ -2370,7 +2379,9 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}
