@@ -4,6 +4,28 @@ import App from './App.tsx';
 import { installUnauthorizedInterceptor } from './services/sessionService';
 import './index.css';
 
+// Recuperación ante chunks obsoletos tras un despliegue (Vite preload error).
+// Si el hash del chunk ya no existe en el CDN, recargamos una vez para obtener el nuevo index.html.
+const reloadOnStaleChunk = (shouldPreventDefault?: () => void) => {
+  const key = 'chunk-reload-at';
+  const last = Number(sessionStorage.getItem(key) || 0);
+  if (Date.now() - last < 60_000) return; // Evitar bucles de recarga
+  sessionStorage.setItem(key, String(Date.now()));
+  shouldPreventDefault?.();
+  window.location.reload();
+};
+
+window.addEventListener('vite:preloadError', (event) => {
+  reloadOnStaleChunk(() => event.preventDefault());
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const message = String((event.reason as { message?: unknown })?.message ?? event.reason ?? '');
+  if (/dynamically imported module|Loading chunk|ChunkLoadError/i.test(message)) {
+    reloadOnStaleChunk(() => event.preventDefault());
+  }
+});
+
 // Los 401 de /api/* propios cierran la sesión de forma centralizada.
 installUnauthorizedInterceptor();
 
