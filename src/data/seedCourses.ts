@@ -15,7 +15,7 @@ export const EXCEL_BASICO_COURSE: Course = {
   instructorId: 'platform-faculty',
   instructorName: 'Equipo DB Academy',
   published: true,
-  technologies: ['Excel', 'La Pantalla de Excel', 'Formato', 'Fórmulas', 'F4 / ITBIS', 'SI()', 'Simulador 3D'],
+  technologies: ['Excel'],
   modulesCount: 5,
   totalLessons: 31,
   modules: [

@@ -26,6 +26,7 @@ import {
   formatFileSize,
   uploadCourseMaterial,
 } from '../services/storageService';
+import { esGoogleDriveUrl, normalizarUrlImagen } from '../utils/imageUtils';
 
 /* ------------------------------------------------------------------ */
 /*  Icon resolver                                                        */
@@ -90,6 +91,7 @@ export function MaterialUploader({
   const [extUrl, setExtUrl] = useState('');
   const [extName, setExtName] = useState('');
   const [extType, setExtType] = useState<CourseMaterialType>('other');
+  const [extDriveConverted, setExtDriveConverted] = useState(false);
 
   const isAuthorizedAdminSession = () => {
     const current = auth.currentUser;
@@ -180,11 +182,13 @@ export function MaterialUploader({
     }
     setPermissionError('');
     if (!extUrl.trim()) return;
-    const name = extName.trim() || extUrl.trim().split('/').pop() || 'Enlace';
-    onChange([...materials, buildExternalMaterial(name, extUrl.trim(), extType)]);
+    const normalized = normalizarUrlImagen(extUrl.trim());
+    const name = extName.trim() || normalized.split('/').pop() || 'Enlace';
+    onChange([...materials, buildExternalMaterial(name, normalized, extType)]);
     setExtUrl('');
     setExtName('');
     setExtType('other');
+    setExtDriveConverted(false);
     setShowExtForm(false);
   };
 
@@ -375,13 +379,33 @@ export function MaterialUploader({
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
             Agregar enlace externo
           </p>
-          <input
-            type="url"
-            value={extUrl}
-            onChange={(e) => setExtUrl(e.target.value)}
-            placeholder="https://drive.google.com/..."
-            className="w-full text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-          />
+          <div className="space-y-1">
+            <input
+              type="url"
+              value={extUrl}
+              onChange={(e) => {
+                setExtUrl(e.target.value);
+                setExtDriveConverted(false);
+              }}
+              onBlur={(e) => {
+                const raw = e.target.value.trim();
+                if (raw && esGoogleDriveUrl(raw)) {
+                  const normalized = normalizarUrlImagen(raw);
+                  if (normalized !== raw) {
+                    setExtUrl(normalized);
+                    setExtDriveConverted(true);
+                  }
+                }
+              }}
+              placeholder="https://drive.google.com/..."
+              className="w-full text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            {extDriveConverted && (
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                ✅ Enlace de Google Drive convertido automáticamente
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <input
               type="text"

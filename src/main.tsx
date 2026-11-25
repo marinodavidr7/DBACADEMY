@@ -1,7 +1,11 @@
 import {createRoot} from 'react-dom/client';
 import {registerSW} from 'virtual:pwa-register';
 import App from './App.tsx';
+import { installUnauthorizedInterceptor } from './services/sessionService';
 import './index.css';
+
+// Los 401 de /api/* propios cierran la sesión de forma centralizada.
+installUnauthorizedInterceptor();
 
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   navigator.serviceWorker

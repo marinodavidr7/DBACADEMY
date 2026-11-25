@@ -21,6 +21,7 @@ import { usePlatform } from '../../context/PlatformContext';
 import type { TranslationKeys } from '../../i18n/translations';
 import { uploadCourseCoverImage } from '../../services/storageService';
 import { isAuthorizedAdminEmail } from '../../firebase';
+import { esGoogleDriveUrl, normalizarUrlImagen } from '../../utils/imageUtils';
 import {
   cloneModules,
   collectPublishIssues,
@@ -36,6 +37,18 @@ import { LessonEditor } from './LessonEditor';
 import { QuizBuilder } from './QuizBuilder';
 import { ToastStack, type ToastItem } from './Toast';
 import { StudentPreviewModal } from './StudentPreviewModal';
+
+/** Errores de infraestructura: en producción se oculta el detalle al usuario. */
+const INTERNAL_SAVE_ERROR =
+  /(DBACADEMY server:|Supabase |Admin [a-z_]+\.(set|update|delete) failed|fetch failed|NetworkError|HTTP\s*5\d{2}|\b50[0-9]\b)/i;
+
+function describeSaveError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  // El detalle completo queda en consola / herramienta de monitoreo.
+  console.error('[CourseEditor] Error al guardar el curso:', err);
+  if (import.meta.env.PROD && INTERNAL_SAVE_ERROR.test(raw)) return fallback;
+  return raw || fallback;
+}
 
 const COVER_PRESETS = [
   { label: 'Excel / Productividad', url: '/assets/images/course_excel_basico_1795186770853.webp' },
@@ -449,6 +462,7 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
   onGenerateCover,
 }) => {
   const [coverDragging, setCoverDragging] = useState(false);
+  const [driveConverted, setDriveConverted] = useState(false);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -583,17 +597,42 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
             )}
           </div>
 
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-              <LinkIcon className="h-3.5 w-3.5" />
+          <div className="space-y-1.5">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                <LinkIcon className="h-3.5 w-3.5" />
+              </div>
+              <input
+                type="url"
+                placeholder="O pega aquí el enlace directo a una imagen (https://...)"
+                value={coverImage.startsWith('data:') ? '' : coverImage}
+                onChange={(e) => {
+                  setDriveConverted(false);
+                  onUpdateField({ coverImage: e.target.value.trim() });
+                }}
+                onBlur={(e) => {
+                  const raw = e.target.value.trim();
+                  if (!raw) return;
+                  if (esGoogleDriveUrl(raw)) {
+                    const normalized = normalizarUrlImagen(raw);
+                    if (normalized !== raw) {
+                      onUpdateField({ coverImage: normalized });
+                      setDriveConverted(true);
+                      return;
+                    }
+                  }
+                  const normalized = normalizarUrlImagen(raw);
+                  if (normalized !== raw) onUpdateField({ coverImage: normalized });
+                }}
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-            <input
-              type="url"
-              placeholder="O pega aquí el enlace directo a una imagen (https://...)"
-              value={coverImage.startsWith('data:') ? '' : coverImage}
-              onChange={(e) => onUpdateField({ coverImage: e.target.value.trim() })}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            {driveConverted && (
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>✅ Enlace de Google Drive convertido automáticamente</span>
+              </p>
+            )}
           </div>
 
           <div className="pt-1">
@@ -657,7 +696,7 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
             </div>
           ) : coverImage ? (
             <>
-              <img src={coverImage} alt={title} decoding="async" className="h-full w-full object-cover" />
+              <img src={normalizarUrlImagen(coverImage)} alt={title} decoding="async" className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-3 text-center">
                 <Upload className="w-5 h-5 mb-1" />
                 <span className="text-xs font-semibold">Cambiar imagen</span>
@@ -1149,7 +1188,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
           pushToast(labels.actions.saved, { variant: 'success', kind: 'save-status' });
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : labels.actions.saveError;
+        const msg = describeSaveError(err, labels.actions.saveError);
         clearSaveStatusToasts();
         if (getCourseSyncSnapshot().status !== 'error') {
           setCourseSyncError(msg, activeCourse?.id ?? tempCourseIdRef.current);

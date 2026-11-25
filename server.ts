@@ -6,57 +6,35 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
 import { WebSocket, WebSocketServer } from 'ws';
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type Firestore, type Transaction } from 'firebase-admin/firestore';
+import { isSupabaseAdminConfigured, serverDb } from './src/lib/supabase/serverClient';
+import { getLegalDocumentByFile } from './src/services/legalDocuments';
 import type { Coupon, CouponRedemption, Referral, ReferralSettings } from './src/types';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// El servidor necesita las credenciales de servicio (no las VITE_* del cliente).
+// En local están en .env.local; en producción las inyecta el hosting.
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env.local'), override: true });
+
+const supabaseAdminConfigured = isSupabaseAdminConfigured();
+if (!supabaseAdminConfigured) {
+  console.warn(
+    '[server] Falta SUPABASE_URL o la clave de servicio (SUPABASE_SERVICE_KEY / SUPABASE_SECRET_KEY): las escrituras de administrador fallarán.'
+  );
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 
 const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
 
-// ---------------------------------------------------------------------------
-// Firebase Admin SDK (para cupones, referidos y reglas de servidor)
-// Requiere: FIREBASE_SERVICE_ACCOUNT (JSON string) o FIREBASE_SERVICE_ACCOUNT_PATH
-// ---------------------------------------------------------------------------
-let adminDb: Firestore | null = null;
-
-function initFirebaseAdmin(): Firestore | null {
-  if (adminDb) return adminDb;
-  try {
-    let serviceAccount: Record<string, unknown> | null = null;
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-    const pathEnv = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-
-    if (raw) {
-      serviceAccount = JSON.parse(raw) as Record<string, unknown>;
-    } else if (pathEnv && fs.existsSync(pathEnv)) {
-      serviceAccount = JSON.parse(fs.readFileSync(pathEnv, 'utf8')) as Record<string, unknown>;
-    }
-
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(serviceAccount as Parameters<typeof cert>[0]),
-      });
-      adminDb = getFirestore();
-    }
-  } catch {
-    // Admin SDK no disponible; los endpoints de cupones/referidos devolverán error 503
-  }
-  return adminDb;
-}
-
-function getAdminDb(): Firestore {
-  const db = initFirebaseAdmin();
-  if (!db) {
-    throw new Error('Firebase Admin SDK no configurado. Define FIREBASE_SERVICE_ACCOUNT o FIREBASE_SERVICE_ACCOUNT_PATH.');
-  }
-  return db;
-}
+// Sesiones por inactividad también en el backend (defensa en profundidad).
+// Un token reutilizado tras 15 min sin peticiones autenticadas se rechaza con 401.
+const SERVER_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+interface SessionActivity { tokenIat: number; lastSeen: number }
+const sessionActivity = new Map<string, SessionActivity>();
 
 // (auth helpers moved below token verification)
 
@@ -87,6 +65,10 @@ setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of rateLimitMap.entries()) {
     if (now > entry.resetAt) rateLimitMap.delete(key);
+  }
+  // Conserva las sesiones expiradas 24 h para poder rechazar tokens reutilizados.
+  for (const [uid, session] of sessionActivity.entries()) {
+    if (now - session.lastSeen > 24 * 60 * 60 * 1000) sessionActivity.delete(uid);
   }
 }, 60_000);
 const FIREBASE_CERT_URL =
@@ -272,6 +254,21 @@ async function verifyFirebaseTokenAny(authHeader?: string): Promise<{ uid: strin
   ) {
     throw new AuthValidationError(401, 'Token expirado o emitido para otro proyecto.');
   }
+
+  // Inactividad: si el mismo token se reutiliza tras el timeout, se rechaza.
+  // Un token recién emitido (nuevo inicio de sesión / renovación) inicia sesión nueva.
+  const nowMs = Date.now();
+  const tokenIat = payload.iat as number;
+  const session = sessionActivity.get(payload.sub);
+  if (!session || tokenIat > session.tokenIat) {
+    sessionActivity.set(payload.sub, { tokenIat, lastSeen: nowMs });
+  } else {
+    if (nowMs - session.lastSeen > SERVER_IDLE_TIMEOUT_MS) {
+      throw new AuthValidationError(401, 'Sesión expirada por inactividad. Inicia sesión nuevamente.');
+    }
+    session.lastSeen = nowMs;
+  }
+
   const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
   return { uid: payload.sub, email, emailVerified: payload.email_verified === true };
 }
@@ -497,41 +494,13 @@ function parseFirestoreValue(val: Record<string, unknown>): unknown {
 async function readFirestoreDoc(
   collectionName: 'courses' | 'coupons' | 'giftCards',
   docId: string,
-  bearerHeader?: string
+  _bearerHeader?: string
 ): Promise<Record<string, unknown> | null> {
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(docId)) {
     return null;
   }
-  const db = initFirebaseAdmin();
-  if (db) {
-    const snap = await db.collection(collectionName).doc(docId).get();
-    return snap.exists ? (snap.data() as Record<string, unknown>) : null;
-  }
-
-  const databaseId = encodeURIComponent(FIREBASE_APP_CONFIG.firestoreDatabaseId || '(default)');
-  const url = new URL(
-    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(FIREBASE_PROJECT_ID)}/databases/${databaseId}/documents/${collectionName}/${encodeURIComponent(docId)}`
-  );
-  if (FIREBASE_APP_CONFIG.apiKey) {
-    url.searchParams.set('key', FIREBASE_APP_CONFIG.apiKey);
-  }
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (bearerHeader?.startsWith('Bearer ')) {
-    headers.Authorization = bearerHeader;
-  }
-  const resp = await fetch(url.toString(), { headers });
-  if (resp.status === 404) return null;
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`No se pudo consultar ${collectionName}/${docId} (${resp.status}): ${text.slice(0, 120)}`);
-  }
-  const json = (await resp.json()) as { fields?: Record<string, Record<string, unknown>> };
-  if (!json.fields) return null;
-  const parsed: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(json.fields)) {
-    parsed[k] = parseFirestoreValue(v);
-  }
-  return parsed;
+  const snap = await serverDb.collection(collectionName).doc(docId).get();
+  return snap.exists() ? (snap.data() as Record<string, unknown>) : null;
 }
 
 function getLemonSqueezyConfig() {
@@ -638,6 +607,8 @@ async function startServer() {
       service: 'catedra-lms-api',
       version: '1.0.0',
       connectedSockets: clients.size,
+      // Booleano: permite a QA verificar la inyección de ENV sin exponer secretos.
+      supabaseAdminConfigured,
       timestamp: new Date().toISOString(),
     });
   });
@@ -1232,11 +1203,11 @@ async function startServer() {
     }
 
     try {
-      const db = getAdminDb();
+      const db = serverDb;
 
       // Fuente de verdad: curso desde Firestore
       const courseSnap = await db.collection('courses').doc(String(courseId)).get();
-      if (!courseSnap.exists) {
+      if (!courseSnap.exists()) {
         res.status(404).json({ error: 'Curso no encontrado' });
         return;
       }
@@ -1254,10 +1225,10 @@ async function startServer() {
       let welcomeDiscountCents = 0;
       if (referralWelcome === true && originalAmountCents > 0) {
         const settingsSnap = await db.collection('settings').doc('referrals').get();
-        const settings = settingsSnap.exists ? (settingsSnap.data() as ReferralSettings) : null;
+        const settings = settingsSnap.exists() ? (settingsSnap.data() as ReferralSettings) : null;
         if (settings?.active) {
           const userSnap = await db.collection('users').doc(auth.uid).get();
-          const userData = userSnap.exists ? (userSnap.data() as { referredBy?: string }) : {};
+          const userData = userSnap.exists() ? (userSnap.data() as { referredBy?: string }) : {};
           if (userData.referredBy && userData.referredBy !== auth.uid) {
             // Solo primera compra pagada
             const prevPayments = await db.collection('payments')
@@ -1280,7 +1251,7 @@ async function startServer() {
       if (normalizedCoupon && originalAmountCents > 0) {
         const couponRef = db.collection('coupons').doc(normalizedCoupon);
         const couponSnap = await couponRef.get();
-        if (!couponSnap.exists) {
+        if (!couponSnap.exists()) {
           res.status(400).json({ error: 'Código de cupón no encontrado.' });
           return;
         }
@@ -1318,9 +1289,9 @@ async function startServer() {
         redemptionId = `cr_${crypto.randomBytes(8).toString('hex')}`;
         const redemptionRef = db.collection('couponRedemptions').doc(redemptionId);
 
-        await db.runTransaction(async (tx: Transaction) => {
+        await db.runTransaction(async (tx: any) => {
           const freshCouponSnap = await tx.get(couponRef);
-          if (!freshCouponSnap.exists) throw new Error('Cupón no encontrado.');
+          if (!freshCouponSnap.exists()) throw new Error('Cupón no encontrado.');
           const freshCoupon = freshCouponSnap.data() as Coupon;
 
           if (!isCouponActive(freshCoupon)) throw new Error('El cupón ya no está disponible.');
@@ -1337,7 +1308,7 @@ async function startServer() {
               .where('couponCode', '==', appliedCouponCode)
               .where('userId', '==', auth.uid)
           );
-          const usedByUser = userRedemptionsSnap.docs.filter((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+          const usedByUser = userRedemptionsSnap.docs.filter((d: any) => {
             const st = (d.data() as CouponRedemption).status;
             return st === 'pending' || st === 'confirmed';
           }).length;
@@ -1459,12 +1430,12 @@ async function startServer() {
     }
 
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const normalizedCode = normalizeCode(code);
       const couponRef = db.collection('coupons').doc(normalizedCode);
       const couponSnap = await couponRef.get();
 
-      if (!couponSnap.exists) {
+      if (!couponSnap.exists()) {
         res.status(404).json({
           valid: false,
           originalPriceCents: priceCents,
@@ -1545,11 +1516,63 @@ async function startServer() {
     }
   });
 
+  // ─── ADMIN: Courses CRUD ──────────────────────────────────────────────────
+
+  // GET /api/admin/courses — Listar todos los cursos (solo admin)
+  app.get('/api/admin/courses', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const snap = await serverDb.collection('courses').get();
+      res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al listar cursos' });
+    }
+  });
+
+  // PUT /api/admin/courses/:id — Actualizar o crear curso (upsert, solo admin)
+  app.put('/api/admin/courses/:id', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const { id } = req.params;
+    if (!id) { res.status(400).json({ error: 'Se requiere el id del curso.' }); return; }
+    try {
+      await serverDb.collection('courses').doc(id).set({ ...req.body, id });
+      res.json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al actualizar curso' });
+    }
+  });
+
+  // POST /api/admin/courses — Crear curso nuevo (solo admin)
+  app.post('/api/admin/courses', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const data = req.body as Record<string, unknown>;
+    const id = (data.id as string)?.trim();
+    if (!id) { res.status(400).json({ error: 'El cuerpo debe incluir un campo "id".' }); return; }
+    try {
+      await serverDb.collection('courses').doc(id).set(data);
+      res.status(201).json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al crear curso' });
+    }
+  });
+
+  // DELETE /api/admin/courses/:id — Eliminar curso (solo admin)
+  app.delete('/api/admin/courses/:id', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const { id } = req.params;
+    try {
+      await serverDb.collection('courses').doc(id).delete();
+      res.json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al eliminar curso' });
+    }
+  });
+
   // GET /api/coupons — Listar todos los cupones (solo admin)
   app.get('/api/coupons', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const snap = await db.collection('coupons').orderBy('createdAt', 'desc').get();
       const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Coupon);
       res.json({ coupons });
@@ -1563,7 +1586,7 @@ async function startServer() {
   app.post('/api/coupons', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const {
         code, description, type, value, currency, appliesTo, courseIds,
         startsAt, expiresAt, maxRedemptions, maxPerUser, minPurchaseCents,
@@ -1620,13 +1643,13 @@ async function startServer() {
   app.put('/api/coupons/:code', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
       const couponRef = db.collection('coupons').doc(normalizedCode);
       const snap = await couponRef.get();
 
-      if (!snap.exists) {
+      if (!snap.exists()) {
         res.status(404).json({ error: 'Cupón no encontrado.' });
         return;
       }
@@ -1649,13 +1672,13 @@ async function startServer() {
   app.delete('/api/coupons/:code', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
       const couponRef = db.collection('coupons').doc(normalizedCode);
       const snap = await couponRef.get();
 
-      if (!snap.exists) {
+      if (!snap.exists()) {
         res.status(404).json({ error: 'Cupón no encontrado.' });
         return;
       }
@@ -1678,7 +1701,7 @@ async function startServer() {
   app.post('/api/coupons/:code/toggle', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
       const { active } = req.body ?? {};
@@ -1701,7 +1724,7 @@ async function startServer() {
   app.get('/api/coupons/:code/redemptions', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
       const snap = await db.collection('couponRedemptions')
@@ -1709,7 +1732,7 @@ async function startServer() {
         .orderBy('createdAt', 'desc')
         .get();
 
-      const redemptions = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as CouponRedemption);
+      const redemptions = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }) as CouponRedemption);
       const totalDiscount = redemptions
         .filter((r: CouponRedemption) => r.status === 'confirmed')
         .reduce((acc: number, r: CouponRedemption) => acc + r.discountCents, 0);
@@ -1729,9 +1752,9 @@ async function startServer() {
   app.get('/api/referrals/settings', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const snap = await db.collection('settings').doc('referrals').get();
-      if (!snap.exists) {
+      if (!snap.exists()) {
         // Valores por defecto
         const defaults: ReferralSettings = {
           id: 'default',
@@ -1757,7 +1780,7 @@ async function startServer() {
   app.put('/api/referrals/settings', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { welcomeDiscountPercent, referrerRewardPercent, retentionDays, maxRewardsPerReferrerPerMonth, active } = req.body ?? {};
 
       const settingsRef = db.collection('settings').doc('referrals');
@@ -1783,9 +1806,9 @@ async function startServer() {
   app.get('/api/referrals', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const snap = await db.collection('referrals').orderBy('createdAt', 'desc').get();
-      const referrals = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as Referral);
+      const referrals = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }) as Referral);
       res.json({ referrals });
     } catch (err) {
       console.error('List referrals error:', err);
@@ -1798,11 +1821,11 @@ async function startServer() {
     const auth = await requireAuth(req, res);
     if (!auth) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const userId = auth.uid;
 
       const userSnap = await db.collection('users').doc(userId).get();
-      const userData = userSnap.exists ? (userSnap.data() as { referralCode?: string; referredBy?: string }) : {};
+      const userData = userSnap.exists() ? (userSnap.data() as { referralCode?: string; referredBy?: string }) : {};
       const referralCode = userData.referralCode;
 
       // Mis referidos como referidor
@@ -1810,7 +1833,7 @@ async function startServer() {
         .where('referrerId', '==', userId)
         .orderBy('createdAt', 'desc')
         .get();
-      const myReferrals = referralsSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as Referral);
+      const myReferrals = referralsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }) as Referral);
 
       const totalRewards = myReferrals
         .filter((r: Referral) => r.status === 'rewarded')
@@ -1836,7 +1859,7 @@ async function startServer() {
   app.post('/api/referrals/record', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const { referrerId, referredId, orderId, rewardValue } = req.body ?? {};
 
       if (!referrerId || !referredId || !orderId || typeof rewardValue !== 'number') {
@@ -1883,9 +1906,9 @@ async function startServer() {
   app.post('/api/referrals/reconcile', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db = getAdminDb();
+      const db = serverDb;
       const settingsSnap = await db.collection('settings').doc('referrals').get();
-      const settings = settingsSnap.exists ? (settingsSnap.data() as ReferralSettings) : {
+      const settings = settingsSnap.exists() ? (settingsSnap.data() as ReferralSettings) : {
         retentionDays: 7,
         active: true,
       };
@@ -2105,6 +2128,26 @@ async function startServer() {
     res.json({
       coverImage: `/generated-covers/${fileName}`,
       generatedAt: new Date().toISOString(),
+    });
+  });
+
+  // Documentos legales: se sirven antes de Vite (dev) y de express.static (producción)
+  // con charset UTF-8 explícito para evitar mojibake en el navegador.
+  const legalDocsDir = path.resolve(__dirname, 'public', 'legal');
+  app.get(/^\/legal\/([A-Za-z0-9_-]+\.md)$/, (req, res, next) => {
+    const fileName = String(req.params[0] || '');
+    if (!getLegalDocumentByFile(fileName)) {
+      next();
+      return;
+    }
+    fs.readFile(path.join(legalDocsDir, fileName), (err, data) => {
+      if (err) {
+        next();
+        return;
+      }
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.end(data);
     });
   });
 

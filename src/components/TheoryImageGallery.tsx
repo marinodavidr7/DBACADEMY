@@ -26,6 +26,7 @@ import {
   buildExternalMaterial,
   uploadCourseMaterial,
 } from '../services/storageService';
+import { esGoogleDriveUrl, normalizarUrlImagen } from '../utils/imageUtils';
 
 export interface CatedraImagePreset {
   label: string;
@@ -257,7 +258,7 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
 
         <div className="relative flex-1 min-h-0 overflow-auto bg-white flex items-center justify-center p-2 sm:p-4">
           <img
-            src={activeModalImage.url}
+            src={normalizarUrlImagen(activeModalImage.url)}
             alt={activeModalImage.name}
             referrerPolicy="no-referrer"
             onClick={() => setZoomed((z) => !z)}
@@ -380,6 +381,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
   const [descriptionInput, setDescriptionInput] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [urlDriveConverted, setUrlDriveConverted] = useState(false);
 
   // Organize state (draft titles/descriptions + drag reorder + safe remove confirm)
   const [draftEdits, setDraftEdits] = useState<
@@ -489,10 +491,11 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
   const handleUrlAttach = async () => {
     const rawUrl = urlInput.trim();
     if (!rawUrl) return;
+    const normalizedUrl = normalizarUrlImagen(rawUrl);
     const isSafe =
-      /^https?:\/\//i.test(rawUrl) ||
-      rawUrl.startsWith('/') ||
-      /^data:image\//i.test(rawUrl);
+      /^https?:\/\//i.test(normalizedUrl) ||
+      normalizedUrl.startsWith('/') ||
+      /^data:image\//i.test(normalizedUrl);
     if (!isSafe) {
       setLocalError('Ingresa una URL válida (https://... o /assets/...).');
       return;
@@ -500,7 +503,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
     setLocalError(null);
     const caption = titleInput.trim() || `Ilustración: ${lessonTitle}`;
     const mat: CourseMaterial = {
-      ...buildExternalMaterial(caption, rawUrl, 'image', descriptionInput),
+      ...buildExternalMaterial(caption, normalizedUrl, 'image', descriptionInput),
       id: `mat_img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
     };
     await onAddImages([mat], 'Ilustración vinculada correctamente a la galería.');
@@ -508,6 +511,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
     setUrlInput('');
     setTitleInput('');
     setDescriptionInput('');
+    setUrlDriveConverted(false);
     setShowComposer(false);
   };
 
@@ -765,15 +769,35 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="relative">
-                  <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="URL de imagen (https://... o /assets/...)"
-                    className="w-full min-h-[44px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-8 pr-3 py-2 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                <div className="space-y-1">
+                  <div className="relative">
+                    <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={urlInput}
+                      onChange={(e) => {
+                        setUrlInput(e.target.value);
+                        setUrlDriveConverted(false);
+                      }}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (raw && esGoogleDriveUrl(raw)) {
+                          const normalized = normalizarUrlImagen(raw);
+                          if (normalized !== raw) {
+                            setUrlInput(normalized);
+                            setUrlDriveConverted(true);
+                          }
+                        }
+                      }}
+                      placeholder="URL de imagen (https://... o /assets/...)"
+                      className="w-full min-h-[44px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-8 pr-3 py-2 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                  {urlDriveConverted && (
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                      ✅ Enlace de Google Drive convertido automáticamente
+                    </p>
+                  )}
                 </div>
                 <input
                   type="text"
@@ -866,7 +890,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                       <div className="flex items-center gap-2 md:block">
                         <div className="relative aspect-video w-28 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white shrink-0">
                           <img
-                            src={img.url}
+                            src={normalizarUrlImagen(img.url)}
                             alt={img.name}
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-contain"
@@ -1009,7 +1033,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                     className="group relative block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600"
                   >
                     <img
-                      src={activeImage.url}
+                      src={normalizarUrlImagen(activeImage.url)}
                       alt={activeImage.name}
                       loading="lazy"
                       decoding="async"
@@ -1147,7 +1171,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                             </div>
                           ) : (
                             <img
-                              src={img.url}
+                              src={normalizarUrlImagen(img.url)}
                               alt=""
                               loading="lazy"
                               referrerPolicy="no-referrer"
@@ -1201,7 +1225,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                         className="group relative block w-full aspect-[16/10] bg-white text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600 border-b border-slate-200 dark:border-slate-800"
                       >
                         <img
-                          src={img.url}
+                          src={normalizarUrlImagen(img.url)}
                           alt={img.name}
                           loading="lazy"
                           decoding="async"

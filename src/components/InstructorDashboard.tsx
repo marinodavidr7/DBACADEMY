@@ -25,6 +25,7 @@ import type { TranslationKeys } from '../i18n/translations';
 import { isAuthorizedAdminEmail, isPlaceholderCampusEmail } from '../firebase';
 import type { Certificate, Course } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 import { exportCertificatePdf, exportTableToPdf, exportToCsv } from '../utils/export';
 import { AuthGateNotice } from './AuthGateNotice';
 import { CertificateDocumentCard, CertificatePreviewModal } from './CertificatePreviewModal';
@@ -34,6 +35,7 @@ import { StudentManagement } from './StudentManagement';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
 import { AssignmentInbox } from './AssignmentInbox';
+import { LandingEditorPanel } from './LandingEditorPanel';
 
 const COURSE_EDITOR_LABELS = (t: (key: TranslationKeys) => string) => ({
   index: {
@@ -225,7 +227,7 @@ export const InstructorDashboard: React.FC = () => {
     studentEmailsMap,
   } = usePlatform();
 
-  const [adminTab, setAdminTab] = useState<'courses' | 'students' | 'certificates' | 'giftcards' | 'coupons' | 'referrals' | 'submissions'>('courses');
+  const [adminTab, setAdminTab] = useState<'courses' | 'students' | 'certificates' | 'giftcards' | 'coupons' | 'referrals' | 'submissions' | 'landing'>('courses');
   const [searchStudent, setSearchStudent] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [showExerciseCreator, setShowExerciseCreator] = useState(false);
@@ -558,6 +560,7 @@ export const InstructorDashboard: React.FC = () => {
           { id: 'coupons', label: t('couponsTitle') },
           { id: 'referrals', label: t('referralsTitle') },
           { id: 'submissions', label: `Entregas (${assignmentSubmissions.filter((s) => s.status === 'submitted').length})` },
+          { id: 'landing', label: '🎨 Personalizar Landing' },
         ] as const).map((tab) => (
           <button
             key={tab.id}
@@ -718,6 +721,10 @@ export const InstructorDashboard: React.FC = () => {
         </div>
       )}
 
+      {adminTab === 'landing' && (
+        <LandingEditorPanel onPreviewLanding={() => setActiveView('landing')} />
+      )}
+
       {adminTab === 'courses' && (<>
       {saveSuccess && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 flex items-center justify-between gap-3 text-xs font-medium text-emerald-800 dark:text-emerald-300">
@@ -816,7 +823,7 @@ export const InstructorDashboard: React.FC = () => {
               >
                 {course.coverImage ? (
                   <img
-                    src={course.coverImage}
+                    src={normalizarUrlImagen(course.coverImage)}
                     alt={course.title}
                     width={1280}
                     height={714}

@@ -116,8 +116,9 @@ export function computeUserBadges(
   }
 
   // 2. Formula Master Badge (Laboratorios del simulador)
+  const uidPrefix = user?.uid.slice(0, 6).toUpperCase() || 'MASTER';
   const isMasterUnlocked = excelPercent >= 80 || certificates.length > 0;
-  const masterCode = `DB-FORMULA-${user?.uid.slice(0, 6).toUpperCase() || 'MASTER'}`;
+  const masterCode = `DB-FORMULA-${uidPrefix}`;
   badges.push({
     id: 'badge_formula_master',
     code: masterCode,
@@ -138,6 +139,195 @@ export function computeUserBadges(
     progressPercent: isMasterUnlocked ? 100 : Math.min(excelPercent + 20, 90),
     criteria: 'Superar con éxito los laboratorios de fórmulas en el simulador 3D.',
     iconType: 'zap',
+  });
+
+  // 2b. Additional Excel Specialization Badges
+  const hasCert = certificates.some((c) => c.courseId === 'excel-basico-05') || certificates.length > 0;
+  const excelBadgeSpecs: Array<{
+    id: string;
+    codePrefix: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    category: string;
+    categoryTag: string;
+    theme: DigitalBadge['theme'];
+    iconType: DigitalBadge['iconType'];
+    unlockAtPercent: number;
+    criteria: string;
+  }> = [
+    {
+      id: 'badge_excel_db_architect',
+      codePrefix: 'DB-XL-TABLAS',
+      title: 'Arquitecto de Bases de Datos Locales',
+      subtitle: 'Insignia de Estructuración y Gestión de Tablas',
+      description: 'Estructuración profesional de datos tabulares mediante ordenamiento avanzado, filtros, inmovilización de paneles y tablas con formato.',
+      category: 'Gestión de Datos en Excel',
+      categoryTag: 'ExcelTablas',
+      theme: 'blue',
+      iconType: 'shield',
+      unlockAtPercent: 30,
+      criteria: 'Ordenar, filtrar, inmovilizar paneles y crear tablas con formato.',
+    },
+    {
+      id: 'badge_excel_data_cleaning',
+      codePrefix: 'DB-XL-CLEAN',
+      title: 'Especialista en Limpieza y Depuración de Datos',
+      subtitle: 'Insignia de Integridad de la Información',
+      description: 'Normalización y depuración de registros para garantizar datasets confiables listos para análisis y reportes.',
+      category: 'Gestión de Datos en Excel',
+      categoryTag: 'LimpiezaDatos',
+      theme: 'cyan',
+      iconType: 'sparkles',
+      unlockAtPercent: 40,
+      criteria: 'Uso de buscar y reemplazar, eliminación de duplicados y texto en columnas.',
+    },
+    {
+      id: 'badge_excel_troubleshooting',
+      codePrefix: 'DB-XL-AUDIT',
+      title: 'Auditor de Errores y Troubleshooting',
+      subtitle: 'Insignia de Resolución de Conflictos en Hojas de Cálculo',
+      description: 'Diagnóstico preciso y corrección de fallos de cálculo y referencias rotas en modelos de hojas de cálculo.',
+      category: 'Ingeniería de Hojas de Cálculo',
+      categoryTag: 'ExcelAudit',
+      theme: 'purple',
+      iconType: 'shield',
+      unlockAtPercent: 50,
+      criteria: 'Identificar y corregir errores comunes (#N/A, #VALOR, #DIV/0).',
+    },
+    {
+      id: 'badge_excel_dashboards_basic',
+      codePrefix: 'DB-XL-DASH',
+      title: 'Creador de Dashboards Ejecutivos (Básico)',
+      subtitle: 'Insignia de Consolidación Visual',
+      description: 'Diseño de hojas ejecutivas claras que integran gráficos y tablas resumen para la toma de decisiones.',
+      category: 'Visualización & Reportes',
+      categoryTag: 'ExcelDashboards',
+      theme: 'gold',
+      iconType: 'award',
+      unlockAtPercent: 60,
+      criteria: 'Unir varios gráficos y tablas en una sola hoja de resumen limpia.',
+    },
+    {
+      id: 'badge_excel_lookup_expert',
+      codePrefix: 'DB-XL-LOOKUP',
+      title: 'Experto en Búsqueda y Referencia Cruzada',
+      subtitle: 'Insignia de Algoritmos de Búsqueda (BUSCARV / XLOOKUP)',
+      description: 'Cruce eficiente de información entre múltiples tablas y hojas mediante funciones de búsqueda y referencia matricial.',
+      category: 'Fórmulas & Análisis',
+      categoryTag: 'ExcelLookup',
+      theme: 'emerald',
+      iconType: 'zap',
+      unlockAtPercent: 75,
+      criteria: 'Dominio de funciones para encontrar datos en tablas grandes (BUSCARV, BUSCARH, INDICE, COINCIDIR).',
+    },
+    {
+      id: 'badge_excel_financial_basic',
+      codePrefix: 'DB-XL-FIN',
+      title: 'Analista Financiero Básico',
+      subtitle: 'Insignia de Operaciones y Tasas',
+      description: 'Modelado de operaciones comerciales con cálculo preciso de impuestos, márgenes porcentuales y tasas financieras.',
+      category: 'Fórmulas & Análisis',
+      categoryTag: 'AnalisisFinanciero',
+      theme: 'gold',
+      iconType: 'award',
+      unlockAtPercent: 45,
+      criteria: 'Uso de funciones de cálculo de impuestos (ITBIS/IVA), porcentajes y tasas.',
+    },
+    {
+      id: 'badge_excel_time_master',
+      codePrefix: 'DB-XL-TIME',
+      title: 'Maestro del Tiempo',
+      subtitle: 'Insignia de Manejo de Fechas y Horas',
+      description: 'Automatización de cálculos temporales, antigüedad, días hábiles y presentación personalizada de fechas y horas.',
+      category: 'Fórmulas & Análisis',
+      categoryTag: 'ExcelFechas',
+      theme: 'cyan',
+      iconType: 'flame',
+      unlockAtPercent: 65,
+      criteria: 'Cálculo de días laborables, edades, y formatos de fecha personalizados.',
+    },
+    {
+      id: 'badge_excel_pivot_specialist',
+      codePrefix: 'DB-XL-PIVOT',
+      title: 'Especialista en Análisis Multidimensional',
+      subtitle: 'Insignia de Tablas Dinámicas',
+      description: 'Resumen, segmentación y análisis dinámico de grandes volúmenes de datos sin alterar la fuente original.',
+      category: 'Fórmulas & Análisis',
+      categoryTag: 'TablasDinamicas',
+      theme: 'purple',
+      iconType: 'sparkles',
+      unlockAtPercent: 85,
+      criteria: 'Crear y configurar tablas dinámicas para resumir grandes volúmenes de datos.',
+    },
+    {
+      id: 'badge_excel_operational_efficiency',
+      codePrefix: 'DB-XL-ATJ71',
+      title: 'Especialista en Eficiencia Operativa',
+      subtitle: 'Insignia de Dominio Avanzado de Atajos (71 Comandos)',
+      description: 'Ejecución fluida de flujos de trabajo corporativos directamente desde el teclado, reduciendo al mínimo el uso del ratón.',
+      category: 'Productividad & Eficiencia',
+      categoryTag: 'EficienciaOperativa',
+      theme: 'blue',
+      iconType: 'award',
+      unlockAtPercent: 70,
+      criteria: 'Demostrado dominio del teclado para agilizar flujos de trabajo, reduciendo el uso del ratón al mínimo.',
+    },
+    {
+      id: 'badge_excel_accelerated_productivity',
+      codePrefix: 'DB-XL-FAST',
+      title: 'Maestro de la Productividad Acelerada',
+      subtitle: 'Insignia de Workflow Ultrarrápido',
+      description: 'Resolución ágil de tareas complejas en hojas de cálculo mediante secuencias y comandos rápidos de teclado.',
+      category: 'Productividad & Eficiencia',
+      categoryTag: 'ProductividadExcel',
+      theme: 'emerald',
+      iconType: 'zap',
+      unlockAtPercent: 90,
+      criteria: 'Capacidad demostrada para ejecutar tareas complejas en tiempo récord mediante el uso de comandos de teclado.',
+    },
+    {
+      id: 'badge_excel_time_saver',
+      codePrefix: 'DB-XL-SAVER',
+      title: 'Optimizador de Tiempo (Time Saver)',
+      subtitle: 'Insignia de Navegación Sin Ratón',
+      description: 'Dominio memorístico de los 71 atajos esenciales para navegar, editar y dar formato a datos a máxima velocidad.',
+      category: 'Productividad & Eficiencia',
+      categoryTag: 'TimeSaverExcel',
+      theme: 'cyan',
+      iconType: 'flame',
+      unlockAtPercent: 95,
+      criteria: 'Manejo memorístico de 71 atajos clave para la gestión de datos y formato.',
+    },
+  ];
+
+  excelBadgeSpecs.forEach((spec, idx) => {
+    const code = `${spec.codePrefix}-${uidPrefix}`;
+    const unlocked = hasCert || excelPercent >= spec.unlockAtPercent;
+    const progressPercent = unlocked
+      ? 100
+      : Math.min(Math.round((excelPercent / spec.unlockAtPercent) * 100), 95);
+    badges.push({
+      id: spec.id,
+      code,
+      title: spec.title,
+      subtitle: spec.subtitle,
+      description: spec.description,
+      category: spec.category,
+      categoryTag: spec.categoryTag,
+      studentName,
+      instructorName: 'Equipo DB Academy',
+      issueDate: issueDateStr,
+      issueYear: currentYear,
+      issueMonth: currentMonth,
+      hashSignature: `db${(idx + 10).toString(16)}a73e0e41578bc901a523efd671234abcd890123ef${idx}`,
+      verificationUrl: `${origin}/?verify=${code}`,
+      theme: spec.theme,
+      unlocked,
+      progressPercent,
+      criteria: spec.criteria,
+      iconType: spec.iconType,
+    });
   });
 
   // 3. Security Champion Badge

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from '../lib/supabase/firestoreAdapter';
 import {
   AlertTriangle,
   Award,
@@ -14,7 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
-import { db } from '../firebase';
+import { db } from '../lib/supabase/firestoreAdapter';
 import type { Certificate } from '../types';
 import { exportCertificatePdf, formatCertificateDate } from '../utils/export';
 import { computeUserBadges, type DigitalBadge } from '../utils/badges';

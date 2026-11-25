@@ -11,12 +11,15 @@ export type AppView =
   | 'course-detail'
   | 'learning'
   | 'instructor'
+  | 'landing-editor'
   | 'forums'
   | 'certificates'
   | 'calendar'
   | 'security'
   | 'integrations'
-  | 'account';
+  | 'account'
+  | 'legal'
+  | 'themes';
 
 export type CourseMaterialType = 'pdf' | 'video' | 'doc' | 'spreadsheet' | 'image' | 'zip' | 'other';
 

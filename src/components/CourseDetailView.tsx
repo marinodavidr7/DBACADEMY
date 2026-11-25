@@ -22,6 +22,7 @@ import { formatCurrency } from '../utils/currency';
 import { CheckoutModal } from './CheckoutModal';
 import { RedeemGiftCardModal } from './RedeemGiftCardModal';
 import { CourseProgressBar } from './ui/CourseProgressBar';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 
 export const CourseDetailView: React.FC = () => {
   const {
@@ -329,7 +330,7 @@ export const CourseDetailView: React.FC = () => {
           <div className="w-full aspect-[16/10] bg-zinc-900 relative overflow-hidden">
             {course.coverImage ? (
               <img
-                src={course.coverImage}
+                src={normalizarUrlImagen(course.coverImage)}
                 alt={course.title}
                 width={1280}
                 height={714}

@@ -21,6 +21,7 @@ import {
   uploadCourseMaterial,
 } from '../../services/storageService';
 import { extractYouTubeId, newId } from '../../utils/courseEditor';
+import { esGoogleDriveUrl, normalizarUrlImagen } from '../../utils/imageUtils';
 import { Field } from './Field';
 import { MarkdownEditor } from './MarkdownEditor';
 import { MaterialsPanel } from './MaterialsPanel';
@@ -118,6 +119,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [imageCaptionInput, setImageCaptionInput] = useState('');
   const [imageDescriptionInput, setImageDescriptionInput] = useState('');
+  const [imageUrlDriveConverted, setImageUrlDriveConverted] = useState(false);
 
   const allMaterials = lesson.materials ?? [];
   const theoryImages = useMemo(
@@ -173,10 +175,11 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
   const handleAddTheoryImageUrl = () => {
     const trimmedUrl = imageUrlInput.trim();
     if (!trimmedUrl) return;
+    const normalizedUrl = normalizarUrlImagen(trimmedUrl);
     const isAllowedUrl =
-      /^https?:\/\//i.test(trimmedUrl) ||
-      trimmedUrl.startsWith('/') ||
-      /^data:image\//i.test(trimmedUrl);
+      /^https?:\/\//i.test(normalizedUrl) ||
+      normalizedUrl.startsWith('/') ||
+      /^data:image\//i.test(normalizedUrl);
     if (!isAllowedUrl) {
       setTheoryImageError('Ingresa una URL válida (https://... o /assets/...).');
       return;
@@ -184,13 +187,14 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
     setTheoryImageError(null);
     const caption = imageCaptionInput.trim() || `Ilustración de ${lesson.title || 'la lección'}`;
     const mat: CourseMaterial = {
-      ...buildExternalMaterial(caption, trimmedUrl, 'image', imageDescriptionInput),
+      ...buildExternalMaterial(caption, normalizedUrl, 'image', imageDescriptionInput),
       id: newId('mat_img'),
     };
     updateTheoryImages([...theoryImages, mat]);
     setImageUrlInput('');
     setImageCaptionInput('');
     setImageDescriptionInput('');
+    setImageUrlDriveConverted(false);
   };
 
   const moveTheoryImage = (idx: number, delta: -1 | 1) => {
@@ -517,15 +521,35 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
         {canEdit && (
           <div className="space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
-              <div className="relative">
-                <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={imageUrlInput}
-                  onChange={(e) => setImageUrlInput(e.target.value)}
-                  placeholder="Vincular URL (https://... o /assets/...)"
-                  className="w-full min-h-[40px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-8 pr-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
+              <div className="space-y-1">
+                <div className="relative">
+                  <Link2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={imageUrlInput}
+                    onChange={(e) => {
+                      setImageUrlInput(e.target.value);
+                      setImageUrlDriveConverted(false);
+                    }}
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      if (raw && esGoogleDriveUrl(raw)) {
+                        const normalized = normalizarUrlImagen(raw);
+                        if (normalized !== raw) {
+                          setImageUrlInput(normalized);
+                          setImageUrlDriveConverted(true);
+                        }
+                      }
+                    }}
+                    placeholder="Vincular URL (https://... o /assets/...)"
+                    className="w-full min-h-[40px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 pl-8 pr-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                {imageUrlDriveConverted && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                    ✅ Enlace de Google Drive convertido automáticamente
+                  </p>
+                )}
               </div>
               <input
                 type="text"
@@ -578,7 +602,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
               >
                 <div className="aspect-video bg-white dark:bg-slate-950 overflow-hidden border-b border-slate-200 dark:border-slate-800">
                   <img
-                    src={img.url}
+                    src={normalizarUrlImagen(img.url)}
                     alt={img.name}
                     loading="lazy"
                     decoding="async"

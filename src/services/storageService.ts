@@ -11,6 +11,7 @@ import {
 } from 'firebase/storage';
 import { assertPlatformAdminWrite, storage } from '../firebase';
 import type { CourseMaterial, CourseMaterialType } from '../types';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 
 /** Map MIME types to our internal material type */
 export function detectMaterialType(file: File): CourseMaterialType {
@@ -132,11 +133,15 @@ export async function uploadCourseCoverImage(
     await assertPlatformAdminWrite('subir portada de curso');
     const fileRef = ref(storage, storagePath);
 
-    return await new Promise<string>((resolve, reject) => {
+    const uploadPromise = new Promise<string>((resolve, reject) => {
       const task = uploadBytesResumable(fileRef, file, {
         contentType: file.type,
         customMetadata: { originalName: file.name, courseId },
       });
+      const timeoutId = window.setTimeout(() => {
+        try { task.cancel(); } catch { /* ignore */ }
+        reject(new Error('Tiempo de espera agotado al subir a Firebase Storage.'));
+      }, 30000);
 
       task.on(
         'state_changed',
@@ -144,17 +149,21 @@ export async function uploadCourseCoverImage(
           const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
           onProgress?.(pct);
         },
-        (err) => reject(err),
+        (err) => { window.clearTimeout(timeoutId); reject(err); },
         async () => {
           try {
             const url = await getDownloadURL(task.snapshot.ref);
+            window.clearTimeout(timeoutId);
             resolve(url);
           } catch (e) {
+            window.clearTimeout(timeoutId);
             reject(e);
           }
         }
       );
     });
+
+    return await uploadPromise;
   } catch (err) {
     console.warn('Firebase Storage upload failed or not permitted, using optimized Data URL fallback:', err);
     onProgress?.(100);
@@ -181,7 +190,7 @@ export async function uploadCourseMaterial(
     await assertPlatformAdminWrite('subir material de curso');
     const fileRef = ref(storage, storagePath);
 
-    return await new Promise<CourseMaterial>((resolve, reject) => {
+    const uploadPromise = new Promise<CourseMaterial>((resolve, reject) => {
       const task = uploadBytesResumable(fileRef, file, {
         contentType: file.type,
         customMetadata: {
@@ -191,16 +200,22 @@ export async function uploadCourseMaterial(
         },
       });
 
+      const timeoutId = window.setTimeout(() => {
+        try { task.cancel(); } catch { /* ignore */ }
+        reject(new Error('Tiempo de espera agotado al subir a Firebase Storage.'));
+      }, 30000);
+
       task.on(
         'state_changed',
         (snap) => {
           const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
           onProgress?.(pct);
         },
-        (err) => reject(err),
+        (err) => { window.clearTimeout(timeoutId); reject(err); },
         async () => {
           try {
             const url = await getDownloadURL(task.snapshot.ref);
+            window.clearTimeout(timeoutId);
             const material: CourseMaterial = {
               id: `mat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
               name: file.name,
@@ -211,11 +226,14 @@ export async function uploadCourseMaterial(
             };
             resolve(material);
           } catch (e) {
+            window.clearTimeout(timeoutId);
             reject(e);
           }
         }
       );
     });
+
+    return await uploadPromise;
   } catch (err) {
     console.warn('Firebase Storage upload error, falling back to local Data URL:', err);
     onProgress?.(100);
@@ -269,7 +287,7 @@ export function buildExternalMaterial(
   return {
     id: `mat_ext_${Date.now().toString(36)}`,
     name,
-    url,
+    url: normalizarUrlImagen(url),
     type,
     ...(cleanDescription ? { description: cleanDescription } : {}),
     sizeByte: 0,

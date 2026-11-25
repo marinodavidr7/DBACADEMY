@@ -138,6 +138,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const [tab, setTab] = useState<MarkdownTab>('edit');
   const [split, setSplit] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 1536px)').matches : false
@@ -179,10 +181,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   const apply = (transform: (before: string, selection: string, after: string) => string) => {
     const el = textareaRef.current;
     if (!el) return;
+    const currentValue = valueRef.current;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const selected = value.slice(start, end);
-    const [before, after] = [value.slice(0, start), value.slice(end)];
+    const selected = currentValue.slice(start, end);
+    const [before, after] = [currentValue.slice(0, start), currentValue.slice(end)];
     const next = transform(before, selected, after);
     onChange(next);
     requestAnimationFrame(() => {
@@ -194,10 +197,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
 
   const insertBlock = (block: string) => {
     const el = textareaRef.current;
-    const start = el ? el.selectionStart : value.length;
-    const end = el ? el.selectionEnd : value.length;
-    const selected = value.slice(start, end) || 'Texto';
-    const next = `${value.slice(0, start)}${block.replace('{text}', selected)}${value.slice(end)}`;
+    const currentValue = valueRef.current;
+    const start = el ? el.selectionStart : currentValue.length;
+    const end = el ? el.selectionEnd : currentValue.length;
+    const selected = currentValue.slice(start, end) || 'Texto';
+    const next = `${currentValue.slice(0, start)}${block.replace('{text}', selected)}${currentValue.slice(end)}`;
     onChange(next);
     if (el) {
       requestAnimationFrame(() => el.focus());
@@ -215,7 +219,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
 
   const handleUploadInlineImage = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    const ext = file.name.toLowerCase().split('.').pop() || '';
+    const allowedExt = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'avif']);
+    const isImage = file.type.startsWith('image/') || allowedExt.has(ext);
+    if (!isImage) {
       setImagePanelError('Selecciona un archivo de imagen válido (PNG, JPG, WebP o GIF).');
       return;
     }
@@ -223,9 +230,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
     setUploadingImage(true);
     try {
       const material = await uploadCourseMaterial(courseId, lessonId, file);
-      const caption = imgAlt.trim() || file.name.replace(/\.[^.]+$/, '');
+      const caption = imgAlt.trim() || file.name.replace(/\.[^.]+$/, '') || 'Ilustración técnica';
       insertImageMarkdown(material.url, caption);
     } catch (err) {
+      console.error('Error al subir imagen en MarkdownEditor:', err);
       setImagePanelError(err instanceof Error ? err.message : 'No se pudo cargar la imagen.');
     } finally {
       setUploadingImage(false);

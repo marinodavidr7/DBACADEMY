@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from '../lib/supabase/firestoreAdapter';
 import {
   CheckCircle2,
   Info,
@@ -12,7 +12,8 @@ import {
   ThumbsUp,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { handleFirestoreError, OperationType } from '../firebase';
+import { db } from '../lib/supabase/firestoreAdapter';
 import { SEED_FORUM_REPLIES } from '../data/seedForum';
 import type { ForumReply, ForumThread } from '../types';
 import { AuthGateNotice } from './AuthGateNotice';

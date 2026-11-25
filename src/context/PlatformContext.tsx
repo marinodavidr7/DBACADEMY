@@ -25,14 +25,14 @@ import {
   updateDoc,
   where,
   writeBatch,
-} from 'firebase/firestore';
+  db,
+} from '../lib/supabase/firestoreAdapter';
 import { EXCEL_BASICO_COURSE, REMOVED_SEED_COURSE_IDS, SEED_COURSES } from '../data/seedCourses';
 import { SEED_FORUM_THREADS } from '../data/seedForum';
 import {
   assertPlatformAdminWrite,
   auth,
   AUTHORIZED_ADMIN_EMAIL,
-  db,
   FIREBASE_PROJECT_ID,
   googleProvider,
   handleFirestoreError,
@@ -42,6 +42,7 @@ import {
   OperationType,
   resolveFirebaseUserEmail,
 } from '../firebase';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 import { translations, type TranslationKeys } from '../i18n/translations';
 import type {
   ApiIntegrationKey,
@@ -522,6 +523,12 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('verify')) return 'certificates';
+      const requestedView = params.get('view');
+      const validViews: AppView[] = [
+        'landing', 'catalog', 'course-detail', 'learning', 'instructor', 'landing-editor',
+        'forums', 'certificates', 'calendar', 'security', 'integrations', 'account', 'legal', 'themes',
+      ];
+      if (requestedView && validViews.includes(requestedView as AppView)) return requestedView as AppView;
     }
     return 'landing';
   });
@@ -1751,7 +1758,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       let normalizedPhoto: string | undefined;
       if (patch.photoURL !== undefined) {
-        const rawPhoto = patch.photoURL.trim().slice(0, 500);
+        const rawPhoto = normalizarUrlImagen(patch.photoURL).slice(0, 500);
         if (rawPhoto.length > 0 && !/^https?:\/\/\S+$/i.test(rawPhoto)) {
           throw new Error('La URL de la foto de perfil debe comenzar con http:// o https://.');
         }
@@ -2671,7 +2678,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           allowedPatch.currency = patch.currency;
         }
         if (typeof patch.coverImage === 'string') {
-          allowedPatch.coverImage = patch.coverImage.slice(0, 300000);
+          allowedPatch.coverImage = normalizarUrlImagen(patch.coverImage).slice(0, 300000);
         }
         if (typeof patch.instructorName === 'string') {
           allowedPatch.instructorName = patch.instructorName.trim().slice(0, 100);

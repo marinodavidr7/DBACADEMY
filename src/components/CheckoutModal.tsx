@@ -23,6 +23,8 @@ import type {
   PaymentRecord,
 } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { legalConsentService } from '../services/legalConsentService';
+import { legalDocumentPath } from '../services/legalDocuments';
 
 interface CheckoutModalProps {
   course: Course;
@@ -82,6 +84,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationResult | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const formatMoney = (cents: number) => formatCurrency(cents, course.currency);
 
@@ -228,6 +231,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         course.id
       );
       if (result.verified && result.payment) {
+        recordCheckoutConsent();
         setReceipt(result.payment);
         setLemonSession(null);
         setTimeout(() => onSuccess(course.id), 700);
@@ -244,9 +248,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
+  /** Registra la aceptación solo cuando la transacción se perfecciona (Ley 126-02). */
+  const recordCheckoutConsent = () => {
+    if (!user) return;
+    (['terminos', 'reembolsos'] as const).forEach((docType) => {
+      legalConsentService.recordConsent({
+        docType,
+        userId: user.uid,
+        userEmail: user.email || undefined,
+      });
+    });
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (!acceptedTerms) {
+      setError(
+        'Debes aceptar los Términos y Condiciones y la Política de Cancelación y Reembolsos para continuar.'
+      );
+      return;
+    }
 
     if (finalPrice > 0 && gateway !== 'lemonsqueezy') {
       if (!cardHolder.trim()) {
@@ -303,6 +326,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           testMode: isAdmin && testMode,
         });
       }
+      recordCheckoutConsent();
       setReceipt(payment);
       setTimeout(() => onSuccess(course.id), 700);
     } catch (err) {
@@ -679,6 +703,44 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     Modo prueba admin: no genera canjes/recompensas reales
                   </label>
                 )}
+
+              <div className="rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3 space-y-2">
+                <label className="flex items-start gap-2.5 text-xs text-[var(--dba-text-primary)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => {
+                      setAcceptedTerms(e.target.checked);
+                      if (e.target.checked && error.includes('Términos')) setError('');
+                    }}
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    He leído y acepto los{' '}
+                    <a
+                      href={legalDocumentPath('terminos')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium text-blue-600 dark:text-blue-400"
+                    >
+                      Términos y Condiciones
+                    </a>{' '}
+                    y la{' '}
+                    <a
+                      href={legalDocumentPath('reembolsos')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium text-blue-600 dark:text-blue-400"
+                    >
+                      Política de Cancelación y Reembolsos
+                    </a>{' '}
+                    (Ley 358-05 y Ley 126-02).
+                  </span>
+                </label>
+                <p className="text-[11px] text-[var(--dba-text-secondary)] pl-6">
+                  Pago único por acceso al curso ({formatMoney(finalPrice)}, sin renovación automática). Impuestos aplicables según pasarela y jurisdicción.
+                </p>
+              </div>
 
               {error && <p className="text-sm text-red-500">{error}</p>}
 

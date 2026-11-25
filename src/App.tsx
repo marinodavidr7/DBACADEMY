@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -9,15 +9,18 @@ import {
   Gift,
   GraduationCap,
   Home,
+  Globe,
   LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
   MessageSquare,
   Moon,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
+  Scale,
   ShieldCheck,
   Sun,
   UserCircle,
@@ -25,16 +28,26 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { AdminThemePanel } from './components/AdminThemePanel';
+import { IdleSessionGuard } from './components/IdleSessionGuard';
 import { LandingPage } from './components/LandingPage';
+import { LegalDocumentViewer } from './components/LegalDocumentViewer';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { RedeemGiftCardModal } from './components/RedeemGiftCardModal';
 import { BrandLogo } from './components/ui/BrandLogo';
+import { CookieBanner } from './components/CookieBanner';
 import { PageContainer } from './components/ui/PageContainer';
 import { PlatformProvider, usePlatform } from './context/PlatformContext';
+import { SeasonalThemeProvider } from './hooks/useSeasonalTheme';
 import { FIREBASE_AUTH_SETTINGS_URL } from './firebase';
 import { LANGUAGE_LABELS } from './i18n/translations';
+import {
+  getLegalDocSlugFromLocation,
+  LEGAL_DOCUMENT_EVENT,
+  type LegalDocSlug,
+} from './services/legalDocuments';
 import type { AppView, Language } from './types';
 
 const CatalogView = lazy(() =>
@@ -66,6 +79,12 @@ const ApiIntegrationsView = lazy(() =>
 );
 const UserAccountView = lazy(() =>
   import('./components/UserAccountView').then((m) => ({ default: m.UserAccountView }))
+);
+const LegalCenterView = lazy(() =>
+  import('./components/LegalCenterView').then((m) => ({ default: m.LegalCenterView }))
+);
+const LandingEditorPanel = lazy(() =>
+  import('./components/LandingEditorPanel').then((m) => ({ default: m.LandingEditorPanel }))
 );
 
 const ViewSkeleton: React.FC = () => (
@@ -105,6 +124,21 @@ const AppShell: React.FC = () => {
   } = usePlatform();
 
   const shouldReduceMotion = useReducedMotion();
+
+  // Visor público de documentos legales: /legal/<slug> o ?legal=<slug>, sin exigir login.
+  const [legalDocSlug, setLegalDocSlug] = useState<LegalDocSlug | null>(() =>
+    getLegalDocSlugFromLocation()
+  );
+  useEffect(() => {
+    const syncLegalDocument = () => setLegalDocSlug(getLegalDocSlugFromLocation());
+    window.addEventListener('popstate', syncLegalDocument);
+    window.addEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
+    return () => {
+      window.removeEventListener('popstate', syncLegalDocument);
+      window.removeEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
+    };
+  }, []);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
@@ -132,12 +166,19 @@ const AppShell: React.FC = () => {
     { id: 'landing', label: t('navHome'), icon: Home },
     { id: 'catalog', label: t('navCatalog'), icon: BookOpen },
     { id: 'learning', label: t('navLearning'), icon: GraduationCap },
-    ...(isAdmin ? [{ id: 'instructor' as AppView, label: t('navInstructor'), icon: LayoutDashboard }] : []),
+    ...(isAdmin
+      ? [
+          { id: 'instructor' as AppView, label: t('navInstructor'), icon: LayoutDashboard },
+          { id: 'landing-editor' as AppView, label: 'Editor del Landing Web', icon: Globe },
+          { id: 'themes' as AppView, label: 'Temas', icon: Palette },
+        ]
+      : []),
     { id: 'forums', label: t('navForums'), icon: MessageSquare },
     { id: 'certificates', label: t('navCertificates'), icon: Award },
     { id: 'calendar', label: t('navCalendar'), icon: Calendar },
     { id: 'security', label: t('navSecurity'), icon: Shield },
     { id: 'integrations', label: t('navIntegrations'), icon: Code2 },
+    { id: 'legal', label: 'Legal', icon: Scale },
   ];
 
   const handleSelectNav = (view: AppView) => {
@@ -158,9 +199,27 @@ const AppShell: React.FC = () => {
     }
   };
 
+  if (legalDocSlug) {
+    const from = new URLSearchParams(window.location.search).get('from');
+    return (
+      <LegalDocumentViewer
+        slug={legalDocSlug}
+        onBack={() => window.location.assign(from ? `/?view=${encodeURIComponent(from)}` : '/')}
+      />
+    );
+  }
+
   if (activeView === 'landing') {
     return (
       <>
+        {new URLSearchParams(window.location.search).get('session') === 'expired' && (
+          <div
+            role="status"
+            className="fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900 shadow-lg dark:border-amber-800 dark:bg-amber-950/90 dark:text-amber-200 sm:text-sm"
+          >
+            Tu sesión se cerró por inactividad. Inicia sesión nuevamente para continuar.
+          </div>
+        )}
         <LandingPage
           onExplore={() => handleSelectNav('catalog')}
           onSelectCourse={(courseId) => {
@@ -174,6 +233,7 @@ const AppShell: React.FC = () => {
         />
         <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
         <OfflineIndicator message={t('offlineBanner')} />
+        <CookieBanner onOpenLegal={() => handleSelectNav('legal')} />
       </>
     );
   }
@@ -593,12 +653,17 @@ const AppShell: React.FC = () => {
                   {activeView === 'course-detail' && <CourseDetailView />}
                   {activeView === 'learning' && <CoursePlayerView />}
                   {activeView === 'instructor' && <InstructorDashboard />}
+                  {activeView === 'landing-editor' && (
+                    <LandingEditorPanel onPreviewLanding={() => handleSelectNav('landing')} />
+                  )}
                   {activeView === 'forums' && <ForumView />}
                   {activeView === 'certificates' && <CertificatesView />}
                   {activeView === 'calendar' && <CalendarTasksView />}
                   {activeView === 'security' && <SecurityCloudView />}
                   {activeView === 'integrations' && <ApiIntegrationsView />}
                   {activeView === 'account' && <UserAccountView />}
+                  {activeView === 'legal' && <LegalCenterView />}
+                  {activeView === 'themes' && <AdminThemePanel />}
                 </motion.div>
               </AnimatePresence>
             </Suspense>
@@ -769,6 +834,7 @@ const AppShell: React.FC = () => {
 
       <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
       <OfflineIndicator message={t('offlineBanner')} />
+      <CookieBanner onOpenLegal={() => handleSelectNav('legal')} />
       {redeemOpen && (
         <RedeemGiftCardModal
           onClose={() => setRedeemOpen(false)}
@@ -792,7 +858,10 @@ export default function App() {
   return (
     <ErrorBoundary>
       <PlatformProvider>
-        <AppShell />
+        <SeasonalThemeProvider>
+          <IdleSessionGuard />
+          <AppShell />
+        </SeasonalThemeProvider>
       </PlatformProvider>
     </ErrorBoundary>
   );

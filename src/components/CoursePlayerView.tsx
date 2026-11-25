@@ -52,6 +52,7 @@ import { CertificatePreviewModal } from './CertificatePreviewModal';
 import { ImageLightboxModal, TheoryImageGallery } from './TheoryImageGallery';
 import { LessonVideoPlayer } from './LessonVideoPlayer';
 import { extractYouTubeId, extractVimeoId } from '../utils/courseEditor';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
@@ -170,7 +171,7 @@ function MaterialsTab({
                   title="Ampliar imagen"
                 >
                   <img
-                    src={mat.url}
+                    src={normalizarUrlImagen(mat.url)}
                     alt={mat.name}
                     loading="lazy"
                     referrerPolicy="no-referrer"
@@ -1272,7 +1273,7 @@ export const CoursePlayerView: React.FC = () => {
             {/* Compact Lesson Header */}
             <div className="relative bg-[var(--dba-bg-hero)] border-b border-zinc-800 px-4 py-4 sm:p-5 overflow-hidden">
               <img
-                src={activeCourse.coverImage}
+                src={normalizarUrlImagen(activeCourse.coverImage)}
                 alt={currentLesson.title}
                 width={1280}
                 height={714}
@@ -1515,7 +1516,7 @@ export const CoursePlayerView: React.FC = () => {
                                     className="group relative block w-full bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   >
                                     <img
-                                      src={imgSrc}
+                                      src={normalizarUrlImagen(imgSrc)}
                                       alt={altText || 'Imagen de la lección'}
                                       loading="lazy"
                                       decoding="async"

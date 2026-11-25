@@ -22,6 +22,7 @@ import {
   validateMaterialFile,
 } from '../../utils/courseEditor';
 import { formatFileSize, uploadCourseMaterial } from '../../services/storageService';
+import { normalizarUrlImagen } from '../../utils/imageUtils';
 import { Field } from './Field';
 
 interface MaterialsPanelProps {
@@ -269,7 +270,7 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
             >
               {material.type === 'image' ? (
                 <img
-                  src={material.url}
+                  src={normalizarUrlImagen(material.url)}
                   alt={material.name}
                   referrerPolicy="no-referrer"
                   className="h-9 w-12 shrink-0 rounded border border-slate-200 dark:border-slate-700 object-cover bg-white"

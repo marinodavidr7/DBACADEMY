@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Course } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { normalizarUrlImagen } from '../utils/imageUtils';
 import { CheckoutModal } from './CheckoutModal';
 import { RedeemGiftCardModal } from './RedeemGiftCardModal';
 import { CourseProgressBar } from './ui/CourseProgressBar';
@@ -35,9 +36,23 @@ function normalizeSearchText(value: string): string {
     .toLowerCase();
 }
 
+const LEGACY_TOPIC_TAGS = new Set([
+  'la pantalla de excel',
+  'formato',
+  'formulas',
+  'f4 / itbis',
+  'si()',
+  'simulador 3d',
+]);
+
 function getCourseTechnologies(course: Course): string[] {
   if (course.technologies && course.technologies.length > 0) {
-    return course.technologies;
+    const filtered = course.technologies.filter(
+      (tech) => !LEGACY_TOPIC_TAGS.has(normalizeSearchText(tech))
+    );
+    if (filtered.length > 0) {
+      return filtered;
+    }
   }
   const corpus = normalizeSearchText(
     [
@@ -392,7 +407,7 @@ export const CatalogView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:gap-5 grid-cols-[repeat(auto-fill,minmax(270px,1fr))]">
+          <div className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
             {filtered.map((course, idx) => {
               const enrollment = enrollments.find((e) => e.courseId === course.id);
               const isEnrolled = Boolean(enrollment);
@@ -405,6 +420,7 @@ export const CatalogView: React.FC = () => {
                   const cert = certificates.some((c) => c.courseId === p.id);
                   return (enr && enr.progressPercent >= 100) || cert || isAdmin;
                 });
+              const technologies = getCourseTechnologies(course);
 
               return (
                 <motion.article
@@ -418,7 +434,7 @@ export const CatalogView: React.FC = () => {
                   <div className="aspect-video w-full bg-zinc-900 relative overflow-hidden">
                     {course.coverImage ? (
                       <img
-                        src={course.coverImage}
+                        src={normalizarUrlImagen(course.coverImage)}
                         alt={course.title}
                         width={1280}
                         height={714}
@@ -431,6 +447,23 @@ export const CatalogView: React.FC = () => {
                       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-400">
                         <BookOpen className="w-10 h-10" />
                       </div>
+                    )}
+
+                    {/* Botón flotante de Administrador para editar curso sin saturar la botonera del estudiante */}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCourseId(course.id);
+                          setActiveView('instructor');
+                        }}
+                        className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-black/80 hover:bg-black text-amber-300 border border-amber-500/40 px-2.5 py-1.5 text-xs font-semibold shadow-md backdrop-blur-sm transition-all active:scale-95"
+                        title="Editar curso como administrador"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Editar</span>
+                      </button>
                     )}
                   </div>
 
@@ -466,8 +499,11 @@ export const CatalogView: React.FC = () => {
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                       {course.subtitle}
                     </p>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 truncate">
-                      {getCourseTechnologies(course).slice(0, 4).join(' · ')}
+                    <p
+                      className="mt-2 text-xs text-slate-500 dark:text-slate-400 line-clamp-1"
+                      title={technologies.join(' · ')}
+                    >
+                      {technologies.slice(0, 5).join(' · ')}
                     </p>
 
                     {hasPrereqs && (
@@ -502,38 +538,26 @@ export const CatalogView: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {course.instructorName}
-                        </p>
-                        <p className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
-                          {formatPrice(course.priceCents, course.currency)}
-                        </p>
+                    <div className="mt-auto pt-5 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {course.instructorName}
+                          </p>
+                          <p className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
+                            {formatPrice(course.priceCents, course.currency)}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedCourseId(course.id);
-                              setActiveView('instructor');
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors whitespace-nowrap min-h-[40px]"
-                            title="Editar curso completo como administrador"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            <span>Editar</span>
-                          </button>
-                        )}
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => {
                             setSelectedCourseId(course.id);
                             setActiveView('course-detail');
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[40px]"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap min-h-[40px]"
                         >
                           <span>Ver programa</span>
                         </button>
@@ -547,12 +571,11 @@ export const CatalogView: React.FC = () => {
                                 setActiveView('course-detail');
                               }
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-200 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-2 text-xs font-semibold text-amber-800 dark:text-amber-200 transition-colors truncate min-h-[40px]"
+                            title={`Completar ${prereqCourses[0]?.title.split(':')[0] || 'prerrequisito'}`}
                           >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>
-                              Completar {prereqCourses[0]?.title.split(':')[0] || 'prerrequisito'}
-                            </span>
+                            <Lock className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Prerrequisito</span>
                           </button>
                         ) : isEnrolled || isAdmin ? (
                           <button
@@ -561,14 +584,16 @@ export const CatalogView: React.FC = () => {
                               setSelectedCourseId(course.id);
                               setActiveView('learning');
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-4 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap shrink-0 min-h-[40px]"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 px-3 py-2 text-xs font-semibold text-white dark:text-slate-900 hover:opacity-90 transition-opacity whitespace-nowrap min-h-[40px]"
                           >
                             {enrollment?.progressPercent === 100 ? (
-                              <Check className="w-3.5 h-3.5" />
+                              <Check className="w-3.5 h-3.5 shrink-0" />
                             ) : (
-                              <Play className="w-3.5 h-3.5" />
+                              <Play className="w-3.5 h-3.5 shrink-0" />
                             )}
-                            <span>{isEnrolled ? t('continueCourse') : 'Abrir curso'}</span>
+                            <span className="truncate">
+                              {isEnrolled ? t('continueCourse') : 'Abrir curso'}
+                            </span>
                           </button>
                         ) : (
                           <button
@@ -582,12 +607,12 @@ export const CatalogView: React.FC = () => {
                                 setCheckoutCourse(course);
                               }
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap min-h-[40px]"
                           >
-                            <span>
+                            <span className="truncate">
                               {course.priceCents === 0 ? 'Inscribirse gratis' : t('enrollNow')}
                             </span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
                         )}
                       </div>

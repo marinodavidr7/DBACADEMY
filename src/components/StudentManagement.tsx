@@ -26,9 +26,11 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from '../lib/supabase/firestoreAdapter';
 import { usePlatform } from '../context/PlatformContext';
-import { db, isPlaceholderCampusEmail } from '../firebase';
+import { normalizarUrlImagen } from '../utils/imageUtils';
+import { db } from '../lib/supabase/firestoreAdapter';
+import { isPlaceholderCampusEmail } from '../firebase';
 import type {
   AssignmentSubmission,
   Certificate,
@@ -1067,7 +1069,7 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
                         <div className="flex items-center gap-3">
                           {student.photoURL ? (
                             <img
-                              src={student.photoURL}
+                              src={normalizarUrlImagen(student.photoURL)}
                               alt={student.name}
                               className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                               referrerPolicy="no-referrer"
@@ -1261,7 +1263,7 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
               <div className="flex items-center gap-3.5 min-w-0">
                 {selectedStudent.photoURL ? (
                   <img
-                    src={selectedStudent.photoURL}
+                    src={normalizarUrlImagen(selectedStudent.photoURL)}
                     alt={selectedStudent.name}
                     className="w-12 h-12 rounded-full object-cover border border-white/20 shrink-0"
                     referrerPolicy="no-referrer"

@@ -187,3 +187,316 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* --------------------------------------------------------------------------- */
+/* Temas estacionales (se aplican al <html> desde useSeasonalTheme)            */
+/* Los pares claro/oscuro mantienen contraste AA para texto sobre --dba-accent */
+/* --------------------------------------------------------------------------- */
+.theme-navidad {
+  --dba-accent: #b91c1c;
+  --dba-accent-hover: #991b1b;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #166534; /* 6.2:1 sobre elevated en claro */
+}
+.dark.theme-navidad {
+  --dba-accent: #f87171;
+  --dba-accent-hover: #fca5a5;
+  --dba-accent-foreground: #2a0707;
+  --dba-accent-ink: #fca5a5;
+}
+
+.theme-altagracia {
+  --dba-accent: #6d28d9;
+  --dba-accent-hover: #5b21b6;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #6d28d9;
+}
+.dark.theme-altagracia {
+  --dba-accent: #c4b5fd;
+  --dba-accent-hover: #ddd6fe;
+  --dba-accent-foreground: #1b0b33;
+  --dba-accent-ink: #c4b5fd;
+}
+
+.theme-duarte {
+  --dba-accent: #1d4ed8;
+  --dba-accent-hover: #1e40af;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #1d4ed8;
+}
+.dark.theme-duarte {
+  --dba-accent: #93c5fd;
+  --dba-accent-hover: #bfdbfe;
+  --dba-accent-foreground: #07162f;
+  --dba-accent-ink: #93c5fd;
+}
+
+.theme-mella {
+  --dba-accent: #b91c1c;
+  --dba-accent-hover: #991b1b;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #b91c1c;
+}
+.dark.theme-mella {
+  --dba-accent: #f87171;
+  --dba-accent-hover: #fca5a5;
+  --dba-accent-foreground: #2a0707;
+  --dba-accent-ink: #fca5a5;
+}
+
+.theme-independencia {
+  --dba-accent: #1d4ed8;
+  --dba-accent-hover: #1e3a8a;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #b91c1c;
+}
+.dark.theme-independencia {
+  --dba-accent: #93c5fd;
+  --dba-accent-hover: #bfdbfe;
+  --dba-accent-foreground: #07162f;
+  --dba-accent-ink: #fca5a5;
+}
+
+.theme-sanchez {
+  --dba-accent: #0f766e;
+  --dba-accent-hover: #115e59;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #0f766e;
+}
+.dark.theme-sanchez {
+  --dba-accent: #5eead4;
+  --dba-accent-hover: #99f6e4;
+  --dba-accent-foreground: #041f1d;
+  --dba-accent-ink: #5eead4;
+}
+
+.theme-san-jose-azua {
+  --dba-accent: #15803d;
+  --dba-accent-hover: #166534;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #15803d;
+}
+.dark.theme-san-jose-azua {
+  --dba-accent: #86efac;
+  --dba-accent-hover: #bbf7d0;
+  --dba-accent-foreground: #042111;
+  --dba-accent-ink: #86efac;
+}
+
+.theme-restauracion {
+  --dba-accent: #b91c1c;
+  --dba-accent-hover: #991b1b;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #1d4ed8;
+}
+.dark.theme-restauracion {
+  --dba-accent: #f87171;
+  --dba-accent-hover: #fca5a5;
+  --dba-accent-foreground: #2a0707;
+  --dba-accent-ink: #93c5fd;
+}
+
+.theme-mercedes {
+  --dba-accent: #7c3aed;
+  --dba-accent-hover: #6d28d9;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #7c3aed;
+}
+.dark.theme-mercedes {
+  --dba-accent: #c4b5fd;
+  --dba-accent-hover: #ddd6fe;
+  --dba-accent-foreground: #1b0b33;
+  --dba-accent-ink: #c4b5fd;
+}
+
+.theme-constitucion {
+  --dba-accent: #1e40af;
+  --dba-accent-hover: #1e3a8a;
+  --dba-accent-foreground: #ffffff;
+  --dba-accent-ink: #1e40af;
+}
+.dark.theme-constitucion {
+  --dba-accent: #93c5fd;
+  --dba-accent-hover: #bfdbfe;
+  --dba-accent-foreground: #07162f;
+  --dba-accent-ink: #93c5fd;
+}
+
+/* Visor editorial de documentos legales */
+.legal-doc-content {
+  color: var(--dba-text-primary);
+  line-height: 1.75;
+  overflow-wrap: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+.legal-doc-content > * + * {
+  margin-top: 1.15rem;
+}
+.legal-doc-content h1,
+.legal-doc-content h2,
+.legal-doc-content h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+  scroll-margin-top: 6.5rem;
+}
+/* El título ya se muestra en la cabecera; el h1 del Markdown se reserva para impresión. */
+.legal-doc-content > h1:first-child {
+  display: none;
+}
+.legal-doc-content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+.legal-doc-content h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--dba-border);
+}
+.legal-doc-content h3 {
+  font-size: 1.08rem;
+  font-weight: 650;
+  margin-top: 1.75rem;
+  color: var(--dba-text-primary);
+}
+.legal-doc-content p {
+  color: var(--dba-text-primary);
+}
+.legal-doc-content ul,
+.legal-doc-content ol {
+  padding-left: 1.5rem;
+}
+.legal-doc-content ul {
+  list-style: disc;
+}
+.legal-doc-content ol {
+  list-style: decimal;
+}
+.legal-doc-content ul ul {
+  list-style: circle;
+}
+.legal-doc-content li {
+  padding-left: 0.2rem;
+}
+.legal-doc-content li + li {
+  margin-top: 0.4rem;
+}
+.legal-doc-content li::marker {
+  color: var(--dba-accent-ink);
+}
+.legal-doc-content blockquote {
+  border-left: 3px solid var(--dba-accent);
+  background: var(--dba-bg-elevated);
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding: 0.9rem 1.15rem;
+  color: var(--dba-text-secondary);
+  font-size: 0.9rem;
+}
+.legal-doc-content blockquote p + p {
+  margin-top: 0.5rem;
+}
+.legal-doc-content code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  background: var(--dba-bg-elevated);
+}
+.legal-doc-content a {
+  color: var(--dba-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.legal-doc-content hr {
+  border: 0;
+  border-top: 1px solid var(--dba-border);
+  margin: 2rem 0;
+}
+.legal-doc-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--dba-border);
+  border-radius: 0.75rem;
+}
+.legal-doc-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.legal-doc-content th,
+.legal-doc-content td {
+  border: 1px solid var(--dba-border);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.legal-doc-content thead {
+  background: var(--dba-bg-elevated);
+}
+.legal-doc-content th {
+  font-weight: 650;
+  font-family: var(--font-display);
+}
+
+/* Impresión / Guardar PDF: solo el texto del documento, en blanco y negro */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+  html,
+  body,
+  .legal-doc-root {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .legal-doc-no-print,
+  .legal-doc-screen-title {
+    display: none !important;
+  }
+  .legal-doc-content > h1:first-child {
+    display: block !important;
+    margin-top: 0 !important;
+  }
+  .legal-doc-content {
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+  .legal-doc-content p,
+  .legal-doc-content h1,
+  .legal-doc-content h2,
+  .legal-doc-content h3 {
+    color: #111 !important;
+  }
+  .legal-doc-content a {
+    color: #111 !important;
+    text-decoration: none !important;
+  }
+  .legal-doc-content blockquote,
+  .legal-doc-content code,
+  .legal-doc-content thead {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .legal-doc-content h2,
+  .legal-doc-content h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .legal-doc-content table,
+  .legal-doc-content blockquote,
+  .legal-doc-content li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
