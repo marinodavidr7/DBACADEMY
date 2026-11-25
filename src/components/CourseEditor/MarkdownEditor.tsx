@@ -149,6 +149,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   const [imgAlt, setImgAlt] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePanelError, setImagePanelError] = useState<string | null>(null);
+  const [showVideoPanel, setShowVideoPanel] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [videoPanelError, setVideoPanelError] = useState<string | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1536px)');
@@ -215,6 +218,18 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
     setImgAlt('');
     setImagePanelError(null);
     setShowImagePanel(false);
+  };
+
+  const handleInsertYoutubeUrl = () => {
+    const trimmed = youtubeUrl.trim();
+    if (!/^https?:\/\/\S+/i.test(trimmed)) {
+      setVideoPanelError('Introduce una URL válida (ej. https://www.youtube.com/watch?v=...).');
+      return;
+    }
+    insertBlock(`\n${trimmed}\n`);
+    setYoutubeUrl('');
+    setVideoPanelError(null);
+    setShowVideoPanel(false);
   };
 
   const handleUploadInlineImage = async (file: File | undefined) => {
@@ -286,16 +301,18 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
             </button>
             <button
               type="button"
-              className={toolbarButton}
+              aria-expanded={showVideoPanel}
+              className={`${toolbarButton} ${
+                showVideoPanel
+                  ? 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                  : ''
+              }`}
               title="Insertar video de YouTube (pega la URL en el contenido)"
               aria-label="Insertar video de YouTube"
               onClick={() => {
-                const url = window.prompt(
-                  'Introduce la URL del video de YouTube (ej. https://www.youtube.com/watch?v=...):'
-                );
-                if (url && url.trim()) {
-                  insertBlock(`\n${url.trim()}\n`);
-                }
+                setVideoPanelError(null);
+                setShowImagePanel(false);
+                setShowVideoPanel((prev) => !prev);
               }}
             >
               <Video className="h-4 w-4 text-red-500" />
@@ -310,7 +327,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
               }`}
               title="Cargar o vincular imagen en el contenido"
               aria-label="Cargar o vincular imagen en el contenido"
-              onClick={() => setShowImagePanel((prev) => !prev)}
+              onClick={() => {
+                setShowVideoPanel(false);
+                setShowImagePanel((prev) => !prev);
+              }}
             >
               <ImageIcon className="h-4 w-4" />
             </button>
@@ -336,6 +356,69 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
             </button>
           </div>
         </div>
+
+        {showVideoPanel && (
+          <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <Video className="h-3.5 w-3.5 text-red-500" />
+                <span>Insertar video de YouTube en el contenido</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVideoPanel(false)}
+                aria-label="Cerrar panel de video"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {videoPanelError && (
+              <p className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">
+                {videoPanelError}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-center">
+              <input
+                type="url"
+                autoFocus
+                value={youtubeUrl}
+                onChange={(e) => {
+                  setYoutubeUrl(e.target.value);
+                  if (videoPanelError) setVideoPanelError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleInsertYoutubeUrl();
+                  } else if (e.key === 'Escape') {
+                    setShowVideoPanel(false);
+                  }
+                }}
+                placeholder="https://www.youtube.com/watch?v=... o https://youtu.be/..."
+                className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                disabled={!youtubeUrl.trim()}
+                onClick={handleInsertYoutubeUrl}
+                className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Insertar video</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowVideoPanel(false)}
+                className="inline-flex min-h-[38px] items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors whitespace-nowrap"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         {showImagePanel && (
           <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">

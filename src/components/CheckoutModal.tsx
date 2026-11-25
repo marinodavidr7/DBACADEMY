@@ -47,6 +47,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     getLemonSqueezyStatus,
     createLemonSqueezyCheckout,
     verifyAndCompleteLemonSqueezyCheckout,
+    createStripeCheckout,
     subscribeToGiftCard,
     redeemGiftCardForCourse,
     validateCoupon: validateCouponInFirestore,
@@ -271,7 +272,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    if (finalPrice > 0 && gateway !== 'lemonsqueezy') {
+    if (finalPrice > 0 && gateway !== 'lemonsqueezy' && gateway !== 'stripe') {
       if (!cardHolder.trim()) {
         setError(t('cardHolderRequired'));
         return;
@@ -286,6 +287,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setSubmitting(true);
     setError('');
     try {
+      if (finalPrice > 0 && gateway === 'stripe') {
+        const session = await createStripeCheckout(course, {
+          couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
+          giftCardCode:
+            appliedGiftCard?.valid && appliedGiftCard.card ? appliedGiftCard.card.code : undefined,
+        });
+
+        if (!session.freeBypass && session.checkoutUrl) {
+          try {
+            sessionStorage.setItem(
+              'dba_pending_stripe_checkout',
+              JSON.stringify({
+                paymentId: session.paymentId,
+                sessionId: session.sessionId,
+                courseId: course.id,
+              })
+            );
+          } catch {
+            // Ignore storage errors
+          }
+          recordCheckoutConsent();
+          window.location.assign(session.checkoutUrl);
+          return;
+        }
+      }
+
       if (finalPrice > 0 && gateway === 'lemonsqueezy') {
         const session = await createLemonSqueezyCheckout(course, {
           couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
@@ -662,6 +689,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         </div>
                       )}
                     </div>
+                  ) : gateway === 'stripe' ? (
+                    <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[var(--dba-text-primary)]">
+                          Stripe Checkout (DOP · RD$)
+                        </span>
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                          Payments · Invoicing · Tax
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--dba-text-secondary)]">
+                        Serás redirigido a la página segura de Stripe para pagar en Pesos Dominicanos (DOP) con tarjeta, Apple Pay o Google Pay y recibir tu factura automática.
+                      </p>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="text-sm text-[var(--dba-text-primary)]">
@@ -693,7 +734,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {isAdmin &&
                 finalPrice > 0 &&
                 !appliedGiftCard?.valid &&
-                gateway !== 'lemonsqueezy' && (
+                gateway !== 'lemonsqueezy' &&
+                gateway !== 'stripe' && (
                   <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                     <input
                       type="checkbox"
@@ -764,7 +806,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         ? t('enrollFree')
                         : gateway === 'lemonsqueezy'
                           ? t('lemonSqueezyPayLabel')
-                          : t('payAndEnroll')}
+                          : gateway === 'stripe'
+                            ? 'Continuar a Stripe (DOP)'
+                            : t('payAndEnroll')}
                 </button>
               </div>
             </form>

@@ -402,6 +402,30 @@ interface PlatformContextValue {
     payment?: PaymentRecord;
     message?: string;
   }>;
+  createStripeCheckout: (
+    course: Course,
+    options?: { couponCode?: string; giftCardCode?: string }
+  ) => Promise<{
+    freeBypass: boolean;
+    checkoutUrl?: string;
+    sessionId?: string;
+    paymentId: string;
+    courseId: string;
+    amountCents: number;
+    currency: string;
+    testMode: boolean;
+  }>;
+  verifyAndCompleteStripeCheckout: (
+    sessionId: string,
+    courseId: string,
+    paymentId?: string
+  ) => Promise<{
+    verified: boolean;
+    status: 'paid' | 'pending';
+    payment?: PaymentRecord;
+    invoiceUrl?: string;
+    message?: string;
+  }>;
   lemonSqueezyBanner: { status: 'verifying' | 'success' | 'pending' | 'error'; message: string } | null;
   clearLemonSqueezyBanner: () => void;
   completeLesson: (course: Course, lessonId: string, minutesSpent?: number) => Promise<{ progressPercent: number; certificateIssued?: Certificate }>;
@@ -651,6 +675,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const wsRef = useRef<WebSocket | null>(null);
   const notifiedDeadlineIdsRef = useRef<Set<string>>(new Set());
   const handledLemonReturnRef = useRef<string | null>(null);
+  const handledStripeReturnRef = useRef<string | null>(null);
 
   const toggleZenMode = useCallback(() => {
     setZenMode((prev) => !prev);
@@ -3971,6 +3996,196 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return (await resp.json()) as LemonSqueezyStatus;
   }, []);
 
+  const createStripeCheckout = useCallback(
+    async (
+      course: Course,
+      options?: { couponCode?: string; giftCardCode?: string }
+    ) => {
+      if (!user) {
+        throw new Error('Debes iniciar sesión para continuar al pago con Stripe.');
+      }
+      const existingEnrollment = enrollments.find((e) => e.courseId === course.id);
+      if (existingEnrollment) {
+        throw new Error('Ya estás matriculado en este curso.');
+      }
+
+      const idToken = await user.getIdToken();
+      const resp = await fetch('/api/v1/payments/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          courseId: course.id,
+          couponCode: options?.couponCode,
+          giftCardCode: options?.giftCardCode,
+        }),
+      });
+      const json = (await resp.json().catch(() => ({}))) as {
+        freeBypass: boolean;
+        checkoutUrl?: string;
+        sessionId?: string;
+        paymentId: string;
+        courseId: string;
+        amountCents: number;
+        currency: string;
+        testMode: boolean;
+        error?: string;
+      };
+      if (!resp.ok) {
+        throw new Error(json.error || 'No se pudo iniciar la pasarela Stripe.');
+      }
+      return json;
+    },
+    [user, enrollments]
+  );
+
+  const verifyAndCompleteStripeCheckout = useCallback(
+    async (sessionId: string, courseId: string, paymentId?: string) => {
+      if (!user) {
+        throw new Error('Inicia sesión para verificar tu pago de Stripe.');
+      }
+      const idToken = await user.getIdToken();
+      const url = new URL('/api/v1/payments/stripe/verify', window.location.origin);
+      url.searchParams.set('sessionId', sessionId);
+      url.searchParams.set('courseId', courseId);
+      if (paymentId) url.searchParams.set('paymentId', paymentId);
+
+      const resp = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const verification = (await resp.json().catch(() => ({}))) as {
+        verified: boolean;
+        status: 'paid' | 'pending';
+        paymentId: string;
+        courseId: string;
+        transactionRef?: string;
+        invoiceUrl?: string;
+        couponCode?: string;
+        giftCardCode?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!resp.ok) {
+        throw new Error(verification.error || 'No se pudo verificar el pago en Stripe.');
+      }
+      if (!verification.verified || verification.status !== 'paid') {
+        return {
+          verified: false,
+          status: verification.status || ('pending' as const),
+          message: verification.message,
+        };
+      }
+
+      const targetCourseId = verification.courseId || courseId;
+      let targetCourse = coursesRef.current.find((c) => c.id === targetCourseId) || null;
+      if (!targetCourse) {
+        const snap = await getDoc(doc(db, 'courses', targetCourseId));
+        if (snap.exists()) {
+          targetCourse = snap.data() as Course;
+        }
+      }
+      if (!targetCourse) {
+        throw new Error('Curso asociado al pago no encontrado.');
+      }
+
+      const existingEnr = enrollments.find((e) => e.courseId === targetCourseId);
+      const existingPay = payments.find(
+        (p) => p.id === verification.paymentId || p.courseId === targetCourseId
+      );
+      if (existingEnr && existingPay) {
+        return {
+          verified: true,
+          status: 'paid' as const,
+          payment: existingPay,
+          invoiceUrl: verification.invoiceUrl,
+        };
+      }
+
+      let recordedPayment: PaymentRecord;
+      if (verification.giftCardCode) {
+        const res = await redeemGiftCardForCourse(
+          verification.giftCardCode,
+          targetCourse,
+          'stripe',
+          {
+            externalPaymentId: verification.paymentId,
+            externalTransactionRef: verification.transactionRef,
+          }
+        );
+        recordedPayment = res.payment;
+      } else {
+        recordedPayment = await enrollWithPayment(targetCourse, 'stripe', {
+          couponCode: verification.couponCode,
+          externalPaymentId: verification.paymentId,
+          externalTransactionRef: verification.transactionRef,
+        });
+      }
+
+      try {
+        sessionStorage.removeItem('dba_pending_stripe_checkout');
+      } catch {
+        // Ignore sessionStorage errors
+      }
+
+      return {
+        verified: true,
+        status: 'paid' as const,
+        payment: recordedPayment,
+        invoiceUrl: verification.invoiceUrl,
+      };
+    },
+    [user, enrollments, payments, enrollWithPayment, redeemGiftCardForCourse]
+  );
+
+  useEffect(() => {
+    if (!authReady || !user || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe_checkout') !== 'success') return;
+
+    const courseId = (params.get('course_id') || '').trim();
+    const sessionId = (params.get('session_id') || '').trim();
+    const paymentId = (params.get('payment_id') || '').trim() || undefined;
+    if (!courseId || !sessionId) return;
+
+    const dedupeKey = `${sessionId}:${courseId}`;
+    if (handledStripeReturnRef.current === dedupeKey) return;
+    handledStripeReturnRef.current = dedupeKey;
+
+    setLemonSqueezyBanner({
+      status: 'verifying',
+      message: 'Verificando tu pago con Stripe (DOP)...',
+    });
+
+    void (async () => {
+      try {
+        const res = await verifyAndCompleteStripeCheckout(sessionId, courseId, paymentId);
+        window.history.replaceState({}, '', window.location.pathname);
+        if (res.verified) {
+          setSelectedCourseId(courseId);
+          setActiveView('learning');
+          setLemonSqueezyBanner({
+            status: 'success',
+            message: res.invoiceUrl
+              ? 'Pago confirmado con Stripe en DOP. Ya tienes acceso al curso y tu factura generada.'
+              : 'Pago confirmado con Stripe en DOP. Ya tienes acceso al curso.',
+          });
+        } else {
+          setLemonSqueezyBanner({
+            status: 'error',
+            message: res.message || 'Tu pago en Stripe aún está pendiente de confirmación.',
+          });
+        }
+      } catch (err) {
+        setLemonSqueezyBanner({
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Error verificando el pago de Stripe.',
+        });
+      }
+    })();
+  }, [authReady, user, verifyAndCompleteStripeCheckout]);
+
   const createLemonSqueezyCheckout = useCallback(
     async (
       course: Course,
@@ -4246,6 +4461,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       getLemonSqueezyStatus,
       createLemonSqueezyCheckout,
       verifyAndCompleteLemonSqueezyCheckout,
+      createStripeCheckout,
+      verifyAndCompleteStripeCheckout,
       lemonSqueezyBanner,
       clearLemonSqueezyBanner,
       completeLesson,
@@ -4344,6 +4561,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       getLemonSqueezyStatus,
       createLemonSqueezyCheckout,
       verifyAndCompleteLemonSqueezyCheckout,
+      createStripeCheckout,
+      verifyAndCompleteStripeCheckout,
       lemonSqueezyBanner,
       clearLemonSqueezyBanner,
       completeLesson,

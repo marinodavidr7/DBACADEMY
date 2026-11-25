@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
+import Stripe from 'stripe';
 import { WebSocket, WebSocketServer } from 'ws';
 import { isSupabaseAdminConfigured, serverDb } from './src/lib/supabase/serverClient';
 import { getLegalDocumentByFile } from './src/services/legalDocuments';
@@ -630,6 +631,10 @@ export function createApp(): express.Express {
         '/payments/lemonsqueezy/checkout': { post: { summary: 'Create hosted Lemon Squeezy checkout session (app.lemonsqueezy.com)' } },
         '/payments/lemonsqueezy/webhook': { post: { summary: 'Receive HMAC-SHA256 signed Lemon Squeezy order webhooks' } },
         '/payments/lemonsqueezy/verify': { get: { summary: 'Verify Lemon Squeezy order completion for authenticated student' } },
+        '/payments/stripe/status': { get: { summary: 'Inspect Stripe server configuration status' } },
+        '/payments/stripe/checkout': { post: { summary: 'Create hosted Stripe Checkout session in DOP with Invoicing & Tax' } },
+        '/payments/stripe/webhook': { post: { summary: 'Receive signed Stripe Checkout webhooks' } },
+        '/payments/stripe/verify': { get: { summary: 'Verify Stripe Checkout session completion for authenticated student' } },
         '/webhooks/register': { post: { summary: 'Register API key hash and webhook endpoint' } },
         '/webhooks/test': { post: { summary: 'Dispatch signed HMAC-SHA256 webhook event' } },
         '/cloud-storage/sync': { post: { summary: 'Upload client-encrypted E2EE backup manifest' } },
@@ -1184,6 +1189,366 @@ export function createApp(): express.Express {
       currency: pending?.currency,
       receiptUrl: verified.receiptUrl,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Stripe (Payments + Invoicing + Tax) in DOP
+  // -------------------------------------------------------------------------
+  const getStripeClient = () => {
+    const secretKey = (process.env.STRIPE_SECRET_KEY || '').trim();
+    const webhookSecret = (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+    if (!secretKey) {
+      return { stripe: null, testMode: false, webhookConfigured: Boolean(webhookSecret) };
+    }
+    return {
+      stripe: new Stripe(secretKey),
+      testMode: secretKey.startsWith('sk_test_'),
+      webhookConfigured: Boolean(webhookSecret),
+      webhookSecret,
+    };
+  };
+
+  app.get('/api/v1/payments/stripe/status', (_req, res) => {
+    const { stripe, testMode, webhookConfigured } = getStripeClient();
+    res.json({
+      configured: Boolean(stripe),
+      webhookConfigured,
+      testMode,
+      currency: 'DOP',
+    });
+  });
+
+  app.post('/api/v1/payments/stripe/checkout', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    const { stripe, testMode } = getStripeClient();
+    if (!stripe) {
+      res.status(503).json({
+        error: 'Stripe no está configurado en el servidor (falta STRIPE_SECRET_KEY).',
+      });
+      return;
+    }
+
+    const { courseId, couponCode, giftCardCode } = req.body ?? {};
+    const safeCourseId = typeof courseId === 'string' ? courseId.trim() : '';
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(safeCourseId)) {
+      res.status(400).json({ error: 'Identificador de curso inválido.' });
+      return;
+    }
+
+    try {
+      const course = await readFirestoreDoc('courses', safeCourseId, req.headers.authorization);
+      if (!course) {
+        res.status(404).json({ error: 'Curso no encontrado.' });
+        return;
+      }
+
+      const courseTitle = String(course.title || 'Curso DB Academy').slice(0, 140);
+      const courseSubtitle = String(course.subtitle || 'Formación técnico profesional en DB Academy').slice(0, 240);
+      const instructorId = String(course.instructorId || '');
+      const originalAmountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
+
+      let discountCents = 0;
+      let discountSource: 'none' | 'coupon' | 'gift_card' = 'none';
+      let appliedCouponCode: string | undefined;
+      let appliedGiftCardCode: string | undefined;
+
+      const normalizedGiftCard =
+        typeof giftCardCode === 'string' && giftCardCode.trim()
+          ? normalizeCode(giftCardCode)
+          : '';
+      const normalizedCoupon =
+        typeof couponCode === 'string' && couponCode.trim()
+          ? normalizeCode(couponCode)
+          : '';
+
+      if (normalizedGiftCard) {
+        const cardSnap = await serverDb.collection('gift_cards').doc(normalizedGiftCard).get();
+        const card = cardSnap.exists() ? (cardSnap.data() as Record<string, unknown>) : null;
+        if (!card) {
+          res.status(400).json({ error: 'Tarjeta de regalo no encontrada.' });
+          return;
+        }
+        if (card.active !== true) {
+          res.status(400).json({ error: 'Esta tarjeta de regalo está desactivada.' });
+          return;
+        }
+        if (card.expiresAt && new Date(String(card.expiresAt)).getTime() < Date.now()) {
+          res.status(400).json({ error: 'Esta tarjeta de regalo ha expirado.' });
+          return;
+        }
+        const remaining = Number(card.remainingUses ?? 0);
+        if (remaining <= 0) {
+          res.status(400).json({ error: 'Esta tarjeta de regalo ya agotó sus usos.' });
+          return;
+        }
+        if (card.courseId && String(card.courseId) !== safeCourseId) {
+          res.status(400).json({ error: 'Esta tarjeta aplica para otro curso específico.' });
+          return;
+        }
+        const valueCents = Math.max(0, Math.round(Number(card.valueCents ?? originalAmountCents)));
+        discountCents = Math.min(originalAmountCents, valueCents);
+        discountSource = 'gift_card';
+        appliedGiftCardCode = normalizedGiftCard;
+      } else if (normalizedCoupon) {
+        const couponDoc = await readFirestoreDoc('coupons', normalizedCoupon, req.headers.authorization);
+        if (!couponDoc) {
+          res.status(400).json({ error: 'Cupón no válido.' });
+          return;
+        }
+        const c = couponDoc as unknown as Coupon;
+        if (!isCouponActive(c)) {
+          res.status(400).json({ error: 'El cupón no está activo, expiró o agotó sus usos.' });
+          return;
+        }
+        if (c.appliesTo === 'courses' && !c.courseIds?.includes(safeCourseId)) {
+          res.status(400).json({ error: 'Este cupón no aplica para el curso seleccionado.' });
+          return;
+        }
+        if (c.minPurchaseCents != null && originalAmountCents < c.minPurchaseCents) {
+          res.status(400).json({ error: 'El curso no alcanza el monto mínimo del cupón.' });
+          return;
+        }
+        discountCents = calculateDiscount(c, originalAmountCents).discountCents;
+        discountSource = 'coupon';
+        appliedCouponCode = normalizedCoupon;
+      }
+
+      const finalAmountCents = Math.max(0, originalAmountCents - discountCents);
+      const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
+
+      if (finalAmountCents === 0) {
+        res.json({
+          freeBypass: true,
+          paymentId,
+          courseId: safeCourseId,
+          amountCents: 0,
+          originalAmountCents,
+          discountCents,
+          discountSource,
+          currency: 'DOP',
+          testMode,
+        });
+        return;
+      }
+
+      const protoHeader = (req.headers['x-forwarded-proto'] as string | undefined) || req.protocol || 'http';
+      const hostHeader = (req.headers['x-forwarded-host'] as string | undefined) || req.get('host') || 'localhost:3000';
+      const appBaseUrl = (process.env.APP_URL && !process.env.APP_URL.includes('MY_APP_URL'))
+        ? process.env.APP_URL.replace(/\/+$/, '')
+        : `${protoHeader.split(',')[0].trim()}://${hostHeader.split(',')[0].trim()}`;
+
+      const successUrl =
+        `${appBaseUrl}/?stripe_checkout=success` +
+        `&session_id={CHECKOUT_SESSION_ID}` +
+        `&course_id=${encodeURIComponent(safeCourseId)}` +
+        `&payment_id=${encodeURIComponent(paymentId)}`;
+      const cancelUrl = `${appBaseUrl}/?stripe_checkout=cancelled&course_id=${encodeURIComponent(safeCourseId)}`;
+
+      const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
+        mode: 'payment',
+        customer_email: auth.email || undefined,
+        line_items: [
+          {
+            price_data: {
+              currency: 'dop',
+              unit_amount: finalAmountCents,
+              product_data: {
+                name: courseTitle,
+                description: courseSubtitle,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        invoice_creation: {
+          enabled: true,
+        },
+        tax_id_collection: {
+          enabled: true,
+        },
+        automatic_tax: {
+          enabled: true,
+        },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          paymentId,
+          courseId: safeCourseId,
+          courseTitle,
+          studentId: auth.uid,
+          instructorId,
+          couponCode: appliedCouponCode || '',
+          giftCardCode: appliedGiftCardCode || '',
+          discountSource,
+          originalAmountCents: String(originalAmountCents),
+          discountCents: String(discountCents),
+        },
+      };
+
+      let session: Stripe.Checkout.Session;
+      let automaticTaxApplied = true;
+      try {
+        session = await stripe.checkout.sessions.create(baseSessionParams);
+      } catch (taxErr) {
+        const msg = taxErr instanceof Error ? taxErr.message : '';
+        if (/automatic_tax|origin address|tax settings/i.test(msg)) {
+          console.warn('[stripe] Stripe Tax aún no configurado en Dashboard; reintentando sin automatic_tax:', msg);
+          automaticTaxApplied = false;
+          const { automatic_tax: _omitTax, ...fallbackParams } = baseSessionParams;
+          session = await stripe.checkout.sessions.create(fallbackParams);
+        } else {
+          throw taxErr;
+        }
+      }
+
+      res.json({
+        freeBypass: false,
+        checkoutUrl: session.url,
+        sessionId: session.id,
+        paymentId,
+        courseId: safeCourseId,
+        amountCents: finalAmountCents,
+        originalAmountCents,
+        discountCents,
+        discountSource,
+        currency: 'DOP',
+        testMode,
+        automaticTaxApplied,
+      });
+    } catch (err) {
+      console.error('[stripe] Error creando Checkout Session:', err);
+      res.status(502).json({
+        error: err instanceof Error ? err.message : 'No se pudo iniciar Stripe Checkout.',
+      });
+    }
+  });
+
+  app.get('/api/v1/payments/stripe/verify', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    const { stripe } = getStripeClient();
+    if (!stripe) {
+      res.status(503).json({ error: 'Stripe no está configurado en el servidor.' });
+      return;
+    }
+
+    const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId.trim() : '';
+    const courseId = typeof req.query.courseId === 'string' ? req.query.courseId.trim() : '';
+    if (!sessionId) {
+      res.status(400).json({ error: 'Se requiere sessionId de Stripe.' });
+      return;
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['payment_intent', 'invoice'],
+      });
+      const meta = session.metadata || {};
+      if (meta.studentId && meta.studentId !== auth.uid) {
+        res.status(403).json({ error: 'Esta sesión de pago pertenece a otro usuario.' });
+        return;
+      }
+
+      if (session.payment_status !== 'paid') {
+        res.json({
+          verified: false,
+          status: 'pending',
+          message: 'El pago en Stripe aún está en proceso o no se ha completado.',
+        });
+        return;
+      }
+
+      const paymentIntentId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id || session.id;
+      const invoiceObj =
+        session.invoice && typeof session.invoice === 'object' ? session.invoice : null;
+
+      res.json({
+        verified: true,
+        status: 'paid',
+        paymentId: meta.paymentId || `pay_${session.id.slice(-12)}`,
+        courseId: meta.courseId || courseId,
+        courseTitle: meta.courseTitle,
+        instructorId: meta.instructorId,
+        transactionRef: paymentIntentId,
+        invoiceUrl: invoiceObj?.hosted_invoice_url || undefined,
+        invoicePdf: invoiceObj?.invoice_pdf || undefined,
+        amountCents: session.amount_total ?? 0,
+        originalAmountCents: meta.originalAmountCents ? Number(meta.originalAmountCents) : undefined,
+        discountCents: meta.discountCents ? Number(meta.discountCents) : undefined,
+        discountSource: meta.discountSource || 'none',
+        couponCode: meta.couponCode || undefined,
+        giftCardCode: meta.giftCardCode || undefined,
+        currency: (session.currency || 'dop').toUpperCase(),
+      });
+    } catch (err) {
+      console.error('[stripe] Error verificando sesión:', err);
+      res.status(502).json({
+        error: err instanceof Error ? err.message : 'No se pudo verificar la sesión en Stripe.',
+      });
+    }
+  });
+
+  app.post('/api/v1/payments/stripe/webhook', (req, res) => {
+    const { stripe, webhookSecret } = getStripeClient();
+    if (!stripe || !webhookSecret) {
+      res.status(503).json({ error: 'STRIPE_WEBHOOK_SECRET no configurado.' });
+      return;
+    }
+
+    const sig = req.headers['stripe-signature'];
+    const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody;
+    if (!sig || !rawBody) {
+      res.status(400).json({ error: 'Falta firma stripe-signature o rawBody.' });
+      return;
+    }
+
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (err) {
+      res.status(401).json({
+        error: err instanceof Error ? err.message : 'Firma de webhook Stripe inválida.',
+      });
+      return;
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const meta = session.metadata || {};
+      const studentId = meta.studentId || '';
+      const instructorId = meta.instructorId || '';
+      const receipt = {
+        paymentId: meta.paymentId || `pay_${session.id.slice(-12)}`,
+        courseId: meta.courseId || '',
+        courseTitle: meta.courseTitle || '',
+        studentId,
+        instructorId,
+        amountCents: session.amount_total ?? 0,
+        currency: (session.currency || 'dop').toUpperCase(),
+        gateway: 'stripe',
+        status: session.payment_status === 'paid' ? 'succeeded' : 'pending',
+        transactionRef:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : session.id,
+        authorizedAt: new Date().toISOString(),
+      };
+      if (studentId) {
+        broadcastEvent({ type: 'PAYMENT_COMPLETED', scope: 'user', ...receipt }, studentId);
+      }
+      if (instructorId) {
+        broadcastEvent({ type: 'INSTRUCTOR_SALE', scope: 'user', ...receipt }, instructorId);
+        void dispatchWebhooks(instructorId, 'payment.succeeded', receipt);
+      }
+    }
+
+    res.json({ received: true, eventType: event.type });
   });
 
   app.post('/api/v1/payments/checkout', async (req, res) => {
