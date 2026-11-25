@@ -1571,9 +1571,10 @@ async function startServer() {
   // ─── ADMIN: proxy de tablas protegidas por RLS (gift cards) ──────────────
   // El cliente no puede leer gift_cards con la key anónima (sólo service_role
   // tiene política). Estas rutas usan el cliente de servicio del servidor.
-  const ADMIN_PROXY_TABLES = new Set(['gift_cards', 'gift_card_redemptions']);
-  const isAdminProxyTable = (table: string): table is 'gift_cards' | 'gift_card_redemptions' =>
-    ADMIN_PROXY_TABLES.has(table);
+  const ADMIN_PROXY_TABLES = new Set([
+    'gift_cards', 'gift_card_redemptions', 'enrollments', 'payments', 'certificates', 'users_private',
+  ]);
+  const isAdminProxyTable = (table: string): boolean => ADMIN_PROXY_TABLES.has(table);
 
   app.get('/api/admin/:table', async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }

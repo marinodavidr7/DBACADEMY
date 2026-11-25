@@ -112,13 +112,20 @@ export function rowToSnapshot(row: Row | null, table = 'unknown_table'): DocSnap
 
 async function singleRow(table: string, id: string): Promise<Row | null> {
   if (SERVER_TABLES.has(table)) {
-    const url = isAdminUser() || table !== 'gift_cards'
-      ? `/api/admin/${table}/${encodeURIComponent(id)}`
-      : `/api/gift-cards/${encodeURIComponent(id)}`;
-    const res = await adminFetch('GET', url);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Admin ${table}.get failed: ${await adminError(res)}`);
-    return (await res.json()) as Row;
+    // El admin always usa el proxy con service_role. Un estudiante sólo puede
+    // ver su propia gift card por código; el resto mantiene el comportamiento previo.
+    if (isAdminUser()) {
+      const res = await adminFetch('GET', `/api/admin/${table}/${encodeURIComponent(id)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Admin ${table}.get failed: ${await adminError(res)}`);
+      return (await res.json()) as Row;
+    }
+    if (table === 'gift_cards') {
+      const res = await adminFetch('GET', `/api/gift-cards/${encodeURIComponent(id)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Supabase gift_cards.get failed: ${await adminError(res)}`);
+      return (await res.json()) as Row;
+    }
   }
   const pk = pkFor(table);
   const { data, error } = await getSupabaseClient()
@@ -213,15 +220,17 @@ export function query(q: CollectionQuery, ...wheres: Where[]): CollectionQuery {
 }
 
 export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
-  if (SERVER_TABLES.has(q.table)) {
-    // Los listados de tablas protegidas se sirven desde el backend con service_role.
-    const url = isAdminUser()
-      ? `/api/admin/${q.table}`
-      : q.table === 'gift_card_redemptions'
-        ? '/api/gift-card-redemptions'
-        : `/api/admin/${q.table}`;
-    const res = await adminFetch('GET', url);
+  if (SERVER_TABLES.has(q.table) && isAdminUser()) {
+    // Listados del panel de administración: se sirven con service_role.
+    const res = await adminFetch('GET', `/api/admin/${q.table}`);
     if (!res.ok) throw new Error(`Admin ${q.table}.list failed: ${await adminError(res)}`);
+    const rows = (await res.json()) as Row[];
+    const docs = rows.map((row) => rowToSnapshot(row, q.table));
+    return { docs, empty: docs.length === 0 };
+  }
+  if (q.table === 'gift_card_redemptions' && !isAdminUser()) {
+    const res = await adminFetch('GET', '/api/gift-card-redemptions');
+    if (!res.ok) throw new Error(`Supabase gift_card_redemptions.list failed: ${await adminError(res)}`);
     const rows = (await res.json()) as Row[];
     const docs = rows.map((row) => rowToSnapshot(row, q.table));
     return { docs, empty: docs.length === 0 };
@@ -250,7 +259,9 @@ const ADMIN_WRITE_TABLES = new Set(['courses', 'gift_cards', 'gift_card_redempti
 
 /** Tablas con RLS sólo para service_role: se leen/escriben vía backend, nunca con la key anónima. */
 // `courses` tiene lectura pública (public_read) y se sigue leyendo con la key del cliente.
-const SERVER_TABLES = new Set(['gift_cards', 'gift_card_redemptions']);
+const SERVER_TABLES = new Set([
+  'gift_cards', 'gift_card_redemptions', 'enrollments', 'payments', 'certificates', 'users_private',
+]);
 const isAdminUser = (): boolean => isAuthorizedAdminEmail(auth.currentUser?.email);
 
 async function adminFetch(
