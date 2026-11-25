@@ -15,7 +15,7 @@
  * Nota: `Timestamp` es un shim mínimo para cumplir imports de tipos antiguos.
  */
 import { getSupabaseClient } from './client';
-import { auth } from '../../firebase';
+import { auth, isAuthorizedAdminEmail } from '../../firebase';
 
 export { getSupabaseClient };
 
@@ -111,6 +111,15 @@ export function rowToSnapshot(row: Row | null, table = 'unknown_table'): DocSnap
 }
 
 async function singleRow(table: string, id: string): Promise<Row | null> {
+  if (SERVER_TABLES.has(table)) {
+    const url = isAdminUser() || table !== 'gift_cards'
+      ? `/api/admin/${table}/${encodeURIComponent(id)}`
+      : `/api/gift-cards/${encodeURIComponent(id)}`;
+    const res = await adminFetch('GET', url);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Admin ${table}.get failed: ${await adminError(res)}`);
+    return (await res.json()) as Row;
+  }
   const pk = pkFor(table);
   const { data, error } = await getSupabaseClient()
     .from(table)
@@ -204,6 +213,19 @@ export function query(q: CollectionQuery, ...wheres: Where[]): CollectionQuery {
 }
 
 export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
+  if (SERVER_TABLES.has(q.table)) {
+    // Los listados de tablas protegidas se sirven desde el backend con service_role.
+    const url = isAdminUser()
+      ? `/api/admin/${q.table}`
+      : q.table === 'gift_card_redemptions'
+        ? '/api/gift-card-redemptions'
+        : `/api/admin/${q.table}`;
+    const res = await adminFetch('GET', url);
+    if (!res.ok) throw new Error(`Admin ${q.table}.list failed: ${await adminError(res)}`);
+    const rows = (await res.json()) as Row[];
+    const docs = rows.map((row) => rowToSnapshot(row, q.table));
+    return { docs, empty: docs.length === 0 };
+  }
   let sb: any = getSupabaseClient().from(q.table).select('*');
   for (const f of q.filters) sb = applyFilter(sb, f, q.table) as typeof sb;
   if (q.order) {
@@ -224,7 +246,12 @@ export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
  * Tablas cuyas escrituras (insert/update/delete) se redirigen al backend
  * admin (server.ts con service_role) porque RLS solo permite lectura pública.
  */
-const ADMIN_WRITE_TABLES = new Set(['courses']);
+const ADMIN_WRITE_TABLES = new Set(['courses', 'gift_cards', 'gift_card_redemptions']);
+
+/** Tablas con RLS sólo para service_role: se leen/escriben vía backend, nunca con la key anónima. */
+// `courses` tiene lectura pública (public_read) y se sigue leyendo con la key del cliente.
+const SERVER_TABLES = new Set(['gift_cards', 'gift_card_redemptions']);
+const isAdminUser = (): boolean => isAuthorizedAdminEmail(auth.currentUser?.email);
 
 async function adminFetch(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -371,6 +398,16 @@ export function writeBatch(_db: unknown): Batch {
     },
     async commit() {
       for (const op of ops) {
+        if (ADMIN_WRITE_TABLES.has(op.table)) {
+          const res =
+            op.type === 'delete'
+              ? await adminFetch('DELETE', `/api/admin/${op.table}/${encodeURIComponent(op.id)}`)
+              : await adminFetch('PUT', `/api/admin/${op.table}/${encodeURIComponent(op.id)}`, op.data ?? {});
+          if (!res.ok) {
+            throw new Error(`Admin ${op.table}.batch.${op.type} failed: ${await adminError(res)}`);
+          }
+          continue;
+        }
         const pk = pkFor(op.table);
         if (op.type === 'delete') {
           const { error } = await getSupabaseClient().from(op.table).delete().eq(pk, op.id).select(pk).maybeSingle();

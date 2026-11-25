@@ -53,6 +53,16 @@ Cuando un registro referencia un curso que ya no está en el catálogo, el scrip
 placeholder con `published=false` (usando `ignoreDuplicates`) para no romper las FK,
 sin sobrescribir el curso real.
 
+## Lectura de gift cards desde el frontend
+
+`gift_cards` y `gift_card_redemptions` tienen RLS **sólo para `service_role`**. El
+adaptador (`src/lib/supabase/firestoreAdapter.ts`) enruta esas lecturas/escrituras
+por el backend (`/api/admin/gift_cards`, `/api/gift-cards/:code`,
+`/api/gift-card-redemptions`), que usa el cliente de servicio. **No se añadió una
+política `SELECT` pública**: eso expondría los códigos a cualquier visitante.
+Tras cambiar `server.ts` es necesario **redesplegar el servidor** para que el
+frontend de producción vea las tarjetas.
+
 ## Wiring la app (progreso — paso 2 hecho, falta paso 3)
 
 ### 2. Cliente de datos → Supabase ✅ (hasta aquí)

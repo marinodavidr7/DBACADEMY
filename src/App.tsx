@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -139,6 +139,30 @@ const AppShell: React.FC = () => {
     };
   }, []);
 
+  // Aviso de sesión cerrada por inactividad: se autocierra y se limpia del URL.
+  const [sessionNoticeVisible, setSessionNoticeVisible] = useState(
+    () => new URLSearchParams(window.location.search).get('session') === 'expired'
+  );
+
+  const dismissSessionNotice = useCallback(() => {
+    setSessionNoticeVisible(false);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('session')) {
+      url.searchParams.delete('session');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionNoticeVisible) return;
+    const timer = window.setTimeout(dismissSessionNotice, 4500);
+    return () => window.clearTimeout(timer);
+  }, [sessionNoticeVisible, dismissSessionNotice]);
+
+  useEffect(() => {
+    if (user) dismissSessionNotice();
+  }, [user, dismissSessionNotice]);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [redeemOpen, setRedeemOpen] = useState(false);
@@ -212,12 +236,22 @@ const AppShell: React.FC = () => {
   if (activeView === 'landing') {
     return (
       <>
-        {new URLSearchParams(window.location.search).get('session') === 'expired' && (
+        {sessionNoticeVisible && (
           <div
             role="status"
-            className="fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900 shadow-lg dark:border-amber-800 dark:bg-amber-950/90 dark:text-amber-200 sm:text-sm"
+            className="fixed right-4 top-20 z-[70] flex max-w-[min(22rem,calc(100vw-2rem))] items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-900 shadow-lg dark:border-amber-800 dark:bg-amber-950/90 dark:text-amber-200 sm:text-sm"
           >
-            Tu sesión se cerró por inactividad. Inicia sesión nuevamente para continuar.
+            <span className="flex-1">
+              Tu sesión se cerró por inactividad. Inicia sesión nuevamente para continuar.
+            </span>
+            <button
+              type="button"
+              onClick={dismissSessionNotice}
+              aria-label="Cerrar notificación"
+              className="-mr-1 -mt-0.5 rounded p-1 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/40"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
         <LandingPage

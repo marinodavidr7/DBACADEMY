@@ -1568,6 +1568,100 @@ async function startServer() {
     }
   });
 
+  // ─── ADMIN: proxy de tablas protegidas por RLS (gift cards) ──────────────
+  // El cliente no puede leer gift_cards con la key anónima (sólo service_role
+  // tiene política). Estas rutas usan el cliente de servicio del servidor.
+  const ADMIN_PROXY_TABLES = new Set(['gift_cards', 'gift_card_redemptions']);
+  const isAdminProxyTable = (table: string): table is 'gift_cards' | 'gift_card_redemptions' =>
+    ADMIN_PROXY_TABLES.has(table);
+
+  app.get('/api/admin/:table', async (req, res) => {
+    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const snap = await serverDb.collection(req.params.table).get();
+      res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al listar' });
+    }
+  });
+
+  app.get('/api/admin/:table/:id', async (req, res) => {
+    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const snap = await serverDb.collection(req.params.table).doc(req.params.id).get();
+      if (!snap.exists()) { res.status(404).json({ error: 'No encontrado' }); return; }
+      res.json({ id: snap.id, ...snap.data() });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al leer' });
+    }
+  });
+
+  app.put('/api/admin/:table/:id', async (req, res) => {
+    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    if (!await requireAdmin(req, res)) return;
+    try {
+      await serverDb.collection(req.params.table).doc(req.params.id).set({ ...req.body, id: req.params.id });
+      res.json({ ok: true, id: req.params.id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al guardar' });
+    }
+  });
+
+  app.post('/api/admin/:table', async (req, res) => {
+    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    if (!await requireAdmin(req, res)) return;
+    const id = String((req.body as { id?: unknown })?.id || '').trim();
+    if (!id) { res.status(400).json({ error: 'Se requiere el campo "id".' }); return; }
+    try {
+      await serverDb.collection(req.params.table).doc(id).set(req.body);
+      res.status(201).json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al crear' });
+    }
+  });
+
+  app.delete('/api/admin/:table/:id', async (req, res) => {
+    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    if (!await requireAdmin(req, res)) return;
+    try {
+      await serverDb.collection(req.params.table).doc(req.params.id).delete();
+      res.json({ ok: true, id: req.params.id });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al eliminar' });
+    }
+  });
+
+  // Validación de gift card para estudiantes: sólo devuelve la tarjeta cuyo
+  // código conoce el usuario autenticado; nunca expone un listado público.
+  app.get('/api/gift-cards/:code', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const code = String(req.params.code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{6,64}$/.test(code)) { res.status(400).json({ error: 'Código inválido' }); return; }
+    try {
+      const snap = await serverDb.collection('gift_cards').doc(code).get();
+      if (!snap.exists()) { res.status(404).json({ error: 'Gift Card no encontrada' }); return; }
+      res.json({ id: snap.id, ...snap.data() });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al verificar' });
+    }
+  });
+
+  // Canjes del estudiante autenticado (el frontend antes lo leía con key anónima).
+  app.get('/api/gift-card-redemptions', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    try {
+      const snap = await serverDb.collection('gift_card_redemptions')
+        .where('studentId', '==', auth.uid).get();
+      res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al listar canjes' });
+    }
+  });
+
   // GET /api/coupons — Listar todos los cupones (solo admin)
   app.get('/api/coupons', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
