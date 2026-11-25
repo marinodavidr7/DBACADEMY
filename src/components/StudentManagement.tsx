@@ -352,13 +352,22 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
         (a, b) => (b.lastActivityMs ?? 0) - (a.lastActivityMs ?? 0)
       );
       const profile = studentProfilesMap[studentId];
-      const emailFromEnrollments = sortedEnrollments.find(
-        (x) => !isPlaceholderCampusEmail(x.enrollment.studentEmail)
-      )?.enrollment.studentEmail;
-      const mappedEmail = !isPlaceholderCampusEmail(studentEmailsMap[studentId])
+      const emailFromPrivate = !isPlaceholderCampusEmail(studentEmailsMap[studentId])
         ? studentEmailsMap[studentId]
         : '';
-      const email = (emailFromEnrollments || mappedEmail || '').trim();
+      // studentEmailsMap ya prioriza: private/info > giftCardRedemptions > assignmentSubmissions
+      // pero para cumplir el requisito explícito, resolvemos con esas 3 fuentes en orden.
+      const emailFromGiftCard = giftCardRedemptions.find(
+        (r) => r.studentId === studentId && !isPlaceholderCampusEmail(r.studentEmail)
+      )?.studentEmail;
+      const emailFromSubmission = assignmentSubmissions.find(
+        (s) => s.studentId === studentId && !isPlaceholderCampusEmail(s.studentEmail)
+      )?.studentEmail;
+      const email = (
+        emailFromPrivate ||
+        (emailFromGiftCard ? emailFromGiftCard.trim() : '') ||
+        (emailFromSubmission ? emailFromSubmission.trim() : '')
+      ).trim();
       const name =
         profile?.displayName ||
         sortedEnrollments[0]?.enrollment.studentName ||
@@ -992,9 +1001,9 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
             >
               <option value="all">Todos los estados</option>
               <option value="active_24h">Activos (últimas 24 h)</option>
-              <option value="active">En curso</option>
-              <option value="completed">Completados (100%)</option>
-              <option value="not_started">Sin iniciar (0%)</option>
+              <option value="active">En progreso</option>
+              <option value="completed">Completado (100%)</option>
+              <option value="not_started">Sin comenzar (0%)</option>
             </select>
 
             <button
@@ -1116,9 +1125,14 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
                             </p>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-slate-400 italic">
-                            Correo pendiente de sincronización
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className="text-[11px] text-slate-400 italic block">
+                              Correo pendiente de sincronización
+                            </span>
+                            <p className="text-[10px] font-mono text-slate-400">
+                              UID: {student.studentId.slice(0, 12)}
+                            </p>
+                          </div>
                         )}
                       </td>
 

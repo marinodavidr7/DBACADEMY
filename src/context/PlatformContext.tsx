@@ -1498,14 +1498,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => unsubs.forEach((u) => u());
   }, [authReady, user, isAdmin]);
 
-  // Admin: resolver correos de estudiantes inscritos desde users/{uid}/private/info
+  // Admin: resolver correos de estudiantes desde users/{uid}/private/info
   useEffect(() => {
     if (!authReady || !user || !isAdmin) return;
     const candidateUids = new Set<string>();
     for (const enr of instructorEnrollments) {
-      if (enr.studentId && isPlaceholderCampusEmail(enr.studentEmail)) {
-        candidateUids.add(enr.studentId);
-      }
+      if (enr.studentId) candidateUids.add(enr.studentId);
+    }
+    for (const red of giftCardRedemptions) {
+      if (red.studentId) candidateUids.add(red.studentId);
+    }
+    for (const sub of assignmentSubmissions) {
+      if (sub.studentId) candidateUids.add(sub.studentId);
     }
     for (const uid of Object.keys(studentProfilesMap)) {
       candidateUids.add(uid);
@@ -1550,27 +1554,31 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       cancelled = true;
     };
-  }, [authReady, user, isAdmin, instructorEnrollments, studentProfilesMap]);
+  }, [authReady, user, isAdmin, instructorEnrollments, studentProfilesMap, giftCardRedemptions, assignmentSubmissions]);
 
   const studentEmailsMap = useMemo(() => {
     const merged: Record<string, string> = {};
+    // Prioridad 1: users/{uid}/private/info (resuelto por admin vía getDoc)
     for (const [uid, email] of Object.entries(privateEmailsByUid)) {
       if (!isPlaceholderCampusEmail(email)) {
         merged[uid] = email.trim();
       }
     }
-    for (const sub of assignmentSubmissions) {
-      if (sub.studentId && !isPlaceholderCampusEmail(sub.studentEmail) && !merged[sub.studentId]) {
-        merged[sub.studentId] = sub.studentEmail.trim();
-      }
-    }
+    // Prioridad 2: giftCardRedemptions.studentEmail
     for (const red of giftCardRedemptions) {
       if (red.studentId && !isPlaceholderCampusEmail(red.studentEmail) && !merged[red.studentId]) {
         merged[red.studentId] = red.studentEmail!.trim();
       }
     }
+    // Prioridad 3: assignmentSubmissions.studentEmail
+    for (const sub of assignmentSubmissions) {
+      if (sub.studentId && !isPlaceholderCampusEmail(sub.studentEmail) && !merged[sub.studentId]) {
+        merged[sub.studentId] = sub.studentEmail.trim();
+      }
+    }
+    // Fallback: enrollment.studentEmail / profile displayName email-like
     for (const enr of instructorEnrollments) {
-      if (enr.studentId && !isPlaceholderCampusEmail(enr.studentEmail)) {
+      if (enr.studentId && !isPlaceholderCampusEmail(enr.studentEmail) && !merged[enr.studentId]) {
         merged[enr.studentId] = enr.studentEmail!.trim();
       }
     }
@@ -1585,7 +1593,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     }
     return merged;
-  }, [privateEmailsByUid, assignmentSubmissions, giftCardRedemptions, instructorEnrollments, studentProfilesMap]);
+  }, [privateEmailsByUid, giftCardRedemptions, assignmentSubmissions, instructorEnrollments, studentProfilesMap]);
 
   // Real-time Calendar Deadline & Push Notification Engine
   useEffect(() => {
@@ -3768,7 +3776,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ? options.externalTransactionRef.slice(0, 100)
             : `gift_${code.slice(0, 14)}_${nextRedemptionNumber}`;
 
-        const studentEmail = authenticatedEmail || resolveFirebaseUserEmail(user);
+        const studentEmail = (authenticatedEmail || resolveFirebaseUserEmail(user) || user.email || '').trim().slice(0, 200);
         const studentName = (displayName || studentEmail || 'Estudiante').slice(0, 100);
         const gateway: PaymentGateway = remainingPaidCents === 0 ? 'gift_card' : partialGateway;
 
@@ -3796,7 +3804,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           redemptionNumber: nextRedemptionNumber,
           studentId: user.uid,
           studentName,
-          ...(studentEmail ? { studentEmail } : {}),
+          studentEmail,
           courseId: course.id,
           courseTitle: course.title.slice(0, 140),
           amountAppliedCents: appliedCents,

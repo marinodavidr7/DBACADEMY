@@ -47,6 +47,8 @@ export function isPlaceholderCampusEmail(email?: string | null): boolean {
   return (
     !normalized ||
     normalized === 'user@catedra.campus' ||
+    normalized === 'estudiante@dbacademy.app' ||
+    normalized === 'user@dbacademy.app' ||
     normalized.endsWith('@catedra.campus')
   );
 }

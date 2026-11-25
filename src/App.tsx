@@ -20,6 +20,7 @@ import {
   Shield,
   ShieldCheck,
   Sun,
+  UserCircle,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -62,6 +63,9 @@ const SecurityCloudView = lazy(() =>
 );
 const ApiIntegrationsView = lazy(() =>
   import('./components/ApiIntegrationsView').then((m) => ({ default: m.ApiIntegrationsView }))
+);
+const UserAccountView = lazy(() =>
+  import('./components/UserAccountView').then((m) => ({ default: m.UserAccountView }))
 );
 
 const ViewSkeleton: React.FC = () => (
@@ -259,14 +263,19 @@ const AppShell: React.FC = () => {
             }`}
           >
             {!sidebarCollapsed && user && (
-              <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <button
+                type="button"
+                onClick={() => handleSelectNav('account')}
+                className="w-full text-left text-xs text-slate-600 dark:text-slate-300 space-y-1 rounded-lg px-2 py-1.5 -mx-2 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors"
+                title="Mi cuenta"
+              >
                 <p className="font-medium text-slate-800 dark:text-slate-100 truncate">
                   {user.displayName || user.email}
                 </p>
                 <p className="tabular-nums text-slate-500 dark:text-slate-300">
                   {connectedDevicesCount} {t('devicesConnected')} · {wsConnected ? 'WS' : 'Local'}
                 </p>
-              </div>
+              </button>
             )}
 
             {sidebarCollapsed ? (
@@ -296,15 +305,26 @@ const AppShell: React.FC = () => {
                 </button>
 
                 {user ? (
-                  <button
-                    type="button"
-                    onClick={() => void logout()}
-                    title={t('signOut')}
-                    aria-label={t('signOut')}
-                    className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectNav('account')}
+                      title="Mi cuenta"
+                      aria-label="Mi cuenta"
+                      className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
+                    >
+                      <UserCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void logout()}
+                      title={t('signOut')}
+                      aria-label={t('signOut')}
+                      className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -464,6 +484,16 @@ const AppShell: React.FC = () => {
                   )}
                   <button
                     type="button"
+                    onClick={() => handleSelectNav('account')}
+                    title="Mi cuenta"
+                    aria-label="Mi cuenta"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 rounded-lg border border-[var(--dba-border)] text-xs font-medium text-[var(--dba-text-primary)] hover:bg-stone-100 dark:hover:bg-zinc-800 transition-colors min-w-[44px] min-h-[44px]"
+                  >
+                    <UserCircle className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline">Mi cuenta</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void logout()}
                     title={t('signOut')}
                     aria-label={t('signOut')}
@@ -568,6 +598,7 @@ const AppShell: React.FC = () => {
                   {activeView === 'calendar' && <CalendarTasksView />}
                   {activeView === 'security' && <SecurityCloudView />}
                   {activeView === 'integrations' && <ApiIntegrationsView />}
+                  {activeView === 'account' && <UserAccountView />}
                 </motion.div>
               </AnimatePresence>
             </Suspense>
