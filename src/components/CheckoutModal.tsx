@@ -54,7 +54,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     t,
   } = usePlatform();
 
-  const [gateway, setGateway] = useState<PaymentGateway>('lemonsqueezy');
+  const [gateway, setGateway] = useState<PaymentGateway>('paypal');
   const [testMode, setTestMode] = useState(false);
   const [cardHolder, setCardHolder] = useState(user?.displayName || '');
   const [cardLastFour, setCardLastFour] = useState('4242');
@@ -619,19 +619,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-4">
               {finalPrice > 0 && (
                 <>
                   <div>
                     <p className="text-sm font-medium text-[var(--dba-text-primary)] mb-2">
                       {t('selectGateway')}
                     </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       {[
-                        { id: 'lemonsqueezy', label: 'Lemon Squeezy', Icon: Sparkles },
-                        { id: 'stripe', label: 'Stripe', Icon: CreditCard },
-                        { id: 'mercadopago', label: 'Mercado Pago', Icon: Globe2 },
-                        { id: 'paypal', label: 'PayPal', Icon: ShieldCheck },
+                        { id: 'paypal', label: 'PayPal (Tarjetas y Cuenta PayPal)', Icon: ShieldCheck },
                       ].map(({ id, label, Icon }) => (
                         <button
                           type="button"
@@ -653,81 +650,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </div>
                   </div>
 
-                  {gateway === 'lemonsqueezy' ? (
-                    <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3.5 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-[var(--dba-text-primary)]">
-                          Lemon Squeezy Checkout (app.lemonsqueezy.com)
-                        </span>
-                        {lsStatus && (
-                          <span
-                            className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
-                              lsStatus.configured
-                                ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                                : 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-                            }`}
-                          >
-                            {lsStatus.configured
-                              ? lsStatus.testMode
-                                ? 'Configurado · Test Mode'
-                                : 'Conectado'
-                              : 'Faltan Secrets'}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--dba-text-secondary)]">
-                        {t('lemonSqueezyHostedNote')}
-                      </p>
-                      {lsStatus && !lsStatus.configured && (
-                        <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 p-2.5 text-[11px] text-amber-900 dark:text-amber-200">
-                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          <span>
-                            Configura en Secrets del proyecto:{' '}
-                            <code className="font-mono">{lsStatus.missingKeys.join(', ')}</code>{' '}
-                            (y <code className="font-mono">LEMONSQUEEZY_WEBHOOK_SECRET</code>).
-                          </span>
-                        </div>
-                      )}
+                  <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-[var(--dba-text-primary)]">
+                        PayPal Checkout
+                      </span>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+                        Pago seguro
+                      </span>
                     </div>
-                  ) : gateway === 'stripe' ? (
-                    <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3.5 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-[var(--dba-text-primary)]">
-                          Stripe Checkout (DOP · RD$)
-                        </span>
-                        <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
-                          Payments · Invoicing · Tax
-                        </span>
-                      </div>
-                      <p className="text-xs text-[var(--dba-text-secondary)]">
-                        Serás redirigido a la página segura de Stripe para pagar en Pesos Dominicanos (DOP) con tarjeta, Apple Pay o Google Pay y recibir tu factura automática.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="text-sm text-[var(--dba-text-primary)]">
-                        {t('cardHolder')}
-                        <input
-                          value={cardHolder}
-                          onChange={(e) => setCardHolder(e.target.value)}
-                          className="mt-1 w-full px-3 py-2.5 rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] text-sm"
-                          placeholder={t('cardHolderPlaceholder')}
-                        />
-                      </label>
-                      <label className="text-sm text-[var(--dba-text-primary)]">
-                        {t('cardLast4')}
-                        <input
-                          value={cardLastFour}
-                          onChange={(e) =>
-                            setCardLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))
-                          }
-                          className="mt-1 w-full px-3 py-2.5 rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] text-sm"
-                          placeholder="4242"
-                          inputMode="numeric"
-                        />
-                      </label>
-                    </div>
-                  )}
+                    <p className="text-xs text-[var(--dba-text-secondary)]">
+                      Completa tu compra de forma segura con tarjeta de débito/crédito o tu cuenta de PayPal.
+                    </p>
+                  </div>
                 </>
               )}
 
@@ -786,32 +721,66 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {error && <p className="text-sm text-red-500">{error}</p>}
 
-              <div className="flex items-center justify-between pt-2 gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 gap-3">
                 <p className="text-xs text-[var(--dba-text-secondary)] flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                   {appliedGiftCard?.valid && finalPrice === 0
                     ? 'Canje atómico sin tarjeta bancaria'
                     : t('securePayment')}
                 </p>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-50 text-[var(--dba-accent-foreground)] text-xs sm:text-sm font-semibold min-h-[42px]"
-                >
-                  {submitting
-                    ? t('processingPayment')
-                    : appliedGiftCard?.valid && finalPrice === 0
-                      ? 'Canjear Gift Card y obtener curso'
-                      : finalPrice === 0
-                        ? t('enrollFree')
-                        : gateway === 'lemonsqueezy'
-                          ? t('lemonSqueezyPayLabel')
-                          : gateway === 'stripe'
-                            ? 'Continuar a Stripe (DOP)'
-                            : t('payAndEnroll')}
-                </button>
+                {finalPrice > 0 ? (
+                  <div className="flex justify-center sm:justify-end">
+                    <style>{`.pp-C6AD8SK2GNA3S{text-align:center;border:none;border-radius:0.25rem;min-width:11.625rem;padding:0 2rem;height:2.625rem;font-weight:bold;background-color:#FFD140;color:#000000;font-family:"Helvetica Neue",Arial,sans-serif;font-size:1rem;line-height:1.25rem;cursor:pointer;}`}</style>
+                    <form
+                      action="https://www.paypal.com/ncp/payment/C6AD8SK2GNA3S"
+                      method="post"
+                      target="_blank"
+                      onSubmit={(e) => {
+                        if (!acceptedTerms) {
+                          e.preventDefault();
+                          setError(
+                            'Debes aceptar los Términos y Condiciones y la Política de Cancelación y Reembolsos antes de continuar.'
+                          );
+                          return;
+                        }
+                        recordCheckoutConsent();
+                      }}
+                      style={{
+                        display: 'inline-grid',
+                        justifyItems: 'center',
+                        alignContent: 'start',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <input className="pp-C6AD8SK2GNA3S" type="submit" value="Comprar ahora" />
+                      <img src="https://www.paypalobjects.com/images/Debit_Credit.svg" alt="cards" />
+                      <section style={{ fontSize: '0.75rem' }}>
+                        {' '}
+                        Con la tecnología de{' '}
+                        <img
+                          src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg"
+                          alt="paypal"
+                          style={{ height: '0.875rem', verticalAlign: 'middle' }}
+                        />
+                      </section>
+                    </form>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={(e) => void onSubmit(e as unknown as React.FormEvent)}
+                    className="px-5 py-2.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-50 text-[var(--dba-accent-foreground)] text-xs sm:text-sm font-semibold min-h-[42px]"
+                  >
+                    {submitting
+                      ? t('processingPayment')
+                      : appliedGiftCard?.valid && finalPrice === 0
+                        ? 'Canjear Gift Card y obtener curso'
+                        : t('enrollFree')}
+                  </button>
+                )}
               </div>
-            </form>
+            </div>
           )}
         </div>
       </motion.div>
