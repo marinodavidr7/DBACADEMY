@@ -1358,7 +1358,7 @@ function createApp() {
         session = await stripe.checkout.sessions.create(baseSessionParams);
       } catch (taxErr) {
         const msg = taxErr instanceof Error ? taxErr.message : "";
-        if (/automatic_tax|origin address|tax settings/i.test(msg)) {
+        if (/automatic[_\s]tax|head office address|origin address|tax settings|settings\/tax/i.test(msg)) {
           console.warn("[stripe] Stripe Tax a\xFAn no configurado en Dashboard; reintentando sin automatic_tax:", msg);
           automaticTaxApplied = false;
           const { automatic_tax: _omitTax, ...fallbackParams } = baseSessionParams;
