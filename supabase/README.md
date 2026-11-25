@@ -18,6 +18,41 @@ Migración planificada de la base de datos del proyecto **DBACADEMY** (actualmen
 2. Copia o ejecuta los archivos de `migrations/` (por ejemplo, con `supabase db push` si configuras el CLI, o pegando en el editor de SQL del dashboard).
 3. Opcional: actualiza `created_at`/`updated_at` con `UPDATE courses SET created_at = now() WHERE created_at IS NULL;`.
 
+## Migrar datos reales de Firestore (gift cards, alumnos, etc.)
+
+Los datos de producción siguen en Firestore; el deploy de código no los mueve.
+Para traerlos a Supabase **sin borrar lo que ya existe**:
+
+1. En Firebase Console → *Project Settings → Service Accounts → Generate new private key*.
+   Guarda el JSON como `secrets/firebase-service-account.json` (carpeta ignorada por git).
+2. Exporta Firestore:
+   ```bash
+   node scripts/export-firestore.mjs
+   ```
+3. Revisa el dry-run y aplica el upsert:
+   ```bash
+   node scripts/migrate-firestore-export.mjs
+   node scripts/migrate-firestore-export.mjs --apply
+   ```
+   Para migrar sólo alumnos y gift cards:
+   ```bash
+   node scripts/migrate-firestore-export.mjs --apply --only=users,users_private,giftCards,giftCardRedemptions
+   ```
+4. Verifica en el dashboard de Supabase que `users` y `gift_cards` ya tengan filas.
+
+> El script usa **UPSERT por PK** (`uid` para users, `id` para el resto): es idempotente
+> y **no ejecuta TRUNCATE**, a diferencia de `0002_seed_courses.sql`.
+
+Si ya tienes un backup en un único JSON (formato `collections`), se puede importar directamente:
+
+```bash
+node scripts/migrate-firestore-export.mjs --backup=/ruta/backup.json --only=users,users_private,giftCards,giftCardRedemptions,enrollments,payments,certificates --apply
+```
+
+Cuando un registro referencia un curso que ya no está en el catálogo, el script crea un
+placeholder con `published=false` (usando `ignoreDuplicates`) para no romper las FK,
+sin sobrescribir el curso real.
+
 ## Wiring la app (progreso — paso 2 hecho, falta paso 3)
 
 ### 2. Cliente de datos → Supabase ✅ (hasta aquí)

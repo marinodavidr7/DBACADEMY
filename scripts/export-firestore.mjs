@@ -20,10 +20,27 @@ if (!fs.existsSync(SA_PATH)) {
   process.exit(1);
 }
 
+const serviceAccount = JSON.parse(fs.readFileSync(SA_PATH, 'utf8'));
+const firebaseConfig = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'firebase-applet-config.json'), 'utf8')
+);
+const projectId = serviceAccount.project_id || firebaseConfig.projectId;
+
 admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(fs.readFileSync(SA_PATH, 'utf8'))),
+  credential: admin.credential.cert(serviceAccount),
+  projectId,
 });
-const db = admin.firestore();
+
+// El proyecto usa una base de Firestore con nombre (no la "(default)").
+const { Firestore } = await import('@google-cloud/firestore');
+const db = new Firestore({
+  projectId,
+  databaseId: firebaseConfig.firestoreDatabaseId || '(default)',
+  credentials: {
+    client_email: serviceAccount.client_email,
+    private_key: serviceAccount.private_key,
+  },
+});
 
 fs.mkdirSync(OUT, { recursive: true });
 
