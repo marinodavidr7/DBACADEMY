@@ -13,6 +13,7 @@ import {
   User,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { isPlaceholderCampusEmail } from '../firebase';
 import type { AssignmentSubmission } from '../types';
 
 type InboxTab = 'submitted' | 'graded' | 'resubmit_requested';
@@ -100,7 +101,9 @@ function SubmissionRow({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white truncate">{sub.studentName}</p>
-          <p className="text-xs text-slate-400 truncate">{sub.studentEmail}</p>
+          <p className="text-xs text-slate-400 truncate">
+            {!isPlaceholderCampusEmail(sub.studentEmail) ? sub.studentEmail : 'Correo no sincronizado'}
+          </p>
         </div>
         <div className="hidden sm:block text-xs text-slate-400 text-right">
           <p className="font-medium text-slate-300 truncate max-w-[140px]">{sub.lessonTitle}</p>

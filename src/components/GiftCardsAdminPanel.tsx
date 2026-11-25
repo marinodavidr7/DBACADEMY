@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { isPlaceholderCampusEmail } from '../firebase';
 import type { CurrencyCode, GiftCard } from '../types';
 import { currencyLabel, formatCurrency } from '../utils/currency';
 
@@ -78,6 +79,7 @@ export const GiftCardsAdminPanel: React.FC = () => {
     courses,
     giftCards,
     giftCardRedemptions,
+    studentEmailsMap,
     createGiftCards,
     toggleGiftCardActive,
     deleteGiftCard,
@@ -714,16 +716,22 @@ export const GiftCardsAdminPanel: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                giftCardRedemptions.map((r) => (
+                giftCardRedemptions.map((r) => {
+                  const resolvedEmail = !isPlaceholderCampusEmail(r.studentEmail)
+                    ? r.studentEmail!.trim()
+                    : !isPlaceholderCampusEmail(studentEmailsMap[r.studentId])
+                      ? studentEmailsMap[r.studentId].trim()
+                      : '';
+                  return (
                   <tr key={r.id}>
                     <td className="py-2.5 px-4 font-mono font-semibold text-[var(--dba-text-primary)]">
                       {r.cardCode}
                     </td>
                     <td className="py-2.5 px-4 text-[var(--dba-text-primary)]">
                       <span>{r.studentName}</span>
-                      {r.studentEmail && (
+                      {resolvedEmail && (
                         <span className="block text-[11px] text-[var(--dba-text-secondary)]">
-                          {r.studentEmail}
+                          {resolvedEmail}
                         </span>
                       )}
                     </td>
@@ -737,7 +745,8 @@ export const GiftCardsAdminPanel: React.FC = () => {
                       {formatDate(r.redeemedAt)}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

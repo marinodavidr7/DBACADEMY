@@ -6,6 +6,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updateProfile as firebaseUpdateProfile,
   type User,
 } from 'firebase/auth';
 import {
@@ -37,7 +38,9 @@ import {
   handleFirestoreError,
   isAuthorizedAdminEmail,
   isFirestoreOfflineError,
+  isPlaceholderCampusEmail,
   OperationType,
+  resolveFirebaseUserEmail,
 } from '../firebase';
 import { translations, type TranslationKeys } from '../i18n/translations';
 import type {
@@ -324,6 +327,8 @@ interface PlatformContextValue {
   isAdmin: boolean;
   profile: UserProfile | null;
   privateInfo: UserPrivateInfo | null;
+  authenticatedEmail: string;
+  displayName: string;
   theme: ThemeMode;
   language: Language;
   t: (key: TranslationKeys) => string;
@@ -360,6 +365,12 @@ interface PlatformContextValue {
   clearAuthError: () => void;
   toggleTheme: () => Promise<void>;
   setLanguage: (lang: Language) => Promise<void>;
+  updateUserProfile: (patch: {
+    displayName: string;
+    photoURL?: string;
+    preferredLanguage?: Language;
+    preferredTheme?: ThemeMode;
+  }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   signInAsAdmin: () => Promise<void>;
@@ -649,6 +660,27 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
+  const authenticatedEmail = useMemo(() => {
+    const fromAuth = resolveFirebaseUserEmail(user);
+    if (fromAuth) return fromAuth;
+    if (privateInfo?.email && !isPlaceholderCampusEmail(privateInfo.email)) {
+      return privateInfo.email.trim();
+    }
+    return '';
+  }, [user, privateInfo]);
+
+  const displayName = useMemo(() => {
+    const profileName =
+      profile?.displayName && !isPlaceholderCampusEmail(profile.displayName)
+        ? profile.displayName.trim()
+        : '';
+    const authName =
+      user?.displayName && !isPlaceholderCampusEmail(user.displayName)
+        ? user.displayName.trim()
+        : '';
+    return profileName || authName || authenticatedEmail || (user ? 'Estudiante' : '');
+  }, [profile, user, authenticatedEmail]);
+
   const t = useCallback(
     (key: TranslationKeys) => translations[language][key] || translations.es[key] || key,
     [language]
@@ -763,6 +795,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw lastError;
         };
 
+        let resolvedEmail = resolveFirebaseUserEmail(firebaseUser);
+        if (!resolvedEmail) {
+          try {
+            const tokenResult = await firebaseUser.getIdTokenResult();
+            const claimEmail =
+              typeof tokenResult.claims.email === 'string' ? tokenResult.claims.email : '';
+            if (!isPlaceholderCampusEmail(claimEmail)) {
+              resolvedEmail = claimEmail.trim().slice(0, 200);
+            }
+          } catch {
+            // Ignore token claim read failure
+          }
+        }
+
         const userRef = doc(db, 'users', firebaseUser.uid);
         let snap;
         try {
@@ -773,12 +819,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
           throw err;
         }
+        const preferredDisplayName = (
+          firebaseUser.displayName ||
+          resolvedEmail ||
+          'Estudiante'
+        ).slice(0, 100);
         if (!snap.exists()) {
           try {
             await withRetry(() =>
               setDoc(userRef, {
                 uid: firebaseUser.uid,
-                displayName: (firebaseUser.displayName || firebaseUser.email || 'Estudiante').slice(0, 100),
+                displayName: preferredDisplayName,
                 photoURL: (firebaseUser.photoURL || '').slice(0, 500),
                 role: 'student',
                 preferredLanguage: language,
@@ -795,6 +846,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
             throw err;
           }
+        } else {
+          const existingProfile = snap.data() as Partial<UserProfile>;
+          if (
+            (isPlaceholderCampusEmail(existingProfile.displayName) ||
+              existingProfile.displayName === 'Estudiante') &&
+            preferredDisplayName !== 'Estudiante'
+          ) {
+            void updateDoc(userRef, {
+              displayName: preferredDisplayName,
+              updatedAt: serverTimestamp(),
+            }).catch(() => undefined);
+          }
         }
 
         const privRef = doc(db, 'users', firebaseUser.uid, 'private', 'info');
@@ -808,31 +871,50 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw err;
         }
         if (!privSnap.exists()) {
-          try {
-            await withRetry(() =>
-              setDoc(privRef, {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || 'user@catedra.campus',
-                pushEnabled: true,
-                notifyDeadlines: true,
-                notifyForumReplies: true,
-                notifyPayments: true,
-                notifyCertificates: true,
-                deadlineLeadMinutes: 60,
-                quietHoursStart: '22:00',
-                quietHoursEnd: '07:00',
-                cloudProvider: 'none',
-                cloudFolder: '/Catedra-Backups',
-                cloudAutoBackup: false,
-                cloudLastSyncedAt: '',
-                updatedAt: serverTimestamp(),
-              })
-            );
-          } catch (err) {
-            if (!isFirestoreOfflineError(err)) {
-              handleFirestoreError(err, OperationType.CREATE, `users/${firebaseUser.uid}/private/info`);
+          if (resolvedEmail.length >= 3) {
+            try {
+              await withRetry(() =>
+                setDoc(privRef, {
+                  uid: firebaseUser.uid,
+                  email: resolvedEmail,
+                  pushEnabled: true,
+                  notifyDeadlines: true,
+                  notifyForumReplies: true,
+                  notifyPayments: true,
+                  notifyCertificates: true,
+                  deadlineLeadMinutes: 60,
+                  quietHoursStart: '22:00',
+                  quietHoursEnd: '07:00',
+                  cloudProvider: 'none',
+                  cloudFolder: '/Catedra-Backups',
+                  cloudAutoBackup: false,
+                  cloudLastSyncedAt: '',
+                  updatedAt: serverTimestamp(),
+                })
+              );
+            } catch (err) {
+              if (!isFirestoreOfflineError(err)) {
+                handleFirestoreError(err, OperationType.CREATE, `users/${firebaseUser.uid}/private/info`);
+              }
+              throw err;
             }
-            throw err;
+          }
+        } else if (resolvedEmail.length >= 3) {
+          const existingPriv = privSnap.data() as Partial<UserPrivateInfo>;
+          if (
+            isPlaceholderCampusEmail(existingPriv.email) ||
+            existingPriv.email?.trim().toLowerCase() !== resolvedEmail.toLowerCase()
+          ) {
+            try {
+              await withRetry(() =>
+                updateDoc(privRef, {
+                  email: resolvedEmail,
+                  updatedAt: serverTimestamp(),
+                })
+              );
+            } catch {
+              // Best-effort repair of stale placeholder email
+            }
           }
         }
 
@@ -1198,13 +1280,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         (snap) => {
           const list = snap.docs.map((d) => d.data() as Enrollment);
           setEnrollments(list);
-          if (user.email) {
-            const cleanEmail = user.email.slice(0, 200);
+          const realEmail = resolveFirebaseUserEmail(user);
+          if (realEmail) {
             for (const enr of list) {
-              if (!enr.studentEmail && !backfilledEnrollmentIdsRef.current.has(enr.id)) {
+              const needsEmailRepair =
+                isPlaceholderCampusEmail(enr.studentEmail) ||
+                enr.studentEmail?.trim().toLowerCase() !== realEmail.toLowerCase();
+              if (needsEmailRepair && !backfilledEnrollmentIdsRef.current.has(enr.id)) {
                 backfilledEnrollmentIdsRef.current.add(enr.id);
                 void updateDoc(doc(db, 'enrollments', enr.id), {
-                  studentEmail: cleanEmail,
+                  studentEmail: realEmail,
                   updatedAt: serverTimestamp(),
                 }).catch(() => {
                   backfilledEnrollmentIdsRef.current.delete(enr.id);
@@ -1418,7 +1503,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!authReady || !user || !isAdmin) return;
     const candidateUids = new Set<string>();
     for (const enr of instructorEnrollments) {
-      if (enr.studentId && !enr.studentEmail) {
+      if (enr.studentId && isPlaceholderCampusEmail(enr.studentEmail)) {
         candidateUids.add(enr.studentId);
       }
     }
@@ -1441,7 +1526,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const privSnap = await getDoc(doc(db, 'users', uid, 'private', 'info'));
           if (privSnap.exists()) {
             const data = privSnap.data() as Partial<UserPrivateInfo>;
-            if (typeof data.email === 'string' && data.email.trim()) {
+            if (typeof data.email === 'string' && !isPlaceholderCampusEmail(data.email)) {
               return [uid, data.email.trim()] as const;
             }
           }
@@ -1468,24 +1553,39 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [authReady, user, isAdmin, instructorEnrollments, studentProfilesMap]);
 
   const studentEmailsMap = useMemo(() => {
-    const merged: Record<string, string> = { ...privateEmailsByUid };
+    const merged: Record<string, string> = {};
+    for (const [uid, email] of Object.entries(privateEmailsByUid)) {
+      if (!isPlaceholderCampusEmail(email)) {
+        merged[uid] = email.trim();
+      }
+    }
     for (const sub of assignmentSubmissions) {
-      if (sub.studentId && sub.studentEmail && !merged[sub.studentId]) {
-        merged[sub.studentId] = sub.studentEmail;
+      if (sub.studentId && !isPlaceholderCampusEmail(sub.studentEmail) && !merged[sub.studentId]) {
+        merged[sub.studentId] = sub.studentEmail.trim();
       }
     }
     for (const red of giftCardRedemptions) {
-      if (red.studentId && red.studentEmail && !merged[red.studentId]) {
-        merged[red.studentId] = red.studentEmail;
+      if (red.studentId && !isPlaceholderCampusEmail(red.studentEmail) && !merged[red.studentId]) {
+        merged[red.studentId] = red.studentEmail!.trim();
       }
     }
     for (const enr of instructorEnrollments) {
-      if (enr.studentId && enr.studentEmail) {
-        merged[enr.studentId] = enr.studentEmail;
+      if (enr.studentId && !isPlaceholderCampusEmail(enr.studentEmail)) {
+        merged[enr.studentId] = enr.studentEmail!.trim();
+      }
+    }
+    for (const [uid, prof] of Object.entries(studentProfilesMap)) {
+      if (
+        !merged[uid] &&
+        prof?.displayName &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prof.displayName.trim()) &&
+        !isPlaceholderCampusEmail(prof.displayName)
+      ) {
+        merged[uid] = prof.displayName.trim();
       }
     }
     return merged;
-  }, [privateEmailsByUid, assignmentSubmissions, giftCardRedemptions, instructorEnrollments]);
+  }, [privateEmailsByUid, assignmentSubmissions, giftCardRedemptions, instructorEnrollments, studentProfilesMap]);
 
   // Real-time Calendar Deadline & Push Notification Engine
   useEffect(() => {
@@ -1624,6 +1724,130 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     },
     [user, sendWs]
+  );
+
+  const updateUserProfile = useCallback(
+    async (patch: {
+      displayName: string;
+      photoURL?: string;
+      preferredLanguage?: Language;
+      preferredTheme?: ThemeMode;
+    }) => {
+      if (!user || !auth.currentUser) {
+        throw new Error('Debes iniciar sesión para actualizar tu perfil.');
+      }
+      const trimmedName = patch.displayName.trim().slice(0, 100);
+      if (trimmedName.length < 2) {
+        throw new Error('El nombre de visualización debe tener al menos 2 caracteres.');
+      }
+
+      let normalizedPhoto: string | undefined;
+      if (patch.photoURL !== undefined) {
+        const rawPhoto = patch.photoURL.trim().slice(0, 500);
+        if (rawPhoto.length > 0 && !/^https?:\/\/\S+$/i.test(rawPhoto)) {
+          throw new Error('La URL de la foto de perfil debe comenzar con http:// o https://.');
+        }
+        normalizedPhoto = rawPhoto;
+      }
+
+      const targetLanguage = patch.preferredLanguage ?? profile?.preferredLanguage ?? language;
+      const targetTheme = patch.preferredTheme ?? profile?.preferredTheme ?? theme;
+
+      try {
+        await firebaseUpdateProfile(auth.currentUser, {
+          displayName: trimmedName,
+          ...(normalizedPhoto !== undefined ? { photoURL: normalizedPhoto || null } : {}),
+        });
+        await auth.currentUser.reload().catch(() => undefined);
+      } catch (err) {
+        console.warn('No se pudo actualizar el perfil en Firebase Auth:', err);
+      }
+
+      const userRef = doc(db, 'users', user.uid);
+      const firestorePatch: Record<string, unknown> = {
+        displayName: trimmedName,
+        preferredLanguage: targetLanguage,
+        preferredTheme: targetTheme,
+        updatedAt: serverTimestamp(),
+      };
+      if (normalizedPhoto !== undefined) {
+        firestorePatch.photoURL = normalizedPhoto;
+      }
+
+      try {
+        if (profile) {
+          await updateDoc(userRef, firestorePatch);
+        } else {
+          await setDoc(userRef, {
+            uid: user.uid,
+            displayName: trimmedName,
+            photoURL: normalizedPhoto ?? (auth.currentUser.photoURL || '').slice(0, 500),
+            role: 'student',
+            preferredLanguage: targetLanguage,
+            preferredTheme: targetTheme,
+            e2eeKeyFingerprint: e2eeFingerprint,
+            activeDevicesCount: Math.max(1, connectedDevicesCount),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+      }
+
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName: trimmedName,
+              ...(normalizedPhoto !== undefined ? { photoURL: normalizedPhoto } : {}),
+              preferredLanguage: targetLanguage,
+              preferredTheme: targetTheme,
+            }
+          : {
+              uid: user.uid,
+              displayName: trimmedName,
+              photoURL: normalizedPhoto ?? (auth.currentUser?.photoURL || '').slice(0, 500),
+              role: isAdmin ? 'instructor' : 'student',
+              preferredLanguage: targetLanguage,
+              preferredTheme: targetTheme,
+              e2eeKeyFingerprint: e2eeFingerprint,
+              activeDevicesCount: Math.max(1, connectedDevicesCount),
+            }
+      );
+
+      if (targetTheme !== theme) {
+        setTheme(targetTheme);
+      }
+      if (targetLanguage !== language) {
+        setLanguageState(targetLanguage);
+        localStorage.setItem('catedra_lang', targetLanguage);
+      }
+
+      sendWs({
+        type: 'SYNC_PREFS',
+        displayName: trimmedName,
+        theme: targetTheme,
+        language: targetLanguage,
+      });
+
+      triggerPushAlert(
+        'sync',
+        'Perfil actualizado',
+        `Tu identidad se actualizó como ${trimmedName}.`
+      );
+    },
+    [
+      user,
+      profile,
+      language,
+      theme,
+      e2eeFingerprint,
+      connectedDevicesCount,
+      isAdmin,
+      sendWs,
+      triggerPushAlert,
+    ]
   );
 
   const normalizeCouponCode = (raw: string): string =>
@@ -2050,13 +2274,14 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: serverTimestamp(),
       };
 
+      const enrollmentEmail = authenticatedEmail || resolveFirebaseUserEmail(user);
       const enrollmentPayload = {
         id: enrollmentId,
         courseId: course.id,
         courseTitle: course.title.slice(0, 140),
         studentId: user.uid,
-        studentName: (user.displayName || user.email || 'Estudiante').slice(0, 100),
-        ...(user.email ? { studentEmail: user.email.slice(0, 200) } : {}),
+        studentName: (displayName || enrollmentEmail || 'Estudiante').slice(0, 100),
+        ...(enrollmentEmail ? { studentEmail: enrollmentEmail } : {}),
         instructorId: resolvedInstructorId,
         completedModuleIds: [],
         completedLessonIds: [],
@@ -2212,7 +2437,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           courseId: course.id,
           courseTitle: course.title.slice(0, 140),
           studentId: user.uid,
-          studentName: (user.displayName || user.email || 'Estudiante').slice(0, 100),
+          studentName: (displayName || authenticatedEmail || 'Estudiante').slice(0, 100),
           instructorId: course.instructorId,
           instructorName: course.instructorName.slice(0, 100),
           completionPercent: 100,
@@ -2639,7 +2864,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           id,
           courseId,
           authorId: user.uid,
-          authorName: (user.displayName || user.email || 'Usuario').slice(0, 100),
+          authorName: (displayName || authenticatedEmail || 'Usuario').slice(0, 100),
           title: title.trim().slice(0, 160),
           body: body.trim().slice(0, 3000),
           pinned: false,
@@ -2654,7 +2879,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         handleFirestoreError(err, OperationType.CREATE, `forumThreads/${id}`);
       }
     },
-    [user, sendWs]
+    [user, displayName, authenticatedEmail, sendWs]
   );
 
   const addForumReply = useCallback(
@@ -2668,7 +2893,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         threadId: thread.id,
         courseId: thread.courseId,
         authorId: user.uid,
-        authorName: (user.displayName || user.email || 'Usuario').slice(0, 100),
+        authorName: (displayName || authenticatedEmail || 'Usuario').slice(0, 100),
         body: body.trim().slice(0, 2000),
         isInstructorAnswer,
         createdAt: serverTimestamp(),
@@ -2973,6 +3198,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const id = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       const trimmedComment = comment?.trim().slice(0, 2000);
+      const realSubmissionEmail = authenticatedEmail || resolveFirebaseUserEmail(user);
       const submission: AssignmentSubmission = {
         id,
         courseId,
@@ -2980,8 +3206,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         lessonId,
         lessonTitle: (lesson?.title ?? lessonId).slice(0, 200),
         studentId: user.uid,
-        studentName: (user.displayName || user.email || 'Estudiante').slice(0, 100),
-        studentEmail: (user.email || '').slice(0, 200),
+        studentName: (displayName || realSubmissionEmail || 'Estudiante').slice(0, 100),
+        studentEmail: realSubmissionEmail,
         fileUrl: url,
         fileName: name.slice(0, 260),
         fileSize: size,
@@ -3542,8 +3768,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ? options.externalTransactionRef.slice(0, 100)
             : `gift_${code.slice(0, 14)}_${nextRedemptionNumber}`;
 
-        const studentName = (user.displayName || user.email || 'Estudiante').slice(0, 100);
-        const studentEmail = (user.email || '').slice(0, 200);
+        const studentEmail = authenticatedEmail || resolveFirebaseUserEmail(user);
+        const studentName = (displayName || studentEmail || 'Estudiante').slice(0, 100);
         const gateway: PaymentGateway = remainingPaidCents === 0 ? 'gift_card' : partialGateway;
 
         const paymentPayload: PaymentRecord = {
@@ -3959,6 +4185,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       isAdmin,
       profile,
       privateInfo,
+      authenticatedEmail,
+      displayName,
       theme,
       language,
       t,
@@ -3994,6 +4222,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearAuthError,
       toggleTheme,
       setLanguage,
+      updateUserProfile,
       signInWithGoogle,
       signInWithEmail,
       signInAsAdmin,
@@ -4058,6 +4287,8 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       isAdmin,
       profile,
       privateInfo,
+      authenticatedEmail,
+      displayName,
       theme,
       language,
       t,
@@ -4089,6 +4320,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearAuthError,
       toggleTheme,
       setLanguage,
+      updateUserProfile,
       signInWithGoogle,
       signInWithEmail,
       signInAsAdmin,

@@ -28,6 +28,8 @@ function initDb(): Firestore {
 export const db = initDb();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
 export const storage = getStorage(app);
 
 export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
@@ -37,6 +39,30 @@ export const AUTHORIZED_ADMIN_EMAIL = 'marinodavidr7@gmail.com';
 
 export function isAuthorizedAdminEmail(email?: string | null): boolean {
   return Boolean(email && email.trim().toLowerCase() === AUTHORIZED_ADMIN_EMAIL);
+}
+
+export function isPlaceholderCampusEmail(email?: string | null): boolean {
+  if (!email) return true;
+  const normalized = email.trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === 'user@catedra.campus' ||
+    normalized.endsWith('@catedra.campus')
+  );
+}
+
+export function resolveFirebaseUserEmail(firebaseUser?: User | null): string {
+  if (!firebaseUser) return '';
+  if (!isPlaceholderCampusEmail(firebaseUser.email)) {
+    return firebaseUser.email!.trim().slice(0, 200);
+  }
+  const providerMatch = firebaseUser.providerData?.find(
+    (p) => !isPlaceholderCampusEmail(p?.email)
+  );
+  if (providerMatch?.email) {
+    return providerMatch.email.trim().slice(0, 200);
+  }
+  return '';
 }
 
 export async function assertPlatformAdminWrite(

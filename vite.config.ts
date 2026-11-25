@@ -13,7 +13,6 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
-          'icon.svg',
           'offline.html',
           'apple-touch-icon.png',
           'pwa-192x192.png',
@@ -25,8 +24,8 @@ export default defineConfig(() => {
           name: 'DB Academy — Formación técnica, en tiempo real.',
           short_name: 'DB Academy',
           description: 'DB Academy: Formación técnica, en tiempo real. Cursos interactivos de Excel, Power Query, seguimiento en vivo y certificación verificable.',
-          theme_color: '#090D16',
-          background_color: '#090D16',
+          theme_color: '#090A0F',
+          background_color: '#090A0F',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',

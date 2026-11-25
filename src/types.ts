@@ -15,7 +15,8 @@ export type AppView =
   | 'certificates'
   | 'calendar'
   | 'security'
-  | 'integrations';
+  | 'integrations'
+  | 'account';
 
 export type CourseMaterialType = 'pdf' | 'video' | 'doc' | 'spreadsheet' | 'image' | 'zip' | 'other';
 

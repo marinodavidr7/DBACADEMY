@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import type { TranslationKeys } from '../i18n/translations';
-import { isAuthorizedAdminEmail } from '../firebase';
+import { isAuthorizedAdminEmail, isPlaceholderCampusEmail } from '../firebase';
 import type { Certificate, Course } from '../types';
 import { formatCurrency } from '../utils/currency';
 import { exportCertificatePdf, exportTableToPdf, exportToCsv } from '../utils/export';
@@ -30,7 +30,7 @@ import { AuthGateNotice } from './AuthGateNotice';
 import { CertificateDocumentCard, CertificatePreviewModal } from './CertificatePreviewModal';
 import { CouponsAdminPanel } from './CouponsAdminPanel';
 import { GiftCardsAdminPanel } from './GiftCardsAdminPanel';
-import { StudentsAdminPanel } from './StudentsAdminPanel';
+import { StudentManagement } from './StudentManagement';
 import { ExerciseCreatorModal } from './ExerciseCreatorModal';
 import { CourseEditor, type CourseEditorLabels, type CourseEditorInput } from './CourseEditor/CourseEditor';
 import { AssignmentInbox } from './AssignmentInbox';
@@ -287,18 +287,27 @@ export const InstructorDashboard: React.FC = () => {
     [instructorEnrollments]
   );
 
+  const resolveEnrollmentEmail = useCallback(
+    (enr: { studentId: string; studentEmail?: string }) => {
+      if (!isPlaceholderCampusEmail(enr.studentEmail)) return enr.studentEmail!.trim();
+      const mapped = studentEmailsMap[enr.studentId];
+      return !isPlaceholderCampusEmail(mapped) ? mapped.trim() : '';
+    },
+    [studentEmailsMap]
+  );
+
   const filteredEnrollments = useMemo(() => {
     const q = searchStudent.trim().toLowerCase();
     if (!q) return instructorEnrollments;
     return instructorEnrollments.filter((e) => {
-      const email = (e.studentEmail || studentEmailsMap[e.studentId] || '').toLowerCase();
+      const email = resolveEnrollmentEmail(e).toLowerCase();
       return (
         e.studentName.toLowerCase().includes(q) ||
         email.includes(q) ||
         e.courseTitle.toLowerCase().includes(q)
       );
     });
-  }, [instructorEnrollments, searchStudent, studentEmailsMap]);
+  }, [instructorEnrollments, searchStudent, resolveEnrollmentEmail]);
 
   const sampleCourse = useMemo(
     () => courses.find((c) => c.id === sampleCourseId) || courses[0] || null,
@@ -449,7 +458,7 @@ export const InstructorDashboard: React.FC = () => {
       ['Alumno', 'Correo', 'Curso', 'Progreso (%)', 'Minutos', 'Estado'],
       filteredEnrollments.map((e) => [
         e.studentName,
-        e.studentEmail || studentEmailsMap[e.studentId] || '—',
+        resolveEnrollmentEmail(e) || '—',
         e.courseTitle,
         e.progressPercent,
         e.studyMinutes,
@@ -466,7 +475,7 @@ export const InstructorDashboard: React.FC = () => {
       ['Alumno', 'Correo', 'Curso', 'Progreso (%)', 'Estudio (min)', 'Estado'],
       filteredEnrollments.map((e) => [
         e.studentName,
-        e.studentEmail || studentEmailsMap[e.studentId] || '—',
+        resolveEnrollmentEmail(e) || '—',
         e.courseTitle,
         `${e.progressPercent}%`,
         e.studyMinutes,
@@ -691,7 +700,7 @@ export const InstructorDashboard: React.FC = () => {
       )}
 
       {adminTab === 'students' && (
-        <StudentsAdminPanel
+        <StudentManagement
           onPreviewCertificate={(cert) => setPreviewCert({ cert, isSample: false })}
         />
       )}
@@ -958,7 +967,7 @@ export const InstructorDashboard: React.FC = () => {
                 </tr>
               ) : (
                 filteredEnrollments.map((enr) => {
-                  const email = enr.studentEmail || studentEmailsMap[enr.studentId] || '';
+                  const email = resolveEnrollmentEmail(enr);
                   return (
                     <tr
                       key={enr.id}
