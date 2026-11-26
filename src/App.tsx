@@ -32,6 +32,7 @@ import { AdminThemePanel } from './components/AdminThemePanel';
 import { IdleSessionGuard } from './components/IdleSessionGuard';
 import { LandingPage } from './components/LandingPage';
 import { LegalDocumentViewer } from './components/LegalDocumentViewer';
+import { CertificateVerificationPage } from './components/CertificateVerificationPage';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -48,6 +49,7 @@ import {
   LEGAL_DOCUMENT_EVENT,
   type LegalDocSlug,
 } from './services/legalDocuments';
+import { getCertificateVerifyCodeFromLocation } from './utils/qr';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { AppView, Language } from './types';
 
@@ -130,13 +132,21 @@ const AppShell: React.FC = () => {
   const [legalDocSlug, setLegalDocSlug] = useState<LegalDocSlug | null>(() =>
     getLegalDocSlugFromLocation()
   );
+  const [verifyCode, setVerifyCode] = useState<string | null>(() =>
+    getCertificateVerifyCodeFromLocation()
+  );
   useEffect(() => {
     const syncLegalDocument = () => setLegalDocSlug(getLegalDocSlugFromLocation());
+    const syncVerifyCode = () => setVerifyCode(getCertificateVerifyCodeFromLocation());
     window.addEventListener('popstate', syncLegalDocument);
     window.addEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
+    window.addEventListener('popstate', syncVerifyCode);
+    window.addEventListener('dbacademy:verify-route', syncVerifyCode);
     return () => {
       window.removeEventListener('popstate', syncLegalDocument);
       window.removeEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
+      window.removeEventListener('popstate', syncVerifyCode);
+      window.removeEventListener('dbacademy:verify-route', syncVerifyCode);
     };
   }, []);
 
@@ -223,6 +233,19 @@ const AppShell: React.FC = () => {
       apply();
     }
   };
+
+  if (verifyCode) {
+    return (
+      <CertificateVerificationPage
+        code={verifyCode}
+        onBack={() => {
+          window.history.pushState({}, '', '/');
+          window.dispatchEvent(new Event('dbacademy:verify-route'));
+          setVerifyCode(null);
+        }}
+      />
+    );
+  }
 
   if (legalDocSlug) {
     const from = new URLSearchParams(window.location.search).get('from');

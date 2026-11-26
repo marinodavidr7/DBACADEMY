@@ -701,7 +701,7 @@ function createApp() {
       servers: [{ url: `${baseUrl}/api/v1` }],
       paths: {
         "/health": { get: { summary: "API and WebSocket Gateway Health" } },
-        "/payments/checkout": { post: { summary: "Authorize Lemon Squeezy, Stripe, Mercado Pago, or PayPal course purchase" } },
+        "/payments/checkout": { post: { summary: "Authorize PayPal course purchase" } },
         "/payments/lemonsqueezy/status": { get: { summary: "Inspect Lemon Squeezy server configuration status" } },
         "/payments/lemonsqueezy/checkout": { post: { summary: "Create hosted Lemon Squeezy checkout session (app.lemonsqueezy.com)" } },
         "/payments/lemonsqueezy/webhook": { post: { summary: "Receive HMAC-SHA256 signed Lemon Squeezy order webhooks" } },

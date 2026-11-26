@@ -17,7 +17,6 @@ import type {
   CouponValidationResult,
   Course,
   GiftCardValidationResult,
-  LemonSqueezyStatus,
   PaymentGateway,
   PaymentRecord,
 } from '../types';
@@ -44,10 +43,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     isAdmin,
     signInWithGoogle,
     enrollWithPayment,
-    getLemonSqueezyStatus,
-    createLemonSqueezyCheckout,
-    verifyAndCompleteLemonSqueezyCheckout,
-    createStripeCheckout,
     subscribeToGiftCard,
     redeemGiftCardForCourse,
     validateCoupon: validateCouponInFirestore,
@@ -59,16 +54,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [cardHolder, setCardHolder] = useState(user?.displayName || '');
   const [cardLastFour, setCardLastFour] = useState('4242');
   const [submitting, setSubmitting] = useState(false);
-  const [verifyingLemon, setVerifyingLemon] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<PaymentRecord | null>(null);
-
-  const [lsStatus, setLsStatus] = useState<LemonSqueezyStatus | null>(null);
-  const [lemonSession, setLemonSession] = useState<{
-    checkoutUrl: string;
-    paymentId: string;
-    testMode?: boolean;
-  } | null>(null);
 
   const [codeMode, setCodeMode] = useState<'gift_card' | 'coupon'>('gift_card');
 
@@ -97,23 +84,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const discountCents = giftCardDiscount > 0 ? giftCardDiscount : couponDiscount;
   const finalPrice = Math.max(0, originalPrice - discountCents);
 
-  useEffect(() => {
-    let active = true;
-    void getLemonSqueezyStatus()
-      .then((status) => {
-        if (active) setLsStatus(status);
-      })
-      .catch(() => {
-        // Non-blocking status probe
-      });
-    return () => {
-      active = false;
-    };
-  }, [getLemonSqueezyStatus]);
-
   // Auto-validación en tiempo real cuando el usuario termina de escribir un código completo
   useEffect(() => {
-    if (!user || receipt || lemonSession || codeMode !== 'gift_card') return;
+    if (!user || receipt || codeMode !== 'gift_card') return;
     if (appliedGiftCard?.valid) return;
     const normalized = giftCardCode.trim().toUpperCase();
     if (!/^[A-Z0-9_-]{8,64}$/.test(normalized) || normalized === liveGiftCardCode) {
@@ -134,7 +107,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     appliedGiftCard?.valid,
     user,
     receipt,
-    lemonSession,
+    
   ]);
 
   // Suscripción en tiempo real a giftCards/{liveGiftCardCode}
@@ -226,32 +199,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setCouponError('');
   };
 
-  const handleVerifyLemonPayment = async () => {
-    if (!lemonSession) return;
-    setVerifyingLemon(true);
-    setError('');
-    try {
-      const result = await verifyAndCompleteLemonSqueezyCheckout(
-        lemonSession.paymentId,
-        course.id
-      );
-      if (result.verified && result.payment) {
-        recordCheckoutConsent();
-        setReceipt(result.payment);
-        setLemonSession(null);
-        setTimeout(() => onSuccess(course.id), 700);
-      } else {
-        setError(
-          result.message ||
-            'Aún no confirmamos el pago en Lemon Squeezy. Completa el checkout en la pestaña abierta e intenta de nuevo.'
-        );
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('checkoutError'));
-    } finally {
-      setVerifyingLemon(false);
-    }
-  };
 
   /** Registra la aceptación solo cuando la transacción se perfecciona (Ley 126-02). */
   const recordCheckoutConsent = () => {
@@ -304,7 +251,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    if (finalPrice > 0 && gateway !== 'lemonsqueezy' && gateway !== 'stripe') {
+    if (false) {
       if (!cardHolder.trim()) {
         setError(t('cardHolderRequired'));
         return;
@@ -319,61 +266,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setSubmitting(true);
     setError('');
     try {
-      if (finalPrice > 0 && gateway === 'stripe') {
-        const session = await createStripeCheckout(course, {
-          couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
-          giftCardCode:
-            appliedGiftCard?.valid && appliedGiftCard.card ? appliedGiftCard.card.code : undefined,
-        });
-
-        if (!session.freeBypass && session.checkoutUrl) {
-          try {
-            sessionStorage.setItem(
-              'dba_pending_stripe_checkout',
-              JSON.stringify({
-                paymentId: session.paymentId,
-                sessionId: session.sessionId,
-                courseId: course.id,
-              })
-            );
-          } catch {
-            // Ignore storage errors
-          }
-          recordCheckoutConsent();
-          window.location.assign(session.checkoutUrl);
-          return;
-        }
-      }
-
-      if (finalPrice > 0 && gateway === 'lemonsqueezy') {
-        const session = await createLemonSqueezyCheckout(course, {
-          couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
-          giftCardCode:
-            appliedGiftCard?.valid && appliedGiftCard.card ? appliedGiftCard.card.code : undefined,
-        });
-
-        if (!session.freeBypass && session.checkoutUrl) {
-          try {
-            sessionStorage.setItem(
-              'dba_pending_ls_checkout',
-              JSON.stringify({
-                paymentId: session.paymentId,
-                courseId: course.id,
-                checkoutId: session.checkoutId,
-              })
-            );
-          } catch {
-            // Ignore storage errors
-          }
-          setLemonSession({
-            checkoutUrl: session.checkoutUrl,
-            paymentId: session.paymentId,
-            testMode: session.testMode,
-          });
-          return;
-        }
-      }
-
       let payment: PaymentRecord;
       if (appliedGiftCard?.valid && appliedGiftCard.card) {
         const res = await redeemGiftCardForCourse(appliedGiftCard.card.code, course, gateway);
@@ -471,7 +363,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 />
               </button>
 
-              {codePanelOpen && !lemonSession && (
+              {codePanelOpen && (
                 <div className="rounded-[12px] border border-stone-200 dark:border-zinc-800 p-4 space-y-3 bg-white dark:bg-zinc-900/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="inline-flex rounded-lg border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 p-0.5 text-xs font-semibold">
@@ -613,65 +505,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {t('transactionRef')}: {receipt.transactionRef}
               </p>
             </div>
-          ) : lemonSession ? (
-            <div className="rounded-[12px] border border-violet-300/80 dark:border-violet-800/70 bg-violet-50/70 dark:bg-violet-950/30 p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-violet-900 dark:text-violet-200 font-semibold text-sm">
-                    <Sparkles className="w-4 h-4 text-violet-600 dark:text-violet-400" aria-hidden="true" />
-                    <span>Sesión de pago lista en Lemon Squeezy</span>
-                  </div>
-                  <p className="text-xs text-violet-800/90 dark:text-violet-300/90">
-                    Abre la pasarela segura de Lemon Squeezy para completar el pago y luego haz clic
-                    en verificar (o regresa automáticamente al finalizar).
-                  </p>
-                </div>
-                {lemonSession.testMode && (
-                  <span className="shrink-0 rounded-md bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 px-2 py-0.5 text-[10px] font-mono font-semibold text-amber-800 dark:text-amber-200">
-                    TEST MODE
-                  </span>
-                )}
-              </div>
-
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <a
-                  href={lemonSession.checkoutUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white min-h-[44px] transition-colors"
-                >
-                  <span>Abrir checkout en app.lemonsqueezy.com</span>
-                  <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
-                </a>
-                <button
-                  type="button"
-                  disabled={verifyingLemon}
-                  onClick={() => void handleVerifyLemonPayment()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-zinc-900 hover:bg-violet-50 dark:hover:bg-violet-950/60 px-4 py-2.5 text-sm font-semibold text-violet-800 dark:text-violet-200 min-h-[44px] disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${verifyingLemon ? 'animate-spin' : ''}`} aria-hidden="true" />
-                  <span>{t('lemonSqueezyVerifyBtn')}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between pt-1 gap-2">
-                <span className="text-[11px] font-mono text-stone-500 dark:text-zinc-400 truncate">
-                  ID: {lemonSession.paymentId}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLemonSession(null);
-                    setError('');
-                  }}
-                  className="min-h-[44px] text-sm font-medium text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-zinc-100 underline"
-                >
-                  Cambiar método de pago
-                </button>
-              </div>
-            </div>
           ) : (
             <div className="space-y-4">
               {finalPrice > 0 && (
@@ -702,8 +535,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {isAdmin &&
                 finalPrice > 0 &&
                 !appliedGiftCard?.valid &&
-                gateway !== 'lemonsqueezy' &&
-                gateway !== 'stripe' && (
+                gateway === 'paypal' && (
                   <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 min-h-[44px]">
                     <input
                       type="checkbox"

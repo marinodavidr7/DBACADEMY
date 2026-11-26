@@ -1,8 +1,10 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
 import type { CalendarEvent, Certificate } from '../types';
-import { generateCertificateQrDataUrl } from './qr';
-import { DAVID_SIGNER_NAME, DAVID_SIGNER_TITLE, loadDavidSignaturePngDataUrl } from './signature';
+import { CertificateDocumentCard } from '../components/CertificatePreviewModal';
 
 const LOGO_LIGHT_PATH = '/assets/aistudio/logo-db-academy-light.png';
 const LOGO_DARK_PATH = '/assets/aistudio/logo-db-academy-dark.png';
@@ -146,132 +148,109 @@ export async function exportTableToPdf(
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 }
 
+async function waitForImages(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(imgs.map((img) => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = () => resolve();
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  }));
+}
+
 export async function exportCertificatePdf(cert: Certificate) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-  const w = doc.internal.pageSize.getWidth();
-  const h = doc.internal.pageSize.getHeight();
+  if (typeof document === 'undefined') return;
 
-  // Clean crisp light background + subtle outer hairline
-  doc.setFillColor(248, 250, 252);
-  doc.rect(0, 0, w, h, 'F');
-
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(1);
-  doc.rect(18, 18, w - 36, h - 36);
-
-  // Official DB Academy transparent logo centered at top
-  const lightLogo = await loadLogoAsset(LOGO_LIGHT_PATH);
-  let headerTitleY = 92;
-  if (lightLogo) {
-    const logoH = 76;
-    const logoW = (lightLogo.width / lightLogo.height) * logoH;
-    doc.addImage(lightLogo.dataUrl, 'PNG', (w - logoW) / 2, 34, logoW, logoH);
-    headerTitleY = 134;
-  }
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.text('CERTIFICADO OFICIAL DE FINALIZACIÓN', w / 2, headerTitleY, { align: 'center' });
-
-  doc.setTextColor(71, 85, 105);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.text('Se certifica que / This certifies that', w / 2, headerTitleY + 32, { align: 'center' });
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(28);
-  doc.text(cert.studentName, w / 2, headerTitleY + 68, { align: 'center', maxWidth: w - 140 });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.setTextColor(71, 85, 105);
-  doc.text(
-    'ha completado satisfactoriamente el 100% de los módulos, prácticas y evaluaciones del programa:',
-    w / 2,
-    headerTitleY + 98,
-    { align: 'center', maxWidth: 460 }
-  );
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(17);
-  doc.text(cert.courseTitle, w / 2, headerTitleY + 146, { align: 'center', maxWidth: w - 160 });
-
-  // 2-Column Signature (David) & Issue Date row
-  const lineY = 382;
-  const leftX = w / 2 - 145;
-  const rightX = w / 2 + 145;
-
-  const davidSignaturePng = await loadDavidSignaturePngDataUrl();
-  if (davidSignaturePng) {
-    doc.addImage(davidSignaturePng, 'PNG', leftX - 54, lineY - 40, 108, 36);
-  } else {
-    doc.setTextColor(15, 23, 42);
-    doc.setFont('times', 'italic');
-    doc.setFontSize(20);
-    doc.text(DAVID_SIGNER_NAME, leftX, lineY - 12, { align: 'center' });
-  }
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text(formatCertificateDate(cert.issuedAt), rightX, lineY - 8, { align: 'center', maxWidth: 180 });
-
-  doc.setDrawColor(148, 163, 184);
-  doc.setLineWidth(0.9);
-  doc.line(leftX - 95, lineY, leftX + 95, lineY);
-  doc.line(rightX - 95, lineY, rightX + 95, lineY);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text(DAVID_SIGNER_TITLE, leftX, lineY + 18, { align: 'center', maxWidth: 190 });
-  doc.text('Fecha de Emisión', rightX, lineY + 18, { align: 'center', maxWidth: 180 });
-
-  // Centered Verification Code + Scannable QR row
-  const qrSize = 72;
-  const qrY = 426;
-  const textCenterX = w / 2 - 58;
-  const qrX = w / 2 + 44;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(71, 85, 105);
-  doc.text('Código de Verificación', textCenterX, qrY + 20, { align: 'center' });
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(cert.verificationCode, textCenterX, qrY + 38, { align: 'center' });
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text('ESCANEA PARA VERIFICAR', textCenterX, qrY + 55, { align: 'center' });
-
+  // Wait for fonts used by the certificate
   try {
-    const qrDataUrl = await generateCertificateQrDataUrl(cert, 260);
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(1);
-    doc.roundedRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8, 4, 4, 'FD');
-    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-  } catch {
-    // Continue generating PDF even if canvas QR fails
+    await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+  } catch { /* continue */ }
+
+  const host = document.createElement('div');
+  host.style.position = 'fixed';
+  host.style.left = '-10000px';
+  host.style.top = '0';
+  host.style.width = '846px';
+  host.style.background = '#ffffff';
+  host.style.zIndex = '-1';
+  host.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(host);
+
+  const root = createRoot(host);
+  try {
+    await new Promise<void>((resolve) => {
+      root.render(React.createElement(CertificateDocumentCard, { certificate: cert }));
+      // allow render + QR generation effect
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+
+    // Wait for fonts and QR
+    try {
+      const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+      await fonts?.ready;
+      await Promise.all([
+        fonts?.load('600 16px "IBM Plex Sans"'),
+        fonts?.load('700 16px "IBM Plex Sans"'),
+        fonts?.load('400 16px "Inter"'),
+        fonts?.load('600 16px "Inter"'),
+        fonts?.load('500 16px "IBM Plex Mono"'),
+      ]);
+      await fonts?.ready;
+    } catch {}
+    // wait for QR to render
+    for (let i = 0; i < 20; i++) {
+      await waitForImages(host);
+      const qr = host.querySelector('.qr img') as HTMLImageElement | null;
+      if (qr && qr.src && qr.src.startsWith('data:image')) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    try { await (document as Document & { fonts?: FontFaceSet }).fonts?.ready; } catch {}
+
+    // print/PDF look: no outer border/radius, fill page
+    const style = document.createElement('style');
+    style.textContent = `.dba-cert-root .certificate{border:0 !important;border-radius:0 !important;}`;
+    host.appendChild(style);
+
+    const certEl = host.querySelector('.dba-cert-root') as HTMLElement | null;
+    const target = certEl || host;
+    const captureWidth = target.offsetWidth || 846;
+    const cqwPx = captureWidth / 100;
+    const canvas = await html2canvas(target, {
+      scale: Math.min(3, (window.devicePixelRatio || 1) * 2),
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      width: captureWidth,
+      height: target.offsetHeight,
+      windowWidth: captureWidth,
+      windowHeight: target.offsetHeight,
+      onclone: (clonedDoc) => {
+        const styles = Array.from(clonedDoc.querySelectorAll('style'));
+        for (const s of styles) {
+          if (s.textContent && s.textContent.includes('cqw')) {
+            s.textContent = s.textContent.replace(/([\d.]+)cqw/g, (_m, n) => `${(parseFloat(n) * cqwPx).toFixed(3)}px`);
+          }
+        }
+        // container-type inline-size may confuse html2canvas; keep layout stable
+        const roots = Array.from(clonedDoc.querySelectorAll('.dba-cert-root')) as HTMLElement[];
+        for (const r of roots) r.style.containerType = 'normal';
+        const certs = Array.from(clonedDoc.querySelectorAll('.dba-cert-root .certificate')) as HTMLElement[];
+        for (const c of certs) { c.style.containerType = 'normal'; c.style.width = `${captureWidth}px`; c.style.maxWidth = `${captureWidth}px`; }
+      },
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    // @page in design: 210mm x 171.5mm
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [210, 171.5] });
+    pdf.addImage(imgData, 'PNG', 0, 0, 210, 171.5, undefined, 'FAST');
+    pdf.save(`Certificado_${cert.verificationCode}.pdf`);
+  } finally {
+    root.unmount();
+    host.remove();
   }
-
-  // Bottom centered SHA-256 signature
-  doc.setFont('courier', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`DB Academy Firma Digital SHA-256 ${cert.hashSignature}`, w / 2, h - 36, {
-    align: 'center',
-    maxWidth: w - 80,
-  });
-
-  doc.save(`Certificado_${cert.verificationCode}.pdf`);
 }
 
 export function exportEventsToIcs(events: CalendarEvent[]) {

@@ -437,7 +437,7 @@ interface PlatformContextValue {
   setCourseSyncError: (message: string | null, courseId?: string | null) => void;
   resetCourseSync: () => void;
   createCourse: (
-    courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>,
+    courseInput: Omit<Course, 'id' | 'instructorId' | 'createdAt' | 'updatedAt'>,
     syncOptions?: { targetRevision?: number }
   ) => Promise<Course>;
   updateCourse: (
@@ -2649,7 +2649,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const createCourse = useCallback(
     async (
-      courseInput: Omit<Course, 'id' | 'instructorId' | 'instructorName' | 'createdAt' | 'updatedAt'>,
+      courseInput: Omit<Course, 'id' | 'instructorId' | 'createdAt' | 'updatedAt'>,
       syncOptions?: { targetRevision?: number }
     ): Promise<Course> => {
       const targetRevision = syncOptions?.targetRevision ?? courseSyncRef.current.dirtyRevision;
@@ -2671,7 +2671,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ...courseInput,
           id,
           instructorId: verifiedAdmin.uid,
-          instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
+          instructorName: (courseInput.instructorName?.trim() || verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
         };
         await setDoc(courseRef, {
           ...createdCourse,
@@ -2794,7 +2794,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ...allowedPatch,
             id: courseId,
             instructorId: verifiedAdmin.uid,
-            instructorName: (verifiedAdmin.displayName || verifiedAdmin.email || existingLocal.instructorName || 'Profesor').slice(0, 100),
+            instructorName: (typeof allowedPatch.instructorName === 'string' ? allowedPatch.instructorName : existingLocal.instructorName || verifiedAdmin.displayName || verifiedAdmin.email || 'Profesor').slice(0, 100),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -3740,7 +3740,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (
       rawCode: string,
       course: Course,
-      partialGateway: PaymentGateway = 'lemonsqueezy',
+      partialGateway: PaymentGateway = 'paypal',
       options?: { externalPaymentId?: string; externalTransactionRef?: string }
     ): Promise<{ payment: PaymentRecord; redemption: GiftCardRedemption }> => {
       if (!user) throw new Error('Inicia sesión para canjear una Gift Card.');

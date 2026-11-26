@@ -1,16 +1,57 @@
 import React, { useEffect, useState } from 'react';
-import { Award, Check, CheckCircle2, Copy, ExternalLink, FileDown, QrCode, ShieldCheck, X } from 'lucide-react';
+import { Award, Check, CheckCircle2, Copy, ExternalLink, FileDown, Loader2, ShieldCheck, X } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import type { Certificate } from '../types';
 import { exportCertificatePdf, formatCertificateDate } from '../utils/export';
 import { generateCertificateQrDataUrl, getCertificateVerificationUrl } from '../utils/qr';
-import {
-  DAVID_SIGNATURE_DOT,
-  DAVID_SIGNATURE_STROKES,
-  DAVID_SIGNATURE_VIEWBOX,
-  DAVID_SIGNER_NAME,
-  DAVID_SIGNER_TITLE,
-} from '../utils/signature';
+
+const CERT_LOGO_SRC = '/assets/aistudio/certificado-logo.png';
+const DEFAULT_SIGNATURE_SRC = '/assets/aistudio/certificado-firma-default.png';
+
+const CERTIFICATE_CSS = `
+.dba-cert-root { container-type: inline-size; width: 100%; max-width: 846px; margin: 0 auto; }
+.dba-cert-root .certificate {
+  width: 100%; max-width: 846px; margin: 0 auto;
+  aspect-ratio: 846 / 691;
+  padding: 3.8cqw 6cqw 0;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: linear-gradient(180deg, var(--cert-paper-top), var(--cert-paper-bottom));
+  border: 1px solid #d9dde6; border-radius: 12px;
+  container-type: normal;
+  color: var(--cert-ink);
+  font-family: var(--cert-body);
+  position: relative;
+  overflow: hidden;
+}
+.dba-cert-root .logo { height: 12.4cqw; width: auto; display: block; }
+.dba-cert-root .title { margin: 2.2cqw 0 0; font-family: var(--cert-head); font-weight: 600; font-size: 2.6cqw; letter-spacing: .06em; color: var(--cert-ink); }
+.dba-cert-root .certifies { margin: 3.6cqw 0 0; font-size: 1.65cqw; color: var(--cert-muted); font-family: var(--cert-body); }
+.dba-cert-root .name { margin: .6cqw 0 0; font-family: var(--cert-head); font-weight: 700; font-size: 3.9cqw; line-height: 1.15; color: var(--cert-ink); overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
+.dba-cert-root .statement { margin: 1.7cqw 0 0; max-width: 56cqw; font-size: 1.75cqw; line-height: 1.6; color: var(--cert-muted); font-family: var(--cert-body); }
+.dba-cert-root .course { margin: 1.9cqw 0 0; max-width: 80cqw; font-family: var(--cert-head); font-weight: 600; font-size: 2.25cqw; line-height: 1.25; color: var(--cert-ink); overflow-wrap: anywhere; word-break: break-word; }
+.dba-cert-root .sig-line strong { display: block; margin-bottom: .3cqw; color: var(--cert-ink); font-weight: 600; font-size: 1.6cqw; }
+.dba-cert-root .signatures {
+  margin-top: 4.4cqw; width: 100%;
+  display: flex; justify-content: center; gap: 14.7cqw; align-items: flex-start;
+}
+.dba-cert-root .sig-col { width: 28.4cqw; display: flex; flex-direction: column; align-items: center; }
+.dba-cert-root .top { width: 100%; height: 11.2cqw; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; }
+.dba-cert-root .sig-img { height: 8.4cqw; width: auto; max-width: 100%; object-fit: contain; display: block; margin-bottom: -2.4cqw; position: relative; z-index: 1; }
+.dba-cert-root .date-value { height: 6cqw; margin: 0; padding-top: 2.5cqw; font-weight: 600; font-size: 2cqw; line-height: 1.15; color: var(--cert-ink); font-family: var(--cert-body); }
+.dba-cert-root .sig-line { width: 100%; border-top: 1px solid var(--cert-line); padding-top: 1.1cqw; font-size: 1.45cqw; color: var(--cert-muted); font-family: var(--cert-body); }
+.dba-cert-root .verify-text { margin-top: 2.6cqw; text-align: center; }
+.dba-cert-root .verify-label { font-size: 1.45cqw; color: var(--cert-muted); font-family: var(--cert-body); }
+.dba-cert-root .verify-code { margin: .7cqw 0; font-family: var(--cert-mono); font-weight: 500; font-size: 2.05cqw; letter-spacing: .04em; color: var(--cert-ink); }
+.dba-cert-root .verify-cta { font-size: 1.3cqw; font-weight: 600; letter-spacing: .05em; color: var(--cert-ink); font-family: var(--cert-body); }
+.dba-cert-root .qr { margin-top: 1.8cqw; width: 12.1cqw; height: 12.1cqw; padding: .9cqw; background: #fff; border: 1px solid #e1e5ee; border-radius: 9px; box-shadow: 0 2px 8px rgba(17,26,44,.08); }
+.dba-cert-root .qr img { width: 100%; height: 100%; display: block; }
+.dba-cert-root .hash { margin: auto 0 0; padding-bottom: 3.2cqw; padding-top: 1.6cqw; font-family: var(--cert-mono); font-size: 1.28cqw; color: #55607a; word-break: break-all; line-height: 1.4; }
+@page { size: 210mm 171.5mm; margin: 0; }
+@media print {
+  .dba-cert-root { max-width: none; width: 210mm; }
+  .dba-cert-root .certificate { border: 0; border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+`;
 
 interface CertificateDocumentProps {
   certificate: Certificate;
@@ -19,13 +60,12 @@ interface CertificateDocumentProps {
 
 export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
   certificate,
-  isSample = false,
 }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
-    void generateCertificateQrDataUrl(certificate, 220).then((url) => {
+    void generateCertificateQrDataUrl(certificate, 320).then((url) => {
       if (!cancelled) setQrDataUrl(url);
     });
     return () => {
@@ -33,121 +73,71 @@ export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
     };
   }, [certificate.id, certificate.verificationCode]);
 
+  const instructorName = certificate.instructorName?.trim() || 'Instructor DB Academy';
+  const signatureSrc = (certificate as Certificate & { instructorSignatureUrl?: string }).instructorSignatureUrl || DEFAULT_SIGNATURE_SRC;
+  const issuedDate = formatCertificateDate(certificate.issuedAt);
+
   return (
-    <div className="relative w-full rounded-xl bg-gradient-to-b from-[#FAFBFD] via-white to-[#F1F5F9] text-[#0F172A] px-6 py-8 sm:px-12 sm:py-10 shadow-md border border-slate-200 overflow-hidden select-none text-center">
-      {isSample && (
-        <span className="absolute top-3.5 right-3.5 rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
-          Vista previa de diseño
-        </span>
-      )}
+    <div
+      className="dba-cert-root"
+      style={{
+        ['--cert-ink' as string]: '#111a2c',
+        ['--cert-muted' as string]: '#475069',
+        ['--cert-line' as string]: '#8a93a6',
+        ['--cert-paper-top' as string]: '#ffffff',
+        ['--cert-paper-bottom' as string]: '#f1f4f9',
+        ['--cert-head' as string]: '"IBM Plex Sans", "Inter", system-ui, "Segoe UI", Arial, sans-serif',
+        ['--cert-body' as string]: '"Inter", system-ui, -apple-system, "Segoe UI", Arial, sans-serif',
+        ['--cert-mono' as string]: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
+      }}
+    >
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+      <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+      <style>{CERTIFICATE_CSS}</style>
+      <main className="certificate" aria-label={`Certificado ${certificate.verificationCode}`}>
+        <img className="logo" src={CERT_LOGO_SRC} alt="DB Academy" />
 
-      {/* Official Centered Logo */}
-      <div className="flex justify-center">
-        <img
-          src="/assets/aistudio/logo-db-academy-light.png"
-          alt="DB Academy"
-          referrerPolicy="no-referrer"
-          className="h-20 sm:h-24 w-auto object-contain"
-        />
-      </div>
+        <h1 className="title">CERTIFICADO OFICIAL DE FINALIZACIÓN</h1>
 
-      {/* Main Certificate Title */}
-      <h2 className="mt-3 font-display text-lg sm:text-2xl font-extrabold uppercase tracking-wide text-[#0F172A] text-balance">
-        Certificado Oficial de Finalización
-      </h2>
+        <p className="certifies">Se certifica que / This certifies that</p>
+        <p className="name">{certificate.studentName}</p>
 
-      {/* Recipient & Completion Copy */}
-      <p className="mt-4 text-xs sm:text-sm text-slate-600">
-        Se certifica que / This certifies that
-      </p>
+        <p className="statement">ha completado satisfactoriamente el 100% de los módulos, prácticas y evaluaciones del programa:</p>
+        <p className="course">{certificate.courseTitle}</p>
 
-      <h3 className="mt-1.5 font-display text-2xl sm:text-4xl font-bold tracking-tight text-[#0F172A] text-balance">
-        {certificate.studentName}
-      </h3>
-
-      <p className="mt-3 text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-        ha completado satisfactoriamente el 100% de los módulos, prácticas y evaluaciones del programa:
-      </p>
-
-      <p className="mt-2.5 font-display text-base sm:text-xl font-bold text-[#0F172A] max-w-2xl mx-auto text-balance">
-        {certificate.courseTitle}
-      </p>
-
-      {/* 2-Column Signature (David) & Issue Date */}
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-14 max-w-2xl mx-auto items-end">
-        <div className="flex flex-col items-center">
-          <svg
-            viewBox={DAVID_SIGNATURE_VIEWBOX}
-            fill="none"
-            role="img"
-            aria-label={`Firma de ${DAVID_SIGNER_NAME}`}
-            className="h-12 sm:h-14 w-auto mb-0.5 pointer-events-none"
-          >
-            {DAVID_SIGNATURE_STROKES.map((s, idx) => (
-              <path
-                key={idx}
-                d={s.d}
-                stroke={s.stroke}
-                strokeWidth={s.strokeWidth}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={s.opacity}
-              />
-            ))}
-            <circle
-              cx={DAVID_SIGNATURE_DOT.cx}
-              cy={DAVID_SIGNATURE_DOT.cy}
-              r={DAVID_SIGNATURE_DOT.r}
-              fill={DAVID_SIGNATURE_DOT.fill}
-            />
-          </svg>
-          <div className="mt-1.5 w-full max-w-[240px] border-t border-slate-400" />
-          <p className="mt-1.5 text-xs text-slate-600 truncate max-w-full">
-            {DAVID_SIGNER_TITLE}
-          </p>
-        </div>
-
-        <div className="flex flex-col items-center">
-          <p className="text-sm sm:text-base font-semibold text-[#0F172A]">
-            {formatCertificateDate(certificate.issuedAt)}
-          </p>
-          <div className="mt-1.5 w-full max-w-[240px] border-t border-slate-400" />
-          <p className="mt-1.5 text-xs text-slate-600">Fecha de Emisión</p>
-        </div>
-      </div>
-
-      {/* Centered Verification Code + Scannable QR */}
-      <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-4">
-        <div className="text-center sm:text-left space-y-0.5">
-          <p className="text-xs text-slate-600">Código de Verificación</p>
-          <p className="text-sm sm:text-base font-bold font-mono tracking-wide text-[#0F172A]">
-            {certificate.verificationCode}
-          </p>
-          <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#0F172A]">
-            Escanea para verificar
-          </p>
-        </div>
-
-        <div className="shrink-0 rounded-md border border-slate-200 bg-white p-1.5 shadow-xs">
-          {qrDataUrl?.trim() ? (
-            <img
-              src={qrDataUrl.trim()}
-              alt={`Código QR para verificar certificado ${certificate.verificationCode}`}
-              referrerPolicy="no-referrer"
-              className="w-20 h-20 sm:w-22 sm:h-22 object-contain"
-            />
-          ) : (
-            <div className="w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center bg-slate-100 text-slate-500">
-              <QrCode className="w-8 h-8" />
+        <div className="signatures">
+          <div className="sig-col">
+            <div className="top">
+              <img className="sig-img" src={signatureSrc} alt={`Firma de ${instructorName}`} crossOrigin="anonymous" />
+              <div className="sig-line"><strong>{instructorName}</strong>Instructor · DB Academy</div>
             </div>
-          )}
+            <div className="verify-text">
+              <div className="verify-label">Código de Verificación</div>
+              <div className="verify-code">{certificate.verificationCode}</div>
+              <div className="verify-cta">ESCANEA PARA VERIFICAR</div>
+            </div>
+          </div>
+          <div className="sig-col">
+            <div className="top">
+              <div className="date-value">{issuedDate}</div>
+              <div className="sig-line">Fecha de Emisión</div>
+            </div>
+            <div className="qr">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt={`Código QR de verificación ${certificate.verificationCode}`} />
+              ) : (
+                <div style={{ width: '100%', height: '100%' }} aria-hidden="true" />
+              )}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Bottom Centered SHA-256 Signature */}
-      <p className="mt-6 text-[10px] sm:text-[11px] font-mono text-slate-500 break-all">
-        DB Academy Firma Digital SHA-256 {certificate.hashSignature}
-      </p>
+        <p className="hash">DB Academy Firma Digital SHA-256 {certificate.hashSignature}</p>
+      </main>
     </div>
   );
 };
@@ -189,15 +179,14 @@ export const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = (
   };
 
   const handleOpenVerification = () => {
-    const token = certificate.id || certificate.verificationCode;
+    const code = certificate.verificationCode || certificate.id;
+    const url = `/verificar/${encodeURIComponent(code)}`;
     if (typeof window !== 'undefined') {
-      const nextUrl = `${window.location.pathname}?verify=${encodeURIComponent(token)}`;
-      window.history.replaceState({}, '', nextUrl);
-      window.dispatchEvent(new CustomEvent('dbacademy:verify', { detail: token }));
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
-    onClose();
-    setActiveView('certificates');
   };
+
+  void setActiveView; // kept for interface stability if needed
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
@@ -237,7 +226,7 @@ export const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = (
               onClick={() => void handleDownload()}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052CC] hover:bg-[#0747A6] disabled:opacity-60 px-3.5 py-2 text-xs font-semibold text-white transition-colors min-h-[38px]"
             >
-              <FileDown className="w-4 h-4" />
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
               <span>{downloading ? 'Generando PDF...' : 'Descargar PDF con Logo y QR'}</span>
             </button>
             <button

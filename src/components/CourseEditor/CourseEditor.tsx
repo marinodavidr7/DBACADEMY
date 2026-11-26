@@ -78,6 +78,7 @@ export interface CourseInput {
   priceCents: number;
   currency: Course['currency'];
   coverImage: string;
+  instructorName: string;
   published: boolean;
   modulesCount: number;
   totalLessons: number;
@@ -389,6 +390,7 @@ function courseToInput(course: Course): CourseInput {
     priceCents: course.priceCents ?? 0,
     currency: course.currency ?? 'DOP',
     coverImage: course.coverImage ?? '',
+    instructorName: course.instructorName ?? 'Equipo DB Academy',
     published: course.published ?? false,
     modulesCount: course.modulesCount ?? course.modules.length,
     totalLessons: course.totalLessons ?? course.modules.reduce((acc, m) => acc + m.lessons.length, 0),
@@ -417,7 +419,7 @@ function buildCourseFromInput(input: CourseInput, base: Course | null): Course {
     currency: input.currency,
     coverImage: input.coverImage,
     instructorId: base?.instructorId ?? 'platform-faculty',
-    instructorName: base?.instructorName ?? 'Equipo DB Academy',
+    instructorName: input.instructorName.trim() || base?.instructorName || 'Equipo DB Academy',
     published: input.published,
     modulesCount: modules.length,
     totalLessons,
@@ -438,6 +440,7 @@ interface CourseDetailsSectionProps {
   currency: Course['currency'];
   description: string;
   coverImage: string;
+  instructorName: string;
   tags: string[];
   uploadingCover: boolean;
   generatingCover: boolean;
@@ -459,6 +462,7 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
   currency,
   description,
   coverImage,
+  instructorName,
   tags,
   uploadingCover,
   generatingCover,
@@ -497,6 +501,16 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
             value={subtitle}
             onChange={(event) => onUpdateField({ subtitle: event.target.value })}
             maxLength={240}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Nombre del instructor (certificado)</span>
+          <input
+            value={instructorName}
+            onChange={(event) => onUpdateField({ instructorName: event.target.value })}
+            maxLength={120}
+            placeholder="Ej. Javier Punil Ramirez"
             className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
           />
         </label>
@@ -1199,6 +1213,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
           title: trimmedTitle,
           subtitle: safeSubtitle,
           description: safeDescription,
+          instructorName: currentInput.instructorName.trim().slice(0, 120) || 'Equipo DB Academy',
           modules: normalizedModules,
           modulesCount: normalizedModules.length,
           totalLessons: normalizedModules.reduce((acc, module) => acc + module.lessons.length, 0),
@@ -1529,6 +1544,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             currency={input.currency}
             description={input.description}
             coverImage={input.coverImage}
+            instructorName={input.instructorName}
             tags={input.tags ?? []}
             uploadingCover={uploadingCover}
             generatingCover={generatingCover}
@@ -1705,6 +1721,7 @@ function emptyInput(): CourseInput {
     priceCents: 60000,
     currency: 'DOP',
     coverImage: '',
+    instructorName: 'Equipo DB Academy',
     published: true,
     modulesCount: 1,
     totalLessons: 1,

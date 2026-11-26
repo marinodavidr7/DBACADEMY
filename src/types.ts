@@ -198,6 +198,7 @@ export interface Certificate {
   studentName: string;
   instructorId: string;
   instructorName: string;
+  instructorSignatureUrl?: string;
   completionPercent: number;
   hashSignature: string;
   issuedAt?: unknown;
