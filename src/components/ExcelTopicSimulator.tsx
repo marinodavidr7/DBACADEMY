@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Dices,
@@ -11,8 +11,9 @@ import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
 import { IntermediateTopicSim, type IntermediateSimKind } from './IntermediateTopicSim';
 import { OperadoresComparacionSimulator } from './OperadoresComparacionSimulator';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
-const ExcelSimulator3D = lazy(() =>
+const ExcelSimulator3D = lazyWithRetry(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
 );
 
@@ -2182,8 +2183,10 @@ export const ExcelTopicSimulator: React.FC<ExcelTopicSimulatorProps> = ({ lesson
         </div>
       </div>
 
-      {lessonId === 'm1-l1' && <OperadoresComparacionSimulator onInteract={onInteract} />}
-      {INTERMEDIATE_KINDS.has(meta.kind as IntermediateSimKind) && lessonId !== 'm1-l1' && (
+      {lessonId === 'm1-l1' && (
+        <OperadoresComparacionSimulator onInteract={onInteract} />
+      )}
+      {INTERMEDIATE_KINDS.has(meta.kind as IntermediateSimKind) && (
         <IntermediateTopicSim kind={meta.kind as IntermediateSimKind} lessonTitle={lessonId} />
       )}
       {meta.kind === 'screen-9' && <ExcelScreenInterfaceViewer />}

@@ -2183,6 +2183,36 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
+  const notifyAdminNewEnrollment = useCallback(
+    async (payload: {
+      enrollmentId: string;
+      courseId: string;
+      courseTitle: string;
+      studentName: string;
+      studentEmail: string;
+      gateway: string;
+      amountCents: number;
+      currency: string;
+      couponCode?: string;
+    }) => {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        await fetch('/api/notifications/enrollment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // Non-blocking: enrollment is already committed in Firestore/Supabase
+      }
+    },
+    [user]
+  );
+
   const enrollWithPayment = useCallback(
     async (
       course: Course,
@@ -2414,6 +2444,20 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
+      if (!existingEnrollmentSnap.exists()) {
+        void notifyAdminNewEnrollment({
+          enrollmentId,
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          studentName: (displayName || enrollmentEmail || 'Estudiante').slice(0, 100),
+          studentEmail: enrollmentEmail || '',
+          gateway: resolvedGateway,
+          amountCents: finalAmount,
+          currency: authoritativeCurrency,
+          ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}),
+        });
+      }
+
       triggerPushAlert(
         'payment',
         t('paymentSuccess'),
@@ -2423,7 +2467,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
       return paymentPayload;
     },
-    [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, t]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, notifyAdminNewEnrollment, t]
   );
 
   const completeLesson = useCallback(
@@ -3917,6 +3961,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         currency: authoritativeCurrency,
       });
 
+      void notifyAdminNewEnrollment({
+        enrollmentId,
+        courseId: course.id,
+        courseTitle: course.title.slice(0, 140),
+        studentName: txResult.redemption.studentName || 'Estudiante',
+        studentEmail: txResult.redemption.studentEmail || '',
+        gateway: txResult.payment.gateway,
+        amountCents: txResult.payment.amountCents,
+        currency: authoritativeCurrency,
+        couponCode: code,
+      });
+
       triggerPushAlert(
         'payment',
         'Gift Card canjeada con éxito',
@@ -3925,7 +3981,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return txResult;
     },
-    [user, isAdmin, enrollments, certificates, courses, privateInfo, sendWs, triggerPushAlert]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, sendWs, triggerPushAlert, notifyAdminNewEnrollment]
   );
 
   const redeemGiftCardCode = useCallback(

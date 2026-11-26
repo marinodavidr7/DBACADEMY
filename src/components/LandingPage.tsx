@@ -343,9 +343,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="lg:col-span-5 relative">
                 <div className="rounded-2xl border border-zinc-800 bg-[var(--dba-bg-hero-surface)] p-2 shadow-2xl overflow-hidden group">
                   <div className="relative aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-zinc-900">
-                    {featuredCourse?.coverImage ? (
+                    {normalizarUrlImagen(featuredCourse?.coverImage) ? (
                       <img
-                        src={normalizarUrlImagen(featuredCourse.coverImage)}
+                        src={normalizarUrlImagen(featuredCourse?.coverImage)}
                         alt="Campus DB Academy"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
@@ -569,7 +569,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       className="group rounded-2xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden flex flex-col transition-all hover:border-[var(--dba-border-strong)] hover:shadow-md"
                     >
                       <div className="aspect-video w-full bg-zinc-900 overflow-hidden relative">
-                        {course.coverImage ? (
+                        {normalizarUrlImagen(course.coverImage) ? (
                           <img
                             src={normalizarUrlImagen(course.coverImage)}
                             alt={course.title}

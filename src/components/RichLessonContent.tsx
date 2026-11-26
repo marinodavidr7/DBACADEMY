@@ -1,11 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { OperadoresComparacionSimulator } from './OperadoresComparacionSimulator';
-import {
-  hasComparisonSimulatorEmbed,
-  renderLessonContent,
-  replaceComparisonSimulatorEmbeds,
-} from '../utils/richText';
+import { renderLessonContent, replaceSimulatorEmbedsWithPortals } from '../utils/richText';
+import { LogicOperatorSimulator } from './LogicOperatorSimulator';
 
 interface RichLessonContentProps {
   content: string;
@@ -13,51 +9,55 @@ interface RichLessonContentProps {
   onInteract?: () => void;
 }
 
+/**
+ * Renders sanitized lesson HTML and upgrades comparison-operator embeds/tokens
+ * into live React portals using LogicOperatorSimulator (no iframe).
+ */
 export const RichLessonContent: React.FC<RichLessonContentProps> = ({
   content,
   className = '',
   onInteract,
 }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [simNodes, setSimNodes] = useState<HTMLElement[]>([]);
+  const htmlHostRef = useRef<HTMLDivElement | null>(null);
+  const [portalTargets, setPortalTargets] = useState<HTMLElement[]>([]);
 
-  const html = useMemo(() => {
-    const rendered = renderLessonContent(content || '');
-    if (!rendered) return '';
-    if (!hasComparisonSimulatorEmbed(content || '') && !/<div[^>]+data-sim="operadores-comparacion"/i.test(rendered)) {
-      return rendered;
-    }
-    return replaceComparisonSimulatorEmbeds(rendered);
+  const processedHtml = useMemo(() => {
+    const rendered = renderLessonContent(content);
+    return replaceSimulatorEmbedsWithPortals(rendered);
   }, [content]);
 
-  useEffect(() => {
-    const root = containerRef.current;
-    if (!root) {
-      setSimNodes([]);
+  useLayoutEffect(() => {
+    const host = htmlHostRef.current;
+    if (!host) {
+      setPortalTargets([]);
       return;
     }
-    const nodes = Array.from(root.querySelectorAll<HTMLElement>('[data-sim="operadores-comparacion"]'));
-    setSimNodes(nodes);
-  }, [html]);
+    host.innerHTML = processedHtml;
+    const targets = Array.from(
+      host.querySelectorAll<HTMLElement>('.dba-sim-operadores-comparacion')
+    );
+    setPortalTargets(targets);
 
-  if (!html) return null;
+    return () => {
+      setPortalTargets([]);
+      if (htmlHostRef.current) {
+        htmlHostRef.current.innerHTML = '';
+      }
+    };
+  }, [processedHtml]);
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className={className}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-      {simNodes.map((node, idx) =>
+      <div ref={htmlHostRef} className={className} />
+      {portalTargets.map((target, idx) =>
         createPortal(
-          <OperadoresComparacionSimulator onInteract={onInteract} />,
-          node,
-          `cmp-sim-${idx}`
+          <LogicOperatorSimulator
+            key={`op-comp-portal-${idx}`}
+            onInteract={onInteract}
+          />,
+          target
         )
       )}
     </>
   );
 };
-
-export default RichLessonContent;

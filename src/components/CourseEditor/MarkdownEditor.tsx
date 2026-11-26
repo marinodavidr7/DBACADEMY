@@ -13,58 +13,162 @@ import {
   X,
 } from 'lucide-react';
 import { uploadCourseMaterial } from '../../services/storageService';
-import { COMPARISON_SIM_TOKEN, isComparisonSimulatorSource, isSafeIframeSrc, sanitizeHtml, sanitizeStyle } from '../../utils/richText';
+import { normalizarUrlImagen } from '../../utils/imageUtils';
+import {
+  COMPARISON_SIM_TOKEN,
+  isComparisonSimulatorSource,
+  isSafeIframeSrc,
+  renderLessonContent,
+  sanitizeHtml,
+  sanitizeStyle,
+} from '../../utils/richText';
 import { RichLessonContent } from '../RichLessonContent';
 import { Field } from './Field';
 
-type QuillStatic = typeof import('react-quill-new').default & { Quill?: any };
-const QuillAny = (ReactQuill as unknown as QuillStatic).Quill;
-if (QuillAny) {
-  const BlockEmbed = QuillAny.import('blots/block/embed');
-  class SafeIframeBlot extends BlockEmbed {
-    static blotName = 'embedIframe';
-    static tagName = 'IFRAME';
+const IFRAME_ATTRIBUTES = [
+  'title',
+  'width',
+  'height',
+  'loading',
+  'allow',
+  'allowfullscreen',
+  'sandbox',
+  'referrerpolicy',
+  'frameborder',
+  'style',
+] as const;
 
-    static create(value: any) {
-      const node = super.create() as HTMLIFrameElement;
-      const src = typeof value === 'string' ? value : value?.src;
-      const safeSrc = isSafeIframeSrc(String(src || '')) ? String(src).trim() : 'about:blank';
-      node.setAttribute('src', safeSrc);
-      node.setAttribute('loading', 'lazy');
-      node.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-      node.setAttribute('sandbox', typeof value?.sandbox === 'string' && value.sandbox ? value.sandbox : 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
-      node.setAttribute('allow', typeof value?.allow === 'string' && value.allow ? value.allow : 'fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
-      node.setAttribute('title', typeof value?.title === 'string' && value.title ? value.title : 'Contenido embebido');
-      if (value?.width) node.setAttribute('width', String(value.width));
-      if (value?.height) node.setAttribute('height', String(value.height));
-      if (value?.allowfullscreen) node.setAttribute('allowfullscreen', 'true');
-      if (value?.style) {
-        const clean = sanitizeStyle(String(value.style));
-        if (clean) node.setAttribute('style', clean);
+let customBlotsRegistered = false;
+function ensureCustomQuillBlots(): void {
+  if (customBlotsRegistered || typeof window === 'undefined') return;
+  customBlotsRegistered = true;
+  try {
+    const QuillCtor = ReactQuill.Quill;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const BaseImage = QuillCtor.import('formats/image') as any;
+    if (BaseImage) {
+      class SafeImageBlot extends BaseImage {
+        static create(value: unknown) {
+          const node = super.create(value) as HTMLImageElement;
+          node.setAttribute('referrerpolicy', 'no-referrer');
+          node.setAttribute('loading', 'lazy');
+          return node;
+        }
+
+        static sanitize(url: string) {
+          const trimmed = (url || '').trim();
+          if (
+            /^https?:\/\//i.test(trimmed) ||
+            trimmed.startsWith('/') ||
+            /^data:image\//i.test(trimmed)
+          ) {
+            return trimmed;
+          }
+          return '//:0';
+        }
       }
-      node.setAttribute('frameborder', value?.frameborder ? String(value.frameborder) : '0');
-      return node;
+
+      QuillCtor.register(SafeImageBlot, true);
     }
 
-    static value(node: HTMLIFrameElement) {
-      return {
-        src: node.getAttribute('src') || '',
-        title: node.getAttribute('title') || '',
-        width: node.getAttribute('width') || '',
-        height: node.getAttribute('height') || '',
-        allow: node.getAttribute('allow') || '',
-        sandbox: node.getAttribute('sandbox') || '',
-        loading: node.getAttribute('loading') || '',
-        referrerpolicy: node.getAttribute('referrerpolicy') || '',
-        frameborder: node.getAttribute('frameborder') || '',
-        allowfullscreen: node.hasAttribute('allowfullscreen'),
-        style: node.getAttribute('style') || '',
-      };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const BlockEmbed = QuillCtor.import('blots/block/embed') as any;
+    if (BlockEmbed) {
+      class SafeIframeBlot extends BlockEmbed {
+        static blotName = 'embedIframe';
+        static tagName = 'IFRAME';
+
+        static create(value: unknown) {
+          const node = super.create(value) as HTMLIFrameElement;
+          const rawUrl = typeof value === 'string' ? value : '';
+          const safeSrc = SafeIframeBlot.sanitize(rawUrl);
+          if (safeSrc) {
+            node.setAttribute('src', safeSrc);
+          }
+          node.setAttribute('loading', 'lazy');
+          node.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+          node.setAttribute('frameborder', '0');
+          return node;
+        }
+
+        static sanitize(url: string) {
+          const trimmed = (url || '').trim();
+          return isSafeIframeSrc(trimmed) ? trimmed : '';
+        }
+
+        static value(domNode: HTMLElement) {
+          const src = (domNode.getAttribute('src') || '').trim();
+          return isSafeIframeSrc(src) ? src : null;
+        }
+
+        static formats(domNode: HTMLElement) {
+          const formats: Record<string, string> = {};
+          for (const attr of IFRAME_ATTRIBUTES) {
+            if (attr === 'allowfullscreen') {
+              if (domNode.hasAttribute('allowfullscreen')) {
+                formats.allowfullscreen = domNode.getAttribute('allowfullscreen') || 'true';
+              }
+            } else if (domNode.hasAttribute(attr)) {
+              const val = domNode.getAttribute(attr);
+              if (val !== null && val !== '') {
+                formats[attr] = attr === 'style' ? sanitizeStyle(val) : val;
+              }
+            }
+          }
+          return formats;
+        }
+
+        format(name: string, value: unknown) {
+          if ((IFRAME_ATTRIBUTES as readonly string[]).includes(name)) {
+            if (name === 'allowfullscreen') {
+              if (value) {
+                this.domNode.setAttribute('allowfullscreen', value === true || value === 'true' ? '' : String(value));
+              } else {
+                this.domNode.removeAttribute('allowfullscreen');
+              }
+            } else if (name === 'style') {
+              const cleanStyle = typeof value === 'string' ? sanitizeStyle(value) : '';
+              if (cleanStyle) {
+                this.domNode.setAttribute('style', cleanStyle);
+              } else {
+                this.domNode.removeAttribute('style');
+              }
+            } else if (value) {
+              this.domNode.setAttribute(name, String(value));
+            } else {
+              this.domNode.removeAttribute(name);
+            }
+          } else {
+            super.format(name, value);
+          }
+        }
+      }
+
+      QuillCtor.register(SafeIframeBlot, true);
     }
+  } catch (err) {
+    console.warn('No se pudieron registrar los blots personalizados en Quill:', err);
   }
-  if (!QuillAny.imports?.['formats/embedIframe']) {
-    QuillAny.register('formats/embedIframe', SafeIframeBlot, true);
-  }
+}
+
+function verifyImageLoads(url: string, timeoutMs = 8000): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(true);
+  if (url.startsWith('data:image/')) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const probe = new Image();
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(ok);
+    };
+    const timer = window.setTimeout(() => finish(true), timeoutMs);
+    probe.referrerPolicy = 'no-referrer';
+    probe.onload = () => finish(probe.naturalWidth > 0);
+    probe.onerror = () => finish(false);
+    probe.src = url;
+  });
 }
 
 export type MarkdownTab = 'edit' | 'preview';
@@ -130,30 +234,72 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
   const [videoPanelError, setVideoPanelError] = useState<string | null>(null);
   const [embedPanelError, setEmbedPanelError] = useState<string | null>(null);
 
+  ensureCustomQuillBlots();
+
   const insertHtmlAtCursor = useCallback((html: string) => {
     const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    const range = quill.getSelection(true);
-    const index = range?.index ?? quill.getLength();
-    quill.clipboard.dangerouslyPasteHTML(index, html);
-    quill.setSelection(index + 1, 0);
-  }, []);
+    if (!quill) {
+      const next = value ? `${value}\n${html}` : html;
+      onChange(sanitizeHtml(next));
+      setTab('edit');
+      return;
+    }
+    const range = quill.getSelection(false);
+    const index = range?.index ?? Math.max(0, quill.getLength() - 1);
+    const pasteDelta = quill.clipboard.convert({ html });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const DeltaCtor = ReactQuill.Quill.import('delta') as any;
+    if (DeltaCtor && pasteDelta?.ops?.length) {
+      const update = new DeltaCtor().retain(index).concat(pasteDelta).insert('\n');
+      quill.updateContents(update, 'user');
+      quill.setSelection(index + pasteDelta.length() + 1, 0, 'silent');
+    } else {
+      quill.clipboard.dangerouslyPasteHTML(index, html, 'user');
+      quill.setSelection(index + 1, 0, 'silent');
+    }
+  }, [onChange, value]);
 
   const insertImage = useCallback((src: string, altText: string) => {
-    const safeAlt = (altText || 'Imagen de la lección').replace(/"/g, '&quot;');
-    const safeSrc = src.trim().replace(/"/g, '&quot;');
-    insertHtmlAtCursor(`<p><img src="${safeSrc}" alt="${safeAlt}" style="max-width:100%;height:auto;border-radius:8px;" /></p><p><br></p>`);
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    const cleanSrc = normalizarUrlImagen(src) || src.trim();
+    const isValid =
+      /^https?:\/\//i.test(cleanSrc) ||
+      cleanSrc.startsWith('/') ||
+      /^data:image\//i.test(cleanSrc);
+    if (!isValid) {
+      setImagePanelError('La fuente de la imagen no es válida.');
+      return;
+    }
+    const cleanAlt = (altText || 'Imagen de la lección').trim();
+    const range = quill.getSelection(true);
+    const index = range?.index ?? Math.max(0, quill.getLength() - 1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const DeltaCtor = ReactQuill.Quill.import('delta') as any;
+    if (DeltaCtor) {
+      const update = new DeltaCtor()
+        .retain(index)
+        .insert({ image: cleanSrc }, { alt: cleanAlt })
+        .insert('\n');
+      quill.updateContents(update, 'user');
+    } else {
+      quill.insertEmbed(index, 'image', cleanSrc, 'user');
+      quill.formatText(index, 1, 'alt', cleanAlt, 'user');
+      quill.insertText(index + 1, '\n', 'user');
+    }
+    quill.setSelection(index + 2, 0, 'silent');
     setImgUrl('');
     setImgAlt('');
     setImagePanelError(null);
     setShowImagePanel(false);
-  }, [insertHtmlAtCursor]);
+  }, []);
 
   const handleUploadInlineImage = async (file: File | undefined) => {
     if (!file) return;
     const ext = file.name.toLowerCase().split('.').pop() || '';
-    const allowedExt = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'avif']);
-    if (!file.type.startsWith('image/') && !allowedExt.has(ext)) {
+    const allowedExt = new Set(['png', 'jpg', 'jpeg', 'jfif', 'webp', 'gif', 'svg', 'avif', 'bmp']);
+    const isImage = file.type.startsWith('image/') || allowedExt.has(ext);
+    if (!isImage) {
       setImagePanelError('Selecciona un archivo de imagen válido (PNG, JPG, WebP o GIF).');
       return;
     }
@@ -161,24 +307,44 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
     setUploadingImage(true);
     try {
       const material = await uploadCourseMaterial(courseId, lessonId, file);
-      const caption = imgAlt.trim() || file.name.replace(/\.[^.]+$/, '') || 'Ilustración técnica';
+      if (!material.url || (!material.url.startsWith('data:image/') && !/^https?:\/\//i.test(material.url) && !material.url.startsWith('/'))) {
+        throw new Error('No se pudo generar una URL válida para la imagen.');
+      }
+      const caption = imgAlt.trim() || file.name.replace(/\.[^.]+$/, '') || 'Imagen de la lección';
       insertImage(material.url, caption);
     } catch (err) {
-      console.error('Error al subir imagen:', err);
+      console.error('Error al subir imagen en MarkdownEditor:', err);
       setImagePanelError(err instanceof Error ? err.message : 'No se pudo cargar la imagen.');
     } finally {
       setUploadingImage(false);
     }
   };
 
-  const handleInsertUrlImage = () => {
-    const trimmed = imgUrl.trim();
-    if (!trimmed) return;
-    if (!/^https?:\/\//i.test(trimmed) && !trimmed.startsWith('/') && !/^data:image\//i.test(trimmed)) {
+  const handleInsertUrlImage = async () => {
+    const raw = imgUrl.trim();
+    if (!raw) return;
+    // Allow pasting markdown image syntax or <img src="..."> accidentally
+    const mdMatch = raw.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+    const htmlMatch = raw.match(/src=["']([^"']+)["']/i);
+    const extracted = mdMatch?.[2] || htmlMatch?.[1] || raw;
+    const normalized = normalizarUrlImagen(extracted) || extracted.trim();
+    const isValid = /^https?:\/\//i.test(normalized) || normalized.startsWith('/') || /^data:image\//i.test(normalized);
+    if (!isValid) {
       setImagePanelError('Ingresa una URL válida (https://... o /assets/...).');
       return;
     }
-    insertImage(trimmed, imgAlt.trim() || 'Ilustración técnica');
+    setImagePanelError(null);
+    setUploadingImage(true);
+    try {
+      const ok = await verifyImageLoads(normalized);
+      if (!ok) {
+        setImagePanelError('No se pudo cargar la imagen desde esa URL. Verifica que el enlace sea público y apunte directamente a una imagen.');
+        return;
+      }
+      insertImage(normalized, imgAlt.trim() || mdMatch?.[1] || 'Imagen de la lección');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleInsertYoutubeUrl = () => {
@@ -193,90 +359,57 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
     setShowVideoPanel(false);
   };
 
-  const insertComparisonSimulatorToken = useCallback(() => {
-    const tokenHtml = `<p>${COMPARISON_SIM_TOKEN}</p><p><br></p>`;
-    const quill = quillRef.current?.getEditor();
-    if (tab === 'edit' && quill) {
-      const range = quill.getSelection(true);
-      const index = range?.index ?? quill.getLength();
-      quill.clipboard.dangerouslyPasteHTML(index, tokenHtml);
-      quill.setSelection(index + 2, 0, 'silent');
-    } else {
-      const base = value || '';
-      onChange(base ? `${base}${tokenHtml}` : tokenHtml);
-    }
+  const handleInsertSimulatorToken = useCallback(() => {
+    insertHtmlAtCursor(`<p>${COMPARISON_SIM_TOKEN}</p><p><br></p>`);
     setEmbedCode('');
     setEmbedPanelError(null);
     setShowEmbedPanel(false);
-  }, [onChange, tab, value]);
+  }, [insertHtmlAtCursor]);
 
   const handleInsertEmbedCode = () => {
     const trimmed = embedCode.trim();
     if (!trimmed) return;
-
-    // If it's the comparison simulator, insert native token instead of iframe
-    const rawSrcMatch = trimmed.match(/\bsrc=["']([^"']+)["']/i);
-    const candidateSrc = rawSrcMatch?.[1] || (isSafeIframeSrc(trimmed) && !/^</.test(trimmed) ? trimmed : '');
-    if (candidateSrc && isComparisonSimulatorSource(candidateSrc)) {
-      insertComparisonSimulatorToken();
+    if (isComparisonSimulatorSource(trimmed)) {
+      handleInsertSimulatorToken();
       return;
     }
-
-    let htmlToInsert = trimmed;
-    if (isSafeIframeSrc(trimmed) && !/^</.test(trimmed)) {
-      htmlToInsert = `<iframe src="${trimmed.replace(/"/g, '&quot;')}" title="Contenido embebido" width="100%" height="480" allowfullscreen></iframe>`;
-    }
-
-    const sanitized = sanitizeHtml(htmlToInsert);
-    if (!sanitized.trim() || !/<iframe\b/i.test(sanitized)) {
-      setEmbedPanelError('El código no es válido o fue bloqueado por seguridad. Usa un <iframe> con https:// o una ruta interna /...');
+    const htmlCandidate =
+      isSafeIframeSrc(trimmed) && !/\s/.test(trimmed)
+        ? `<iframe src="${trimmed.replace(/"/g, '&quot;')}" width="100%" height="560" loading="lazy" allowfullscreen></iframe>`
+        : trimmed;
+    const sanitized = sanitizeHtml(htmlCandidate);
+    if (!sanitized.trim()) {
+      setEmbedPanelError('El código no es válido o fue bloqueado por seguridad. Usa iframe/HTML con https.');
       return;
     }
-
-    const temp = document.createElement('div');
-    temp.innerHTML = sanitized;
-    const iframe = temp.querySelector('iframe');
-    const src = iframe?.getAttribute('src') || '';
-    if (!iframe || !isSafeIframeSrc(src)) {
-      setEmbedPanelError('El iframe debe tener src https:// o ruta interna /...');
-      return;
-    }
-
-    if (isComparisonSimulatorSource(src)) {
-      insertComparisonSimulatorToken();
-      return;
-    }
-
-    const iframeValue = {
-      src,
-      title: iframe.getAttribute('title') || 'Contenido embebido',
-      width: iframe.getAttribute('width') || '100%',
-      height: iframe.getAttribute('height') || '480',
-      allow: iframe.getAttribute('allow') || 'fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-      sandbox: iframe.getAttribute('sandbox') || 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation',
-      loading: iframe.getAttribute('loading') || 'lazy',
-      referrerpolicy: iframe.getAttribute('referrerpolicy') || 'strict-origin-when-cross-origin',
-      frameborder: iframe.getAttribute('frameborder') || '0',
-      allowfullscreen: iframe.hasAttribute('allowfullscreen') || true,
-      style: iframe.getAttribute('style') || 'width:100%;min-height:320px;border:0;border-radius:8px;',
-    };
 
     const quill = quillRef.current?.getEditor();
-    if (tab === 'edit' && quill && QuillAny) {
-      const range = quill.getSelection(true);
-      const index = range?.index ?? quill.getLength();
-      const Delta = QuillAny.import('delta');
-      if (Delta) {
-        const delta = new Delta().retain(index).insert({ embedIframe: iframeValue }).insert('\n');
-        quill.updateContents(delta as any, 'user');
-        quill.setSelection(index + 2, 0, 'silent');
-      } else {
-        quill.clipboard.dangerouslyPasteHTML(index, `<p><iframe src="${iframeValue.src}" title="${iframeValue.title}" width="${iframeValue.width}" height="${iframeValue.height}" allow="${iframeValue.allow}" sandbox="${iframeValue.sandbox}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" frameborder="0" allowfullscreen style="${iframeValue.style}"></iframe></p><p><br></p>`);
-      }
+    if (!quill) {
+      const combined = value ? `${value}\n${sanitized}<p><br></p>` : `${sanitized}<p><br></p>`;
+      onChange(sanitizeHtml(combined));
+      setEmbedCode('');
+      setEmbedPanelError(null);
+      setShowEmbedPanel(false);
+      setTab('edit');
+      return;
+    }
+
+    const pasteDelta = quill.clipboard.convert({ html: sanitized });
+    if (!pasteDelta || !pasteDelta.ops || pasteDelta.length() === 0) {
+      setEmbedPanelError('No se reconoció contenido HTML o iframe válido para insertar.');
+      return;
+    }
+
+    const range = quill.getSelection(false);
+    const index = range?.index ?? Math.max(0, quill.getLength() - 1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const DeltaCtor = ReactQuill.Quill.import('delta') as any;
+    if (DeltaCtor) {
+      const update = new DeltaCtor().retain(index).concat(pasteDelta).insert('\n');
+      quill.updateContents(update, 'user');
+      quill.setSelection(index + pasteDelta.length() + 1, 0, 'silent');
     } else {
-      const embedHtml = `<p><iframe src="${iframeValue.src}" title="${iframeValue.title}" width="${iframeValue.width}" height="${iframeValue.height}" allow="${iframeValue.allow}" sandbox="${iframeValue.sandbox}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" frameborder="0" allowfullscreen style="${iframeValue.style}"></iframe></p><p><br></p>`;
-      const base = value || '';
-      onChange(base ? `${base}${embedHtml}` : embedHtml);
+      quill.clipboard.dangerouslyPasteHTML(index, `${sanitized}<p><br></p>`, 'user');
     }
 
     setEmbedCode('');
@@ -297,38 +430,76 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
     clipboard: { matchVisual: false },
   }), []);
 
-  const formats = useMemo(
-    () => [
-      'header', 'bold', 'italic', 'underline', 'strike',
-      'color', 'background', 'align', 'list',
-      'blockquote', 'code-block', 'link', 'image',
-      'embedIframe',
-    ],
-    []
-  );
+  const formats = useMemo(() => [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'color', 'background',
+    'align',
+    'list',
+    'blockquote', 'code-block',
+    'link', 'image', 'embedIframe',
+  ], []);
+
+  const previewHtml = useMemo(() => {
+    if (tab !== 'preview') return '';
+    return renderLessonContent(value);
+  }, [tab, value]);
 
   return (
     <Field label={label} help={help} error={error}>
       <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 px-2 py-1.5">
           <div className="flex items-center gap-1">
-            <button type="button" aria-expanded={showImagePanel} className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showImagePanel ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-cyan-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`} title="Insertar imagen" onClick={() => { setShowVideoPanel(false); setShowEmbedPanel(false); setShowImagePanel((p) => !p); }}>
-              <ImageIcon className="h-4 w-4" /><span>Imagen</span>
+            <button
+              type="button"
+              aria-expanded={showImagePanel}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showImagePanel ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-cyan-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              title="Insertar imagen"
+              onClick={() => { setShowVideoPanel(false); setShowEmbedPanel(false); setShowImagePanel((p) => !p); }}
+            >
+              <ImageIcon className="h-4 w-4" />
+              <span>Imagen</span>
             </button>
-            <button type="button" aria-expanded={showVideoPanel} className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showVideoPanel ? 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`} title="Insertar enlace de video" onClick={() => { setShowImagePanel(false); setShowEmbedPanel(false); setShowVideoPanel((p) => !p); }}>
-              <Video className="h-4 w-4 text-red-500" /><span>Video</span>
+            <button
+              type="button"
+              aria-expanded={showVideoPanel}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showVideoPanel ? 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              title="Insertar enlace de video"
+              onClick={() => { setShowImagePanel(false); setShowEmbedPanel(false); setShowVideoPanel((p) => !p); }}
+            >
+              <Video className="h-4 w-4 text-red-500" />
+              <span>Video</span>
             </button>
-            <button type="button" aria-expanded={showEmbedPanel} className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showEmbedPanel ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`} title="Insertar código HTML/Embed (iframe, simulador 3D, etc.)" onClick={() => { setShowImagePanel(false); setShowVideoPanel(false); setShowEmbedPanel((p) => !p); }}>
-              <Code2 className="h-4 w-4" /><span>Embed/HTML</span>
+            <button
+              type="button"
+              aria-expanded={showEmbedPanel}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${showEmbedPanel ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              title="Insertar código HTML/Embed (iframe, simulador 3D, etc.)"
+              onClick={() => { setShowImagePanel(false); setShowVideoPanel(false); setShowEmbedPanel((p) => !p); }}
+            >
+              <Code2 className="h-4 w-4" />
+              <span>Embed/HTML</span>
             </button>
           </div>
 
           <div className="flex items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
-            <button type="button" onClick={() => setTab('edit')} aria-pressed={tab === 'edit'} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium ${tab === 'edit' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
-              <PencilLine className="h-3.5 w-3.5" />{editLabel}
+            <button
+              type="button"
+              onClick={() => setTab('edit')}
+              aria-pressed={tab === 'edit'}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium ${tab === 'edit' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              {editLabel}
             </button>
-            <button type="button" onClick={() => setTab('preview')} aria-pressed={tab === 'preview'} className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium ${tab === 'preview' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
-              <Eye className="h-3.5 w-3.5" />{previewLabel}
+            <button
+              type="button"
+              onClick={() => setTab('preview')}
+              aria-pressed={tab === 'preview'}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium ${tab === 'preview' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {previewLabel}
             </button>
           </div>
         </div>
@@ -336,7 +507,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
         {showVideoPanel && (
           <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100"><Video className="h-3.5 w-3.5 text-red-500" /><span>Insertar enlace de video en el contenido</span></div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <Video className="h-3.5 w-3.5 text-red-500" />
+                <span>Insertar enlace de video en el contenido</span>
+              </div>
               <button type="button" onClick={() => setShowVideoPanel(false)} aria-label="Cerrar panel de video" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800"><X className="h-3.5 w-3.5" /></button>
             </div>
             {videoPanelError && <p className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">{videoPanelError}</p>}
@@ -351,21 +525,25 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
         {showEmbedPanel && (
           <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100"><Code2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" /><span>Insertar código HTML / Embed (iframe, simulador 3D, etc.)</span></div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <Code2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                <span>Insertar código HTML / Embed (iframe, simulador 3D, etc.)</span>
+              </div>
               <button type="button" onClick={() => setShowEmbedPanel(false)} aria-label="Cerrar panel embed" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800"><X className="h-3.5 w-3.5" /></button>
             </div>
             {embedPanelError && <p className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">{embedPanelError}</p>}
+            <textarea
+              value={embedCode}
+              onChange={(e) => { setEmbedCode(e.target.value); if (embedPanelError) setEmbedPanelError(null); }}
+              placeholder={'Pega aquí el código embed. Ejemplo:\n<iframe src="https://..." width="100%" height="480" allowfullscreen></iframe>'}
+              rows={5}
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-mono text-slate-800 dark:text-slate-100"
+            />
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Simuladores nativos:</span>
-              <button type="button" onClick={insertComparisonSimulatorToken} className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-2.5 py-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors">
-                <Plus className="h-3 w-3" /> Simulador: Operadores de Comparación
-              </button>
-            </div>
-            <textarea value={embedCode} onChange={(e) => { setEmbedCode(e.target.value); if (embedPanelError) setEmbedPanelError(null); }} placeholder={'Pega aquí el código embed. Ejemplo:\n<iframe src="https://..." width="100%" height="480" allowfullscreen></iframe>'} rows={5} className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-mono text-slate-800 dark:text-slate-100" />
-            <div className="flex items-center gap-2">
               <button type="button" disabled={!embedCode.trim()} onClick={handleInsertEmbedCode} className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white transition-colors"><Plus className="h-3.5 w-3.5" /><span>Insertar embed</span></button>
+              <button type="button" onClick={handleInsertSimulatorToken} className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 transition-colors"><Plus className="h-3.5 w-3.5" /><span>Simulador: Operadores de Comparación</span></button>
               <button type="button" onClick={() => setShowEmbedPanel(false)} className="inline-flex min-h-[38px] items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors">Cancelar</button>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">Solo HTTPS o rutas internas /. Scripts bloqueados.</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Solo HTTPS. Scripts bloqueados por seguridad.</span>
             </div>
           </div>
         )}
@@ -373,14 +551,17 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
         {showImagePanel && (
           <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/60 p-3 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100"><ImageIcon className="h-3.5 w-3.5 text-blue-600 dark:text-cyan-400" /><span>Insertar imagen en el contenido</span></div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <ImageIcon className="h-3.5 w-3.5 text-blue-600 dark:text-cyan-400" />
+                <span>Insertar imagen en el contenido</span>
+              </div>
               <button type="button" onClick={() => setShowImagePanel(false)} aria-label="Cerrar panel de imagen" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-800"><X className="h-3.5 w-3.5" /></button>
             </div>
             {imagePanelError && <p className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">{imagePanelError}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
-              <input type="text" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} placeholder="URL de imagen (https://... o /assets/...)" className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100" />
+              <input type="text" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleInsertUrlImage(); } }} placeholder="URL de imagen (https://... o Google Drive)" className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100" />
               <input type="text" value={imgAlt} onChange={(e) => setImgAlt(e.target.value)} placeholder="Descripción (alt)" className="min-h-[38px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-base sm:text-xs text-slate-800 dark:text-slate-100" />
-              <button type="button" disabled={!imgUrl.trim()} onClick={handleInsertUrlImage} className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"><Plus className="h-3.5 w-3.5" /><span>Vincular</span></button>
+              <button type="button" disabled={!imgUrl.trim() || uploadingImage} onClick={() => void handleInsertUrlImage()} className="inline-flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"><Plus className="h-3.5 w-3.5" /><span>Vincular</span></button>
               {canEdit && (
                 <>
                   <input ref={imageFileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void handleUploadInlineImage(e.target.files?.[0]); e.target.value = ''; }} />
@@ -410,6 +591,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
               theme="snow"
               value={value || ''}
               onChange={(content) => {
+                // Quill returns '<p><br></p>' for empty
                 const isEmpty = content === '<p><br></p>' || content === '<p></p>' || !content;
                 onChange(isEmpty ? '' : sanitizeHtml(content));
               }}
@@ -421,7 +603,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
           </div>
         ) : (
           <div className="px-4 py-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200 min-h-[180px]">
-            {value?.trim() ? (
+            {previewHtml ? (
               <RichLessonContent content={value} className="prose-sm dba-rich-content" />
             ) : (
               <p className="text-slate-400 dark:text-slate-500">{previewEmpty}</p>

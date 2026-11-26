@@ -28,10 +28,16 @@ export function clearSessionData(): void {
  * Se instala una sola vez en main.tsx.
  */
 export function installUnauthorizedInterceptor(): void {
-  if (typeof window === 'undefined') return;
-  const nativeFetch = window.fetch.bind(window);
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
 
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const win = window as Window & { __dbaFetchInterceptorInstalled?: boolean };
+  if (win.__dbaFetchInterceptorInstalled) return;
+
+  const nativeFetch = window.fetch.bind(window);
+  const wrappedFetch: typeof window.fetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
     const response = await nativeFetch(input, init);
     if (response.status === 401) {
       const rawUrl =
@@ -51,4 +57,21 @@ export function installUnauthorizedInterceptor(): void {
     }
     return response;
   };
+
+  try {
+    const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+    if (desc && (desc.writable || desc.set)) {
+      window.fetch = wrappedFetch;
+      win.__dbaFetchInterceptorInstalled = true;
+    } else if (!desc || desc.configurable) {
+      Object.defineProperty(window, 'fetch', {
+        value: wrappedFetch,
+        writable: true,
+        configurable: true,
+      });
+      win.__dbaFetchInterceptorInstalled = true;
+    }
+  } catch {
+    // Entornos con window.fetch de sólo lectura (p. ej. iframe/proxy estricto): no bloquear el arranque.
+  }
 }

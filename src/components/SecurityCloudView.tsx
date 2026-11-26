@@ -1,6 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { Cloud, Eye, EyeOff, KeyRound, Lock, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  Cloud,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Mic,
+  MicOff,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
+import { useSpeechDictation } from '../hooks/useSpeechDictation';
 import type { CloudProvider } from '../types';
 import {
   decryptTextE2EE,
@@ -13,6 +27,7 @@ import { AuthGateNotice } from './AuthGateNotice';
 export const SecurityCloudView: React.FC = () => {
   const {
     user,
+    language,
     privateInfo,
     encryptedNotes,
     e2eeFingerprint,
@@ -28,6 +43,29 @@ export const SecurityCloudView: React.FC = () => {
   const [savingNote, setSavingNote] = useState(false);
   const [decryptedMap, setDecryptedMap] = useState<Record<string, string>>({});
   const [showCiphertextMap, setShowCiphertextMap] = useState<Record<string, boolean>>({});
+
+  const appendDictatedReflection = useCallback((transcript: string) => {
+    setNotePlaintext((prev) => {
+      if (!prev.trim()) return transcript;
+      const needsSpace = !/[\s\n]$/.test(prev);
+      return `${prev}${needsSpace ? ' ' : ''}${transcript}`;
+    });
+  }, []);
+
+  const {
+    isSupported: speechSupported,
+    isListening: isDictating,
+    interimTranscript,
+    error: speechError,
+    speechLang,
+    setSpeechLang,
+    stop: stopDictation,
+    toggle: toggleDictation,
+    clearError: clearSpeechError,
+  } = useSpeechDictation({
+    initialLang: language === 'en' ? 'en-US' : 'es-DO',
+    onFinalTranscript: appendDictatedReflection,
+  });
 
   const [passphrase, setPassphrase] = useState('');
   const [exportedKey, setExportedKey] = useState('');
@@ -73,6 +111,9 @@ export const SecurityCloudView: React.FC = () => {
   const handleSaveNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteTitle.trim() || !notePlaintext.trim()) return;
+    if (isDictating) {
+      stopDictation();
+    }
     setSavingNote(true);
     try {
       await saveEncryptedNote(noteTitle, notePlaintext);
@@ -147,14 +188,99 @@ export const SecurityCloudView: React.FC = () => {
               className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100"
             />
             <textarea
-              rows={3}
+              rows={4}
               required
               value={notePlaintext}
               onChange={(e) => setNotePlaintext(e.target.value)}
-              placeholder="Este contenido se cifrará con AES-GCM-256 antes de enviarse a Firestore..."
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100"
+              placeholder="Escribe o dicta por voz tus reflexiones de aprendizaje. Este contenido se cifrará con AES-GCM-256 antes de guardarse..."
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100"
             />
-            <div className="flex justify-end">
+
+            {isDictating && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/25 px-3 py-2 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2"
+              >
+                <span className="mt-1 h-2 w-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-semibold">Escuchando dictado...</span>{' '}
+                  <span className="italic text-rose-700 dark:text-rose-300">
+                    {interimTranscript || 'Habla naturalmente para transcribir tu reflexión.'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {speechError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{speechError}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={clearSpeechError}
+                  aria-label="Cerrar aviso de micrófono"
+                  className="p-1 rounded hover:bg-amber-200/50 dark:hover:bg-amber-900/40"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleDictation}
+                  disabled={!speechSupported || savingNote}
+                  aria-pressed={isDictating}
+                  title={
+                    speechSupported
+                      ? isDictating
+                        ? 'Detener dictado por voz'
+                        : 'Dictar reflexión con el micrófono (Web Speech API)'
+                      : 'Dictado por voz no disponible en este navegador'
+                  }
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium min-h-[40px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isDictating
+                      ? 'border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {isDictating ? (
+                    <>
+                      <MicOff className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                      <span>Detener dictado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span>Dictar por voz</span>
+                    </>
+                  )}
+                </button>
+
+                {speechSupported && (
+                  <select
+                    value={speechLang}
+                    disabled={isDictating}
+                    onChange={(e) => setSpeechLang(e.target.value)}
+                    aria-label="Idioma de dictado por voz"
+                    className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-xs text-slate-700 dark:text-slate-200 min-h-[40px] disabled:opacity-60"
+                  >
+                    <option value="es-DO">Español (RD)</option>
+                    <option value="es-ES">Español (ES)</option>
+                    <option value="es-MX">Español (MX)</option>
+                    <option value="en-US">English (US)</option>
+                  </select>
+                )}
+              </div>
+
               <button
                 type="submit"
                 disabled={savingNote}

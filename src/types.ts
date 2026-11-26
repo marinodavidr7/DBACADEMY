@@ -57,6 +57,7 @@ export interface CourseLesson {
   requiredWatchPercent?: number;
   allowSpeedChange?: boolean;
   status?: 'draft' | 'published';
+  tags?: string[];
   assignmentConfig?: LessonAssignmentConfig;
 }
 
@@ -106,6 +107,7 @@ export interface Course {
   modules: CourseModule[];
   prerequisites?: string[];
   technologies?: string[];
+  tags?: string[];
   createdAt?: unknown;
   updatedAt?: unknown;
 }

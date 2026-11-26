@@ -432,7 +432,7 @@ export const CatalogView: React.FC = () => {
                   className="group rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden flex flex-col transition-colors hover:border-[var(--dba-border-strong)]"
                 >
                   <div className="aspect-video w-full bg-zinc-900 relative overflow-hidden">
-                    {course.coverImage ? (
+                    {normalizarUrlImagen(course.coverImage) ? (
                       <img
                         src={normalizarUrlImagen(course.coverImage)}
                         alt={course.title}

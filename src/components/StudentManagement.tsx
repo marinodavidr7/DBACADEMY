@@ -1067,7 +1067,7 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
                       {/* Student identity */}
                       <td className="py-3.5 px-4 align-top">
                         <div className="flex items-center gap-3">
-                          {student.photoURL ? (
+                          {normalizarUrlImagen(student.photoURL) ? (
                             <img
                               src={normalizarUrlImagen(student.photoURL)}
                               alt={student.name}
@@ -1261,7 +1261,7 @@ export const StudentManagement: React.FC<StudentManagementProps> = ({
             {/* Modal Header */}
             <div className="px-6 py-4 bg-[var(--dba-bg-hero)] text-white flex items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5 min-w-0">
-                {selectedStudent.photoURL ? (
+                {normalizarUrlImagen(selectedStudent.photoURL) ? (
                   <img
                     src={normalizarUrlImagen(selectedStudent.photoURL)}
                     alt={selectedStudent.name}

@@ -257,17 +257,24 @@ export const ImageLightboxModal: React.FC<ImageLightboxModalProps> = ({
         </div>
 
         <div className="relative flex-1 min-h-0 overflow-auto bg-white flex items-center justify-center p-2 sm:p-4">
-          <img
-            src={normalizarUrlImagen(activeModalImage.url)}
-            alt={activeModalImage.name}
-            referrerPolicy="no-referrer"
-            onClick={() => setZoomed((z) => !z)}
-            className={`cursor-zoom-in transition-all ${
-              zoomed
-                ? 'w-[150%] max-w-none h-auto cursor-zoom-out'
-                : 'max-w-full max-h-[68dvh] w-auto h-auto object-contain'
-            }`}
-          />
+          {normalizarUrlImagen(activeModalImage.url) ? (
+            <img
+              src={normalizarUrlImagen(activeModalImage.url)}
+              alt={activeModalImage.name}
+              referrerPolicy="no-referrer"
+              onClick={() => setZoomed((z) => !z)}
+              className={`cursor-zoom-in transition-all ${
+                zoomed
+                  ? 'w-[150%] max-w-none h-auto cursor-zoom-out'
+                  : 'max-w-full max-h-[68dvh] w-auto h-auto object-contain'
+              }`}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 p-8 text-slate-500">
+              <ImageIcon className="w-10 h-10 opacity-60" />
+              <p className="text-xs font-medium">{activeModalImage.name}</p>
+            </div>
+          )}
 
           {isGallery && images.length > 1 && onSelectIndex && (
             <>
@@ -888,13 +895,17 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2 md:block">
-                        <div className="relative aspect-video w-28 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white shrink-0">
-                          <img
-                            src={normalizarUrlImagen(img.url)}
-                            alt={img.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-contain"
-                          />
+                        <div className="relative aspect-video w-28 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white shrink-0 flex items-center justify-center">
+                          {normalizarUrlImagen(img.url) ? (
+                            <img
+                              src={normalizarUrlImagen(img.url)}
+                              alt={img.name}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <ImageIcon className="w-5 h-5 text-slate-400" />
+                          )}
                           <span className="absolute top-1 left-1 rounded bg-slate-900/80 px-1.5 py-0.5 font-mono tabular-nums text-[10px] font-semibold text-white">
                             {String(idx + 1).padStart(2, '0')}
                           </span>
@@ -1020,7 +1031,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
           {images.length > 0 && viewMode === 'stage' && activeImage && (
             <div className="min-w-0">
               <div className="relative bg-white dark:bg-slate-950/90">
-                {brokenIds[activeImage.id] ? (
+                {brokenIds[activeImage.id] || !normalizarUrlImagen(activeImage.url) ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-14 px-4 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400">
                     <ImageIcon className="w-7 h-7 opacity-70" />
                     <p className="text-xs font-medium text-center">{activeImage.name}</p>
@@ -1165,7 +1176,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                         }`}
                       >
                         <div className="relative h-16 w-full bg-white border-b border-slate-200/80 dark:border-slate-800 overflow-hidden">
-                          {brokenIds[img.id] ? (
+                          {brokenIds[img.id] || !normalizarUrlImagen(img.url) ? (
                             <div className="flex h-full items-center justify-center bg-slate-100 dark:bg-slate-900 text-slate-400">
                               <ImageIcon className="w-4 h-4" />
                             </div>
@@ -1203,7 +1214,8 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
           {images.length > 0 && viewMode === 'grid' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3.5 sm:p-4">
               {images.map((img, idx) => {
-                const isBroken = Boolean(brokenIds[img.id]);
+                const gridSrc = normalizarUrlImagen(img.url);
+                const isBroken = Boolean(brokenIds[img.id]) || !gridSrc;
                 return (
                   <figure
                     key={img.id}
@@ -1225,7 +1237,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                         className="group relative block w-full aspect-[16/10] bg-white text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600 border-b border-slate-200 dark:border-slate-800"
                       >
                         <img
-                          src={normalizarUrlImagen(img.url)}
+                          src={gridSrc}
                           alt={img.name}
                           loading="lazy"
                           decoding="async"

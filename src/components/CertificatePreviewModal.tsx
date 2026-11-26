@@ -129,9 +129,9 @@ export const CertificateDocumentCard: React.FC<CertificateDocumentProps> = ({
         </div>
 
         <div className="shrink-0 rounded-md border border-slate-200 bg-white p-1.5 shadow-xs">
-          {qrDataUrl ? (
+          {qrDataUrl?.trim() ? (
             <img
-              src={qrDataUrl}
+              src={qrDataUrl.trim()}
               alt={`Código QR para verificar certificado ${certificate.verificationCode}`}
               referrerPolicy="no-referrer"
               className="w-20 h-20 sm:w-22 sm:h-22 object-contain"

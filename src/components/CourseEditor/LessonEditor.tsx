@@ -596,20 +596,26 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {theoryImages.map((img, idx) => (
+            {theoryImages.map((img, idx) => {
+              const imgSrc = normalizarUrlImagen(img.url);
+              return (
               <div
                 key={img.id}
                 className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900 overflow-hidden flex flex-col"
               >
-                <div className="aspect-video bg-white dark:bg-slate-950 overflow-hidden border-b border-slate-200 dark:border-slate-800">
-                  <img
-                    src={normalizarUrlImagen(img.url)}
-                    alt={img.name}
-                    loading="lazy"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                    className="h-full w-full object-contain"
-                  />
+                <div className="aspect-video bg-white dark:bg-slate-950 overflow-hidden border-b border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                  {imgSrc ? (
+                    <img
+                      src={imgSrc}
+                      alt={img.name}
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <ImageIcon className="h-7 w-7 text-slate-400" />
+                  )}
                 </div>
                 <div className="p-2.5 space-y-2">
                   <input
@@ -675,7 +681,8 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -48,42 +48,43 @@ import {
   LEGAL_DOCUMENT_EVENT,
   type LegalDocSlug,
 } from './services/legalDocuments';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import type { AppView, Language } from './types';
 
-const CatalogView = lazy(() =>
+const CatalogView = lazyWithRetry(() =>
   import('./components/CatalogView').then((m) => ({ default: m.CatalogView }))
 );
-const CourseDetailView = lazy(() =>
+const CourseDetailView = lazyWithRetry(() =>
   import('./components/CourseDetailView').then((m) => ({ default: m.CourseDetailView }))
 );
-const CoursePlayerView = lazy(() =>
+const CoursePlayerView = lazyWithRetry(() =>
   import('./components/CoursePlayerView').then((m) => ({ default: m.CoursePlayerView }))
 );
-const InstructorDashboard = lazy(() =>
+const InstructorDashboard = lazyWithRetry(() =>
   import('./components/InstructorDashboard').then((m) => ({ default: m.InstructorDashboard }))
 );
-const ForumView = lazy(() =>
+const ForumView = lazyWithRetry(() =>
   import('./components/ForumView').then((m) => ({ default: m.ForumView }))
 );
-const CertificatesView = lazy(() =>
+const CertificatesView = lazyWithRetry(() =>
   import('./components/CertificatesView').then((m) => ({ default: m.CertificatesView }))
 );
-const CalendarTasksView = lazy(() =>
+const CalendarTasksView = lazyWithRetry(() =>
   import('./components/CalendarTasksView').then((m) => ({ default: m.CalendarTasksView }))
 );
-const SecurityCloudView = lazy(() =>
+const SecurityCloudView = lazyWithRetry(() =>
   import('./components/SecurityCloudView').then((m) => ({ default: m.SecurityCloudView }))
 );
-const ApiIntegrationsView = lazy(() =>
+const ApiIntegrationsView = lazyWithRetry(() =>
   import('./components/ApiIntegrationsView').then((m) => ({ default: m.ApiIntegrationsView }))
 );
-const UserAccountView = lazy(() =>
+const UserAccountView = lazyWithRetry(() =>
   import('./components/UserAccountView').then((m) => ({ default: m.UserAccountView }))
 );
-const LegalCenterView = lazy(() =>
+const LegalCenterView = lazyWithRetry(() =>
   import('./components/LegalCenterView').then((m) => ({ default: m.LegalCenterView }))
 );
-const LandingEditorPanel = lazy(() =>
+const LandingEditorPanel = lazyWithRetry(() =>
   import('./components/LandingEditorPanel').then((m) => ({ default: m.LandingEditorPanel }))
 );
 

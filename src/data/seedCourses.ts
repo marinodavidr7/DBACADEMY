@@ -1151,6 +1151,7 @@ export const EXCEL_INTERMEDIO_COURSE: Course = {
   instructorName: 'Equipo DB Academy',
   published: false,
   technologies: ['Excel', 'Funciones Lógicas', 'Búsqueda', 'Tablas Dinámicas', 'Gráficos', 'Power Query'],
+  tags: ['requires-simulator'],
   modulesCount: 8,
   totalLessons: 69,
   modules: [

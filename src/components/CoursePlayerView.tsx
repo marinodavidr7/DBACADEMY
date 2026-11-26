@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Archive,
@@ -64,24 +64,25 @@ import { CourseProgressBar } from './ui/CourseProgressBar';
 import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
 import { GradesPanel } from './GradesPanel';
 import { FormattedTheoryContent } from './FormattedTheoryContent';
-import { COMPARISON_SIM_TOKEN, hasComparisonSimulatorEmbed, isComparisonSimulatorSource, isHtmlContent, renderLessonContent } from '../utils/richText';
+import { isComparisonSimulatorSource, isHtmlContent, sanitizeHtml } from '../utils/richText';
 import { RichLessonContent } from './RichLessonContent';
-import { OperadoresComparacionSimulator } from './OperadoresComparacionSimulator';
+import { LogicOperatorSimulator } from './LogicOperatorSimulator';
 import { CompletionCelebration, type CelebrationEvent } from './CompletionCelebration';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
-const ExcelTopicSimulator = lazy(() =>
+const ExcelTopicSimulator = lazyWithRetry(() =>
   import('./ExcelTopicSimulator').then((m) => ({ default: m.ExcelTopicSimulator }))
 );
 
-const InteractiveExcelLab = lazy(() =>
+const InteractiveExcelLab = lazyWithRetry(() =>
   import('./InteractiveExcelLab').then((m) => ({ default: m.InteractiveExcelLab }))
 );
 
-const LearningProgressDashboard = lazy(() =>
+const LearningProgressDashboard = lazyWithRetry(() =>
   import('./LearningProgressDashboard').then((m) => ({ default: m.LearningProgressDashboard }))
 );
 
-const ExcelSimulator3D = lazy(() =>
+const ExcelSimulator3D = lazyWithRetry(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
 );
 
@@ -119,16 +120,20 @@ const typeLabel: Record<CourseMaterialType, string> = {
   other: 'Archivo',
 };
 
-const InteractiveGuideMaterial: React.FC<{ material: CourseMaterial }> = ({ material }) => (
-  <div className="w-full h-[60vh] min-h-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F1624] overflow-hidden">
-    <iframe
-      src={material.url}
-      title={material.name}
-      className="h-full w-full"
-      loading="lazy"
-    />
-  </div>
-);
+const InteractiveGuideMaterial: React.FC<{ material: CourseMaterial }> = ({ material }) => {
+  const safeUrl = (material.url || '').trim();
+  if (!safeUrl) return null;
+  return (
+    <div className="w-full h-[60vh] min-h-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F1624] overflow-hidden">
+      <iframe
+        src={safeUrl}
+        title={material.name}
+        className="h-full w-full"
+        loading="lazy"
+      />
+    </div>
+  );
+};
 
 function MaterialsTab({
   materials,
@@ -162,25 +167,32 @@ function MaterialsTab({
             return <InteractiveGuideMaterial key={mat.id} material={mat} />;
           }
           if (mat.type === 'image') {
+            const matImgSrc = normalizarUrlImagen(mat.url);
             return (
               <div
                 key={mat.id}
                 className="group flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3 py-2.5"
               >
-                <button
-                  type="button"
-                  onClick={() => onPreviewImage?.(mat)}
-                  className="shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  title="Ampliar imagen"
-                >
-                  <img
-                    src={normalizarUrlImagen(mat.url)}
-                    alt={mat.name}
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    className="w-16 h-11 object-cover"
-                  />
-                </button>
+                {matImgSrc ? (
+                  <button
+                    type="button"
+                    onClick={() => onPreviewImage?.(mat)}
+                    className="shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title="Ampliar imagen"
+                  >
+                    <img
+                      src={matImgSrc}
+                      alt={mat.name}
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-11 object-cover"
+                    />
+                  </button>
+                ) : (
+                  <div className="w-16 h-11 shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                    {getMaterialIcon(mat.type)}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                     {mat.name}
@@ -576,6 +588,16 @@ export const CoursePlayerView: React.FC = () => {
     () => getTopicSimulatorMeta(currentLesson?.id),
     [currentLesson?.id]
   );
+  const hasRequiresSimulatorTag = useMemo(() => {
+    const candidates = [
+      ...(activeCourse?.tags ?? []),
+      ...(activeCourse?.technologies ?? []),
+      ...(currentLesson?.tags ?? []),
+    ];
+    return candidates.some(
+      (tag) => String(tag || '').trim().toLowerCase() === 'requires-simulator'
+    );
+  }, [activeCourse?.tags, activeCourse?.technologies, currentLesson?.tags]);
   const topicHtmlGuide = useMemo(() => {
     const id = currentLesson?.id;
     if (id === 'les-excel-0-0') {
@@ -1275,15 +1297,17 @@ export const CoursePlayerView: React.FC = () => {
           <div className="-mx-4 min-[480px]:mx-0 rounded-none min-[480px]:rounded-xl border-y border-x-0 min-[480px]:border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden">
             {/* Compact Lesson Header */}
             <div className="relative bg-[var(--dba-bg-hero)] border-b border-zinc-800 px-4 py-4 sm:p-5 overflow-hidden">
-              <img
-                src={normalizarUrlImagen(activeCourse.coverImage)}
-                alt={currentLesson.title}
-                width={1280}
-                height={714}
-                decoding="async"
-                referrerPolicy="no-referrer"
-                className="absolute inset-y-0 right-0 w-1/2 h-full object-cover opacity-20 pointer-events-none select-none"
-              />
+              {normalizarUrlImagen(activeCourse.coverImage) && (
+                <img
+                  src={normalizarUrlImagen(activeCourse.coverImage)}
+                  alt={currentLesson.title}
+                  width={1280}
+                  height={714}
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-y-0 right-0 w-1/2 h-full object-cover opacity-20 pointer-events-none select-none"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-r from-[var(--dba-bg-hero)] via-[var(--dba-bg-hero)]/95 to-[var(--dba-bg-hero)]/60 pointer-events-none" />
               <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1.5 min-w-0">
@@ -1472,45 +1496,86 @@ export const CoursePlayerView: React.FC = () => {
                       );
                     })()}
 
-                    {/* Contenido teórico (HTML enriquecido o Markdown legado) */}
+                    {/* Contenido teórico (HTML enriquecido o Markdown legado) + Simulador Lógico condicional */}
                     {(() => {
                       const content = currentLesson.content || '';
-                      if (!content.trim() && !currentLesson.videoUrl) return null;
-                      if (!content.trim()) return null;
+                      const hasInlineComparisonSim = isComparisonSimulatorSource(content);
+                      const isComparisonLesson =
+                        currentLesson.id === 'm1-l1' ||
+                        /operadores\s+de\s+comparaci[oó]n/i.test(currentLesson.title || '');
+                      const shouldShowTagSimulator =
+                        (hasRequiresSimulatorTag || isComparisonLesson) && !hasInlineComparisonSim;
 
-                      // Nuevo contenido HTML (WYSIWYG) o embeds nativos (simuladores)
-                      if (isHtmlContent(content) || hasComparisonSimulatorEmbed(content)) {
-                        return (
-                          <RichLessonContent
-                            content={content}
-                            className="dba-rich-content text-slate-700 dark:text-slate-200 leading-relaxed text-sm max-w-none"
-                          />
-                        );
-                      }
+                      if (!content.trim() && !shouldShowTagSimulator) return null;
 
-                      // Compatibilidad con contenido Markdown legado
-                      const mainYtId = currentLesson.videoUrl ? extractYouTubeId(currentLesson.videoUrl) : null;
-                      const mainVimeoId = currentLesson.videoUrl ? extractVimeoId(currentLesson.videoUrl) : null;
-                      const renderedContentVideoIds = new Set<string>();
-                      if (mainYtId) renderedContentVideoIds.add(`yt:${mainYtId}`);
-                      if (mainVimeoId) renderedContentVideoIds.add(`vim:${mainVimeoId}`);
-
-                      const rawSegments = content
-                        .split(/(!\[[^\]]*\]\([^)\s]+\))/g)
-                        .filter(Boolean);
-
-                      if (rawSegments.length === 0) return null;
+                      const handleSimulatorInteract = () => {
+                        if (!isLessonDone) {
+                          void markSubModuleComplete(
+                            currentLesson.id,
+                            currentLesson.title,
+                            currentLesson.durationMinutes
+                          );
+                        }
+                      };
 
                       return (
-                        <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
-                          {rawSegments.map((segment, segIdx) => {
-                            const imgMatch = segment.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+                        <div className="space-y-5">
+                          {content.trim() && (isHtmlContent(content) ? (
+                            <RichLessonContent
+                              content={content}
+                              className="dba-rich-content text-slate-700 dark:text-slate-200 leading-relaxed text-sm max-w-none"
+                              onInteract={handleSimulatorInteract}
+                            />
+                          ) : (
+                            (() => {
+                              // Compatibilidad con contenido Markdown legado
+                              const mainYtId = currentLesson.videoUrl ? extractYouTubeId(currentLesson.videoUrl) : null;
+                              const mainVimeoId = currentLesson.videoUrl ? extractVimeoId(currentLesson.videoUrl) : null;
+                              const renderedContentVideoIds = new Set<string>();
+                              if (mainYtId) renderedContentVideoIds.add(`yt:${mainYtId}`);
+                              if (mainVimeoId) renderedContentVideoIds.add(`vim:${mainVimeoId}`);
+
+                              const rawSegments = content
+                                .split(/(\[\[?simulador:operadores-comparacion\]\]?|<iframe\b[^>]*>[\s\S]*?<\/iframe>|!\[[^\]]*\]\([^)\s]+\))/gi)
+                                .filter(Boolean);
+
+                              if (rawSegments.length === 0) return null;
+
+                              return (
+                                <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
+                                  {rawSegments.map((segment, segIdx) => {
+                                    const trimmedSegment = segment.trim();
+                                    if (isComparisonSimulatorSource(trimmedSegment)) {
+                                      return (
+                                        <LogicOperatorSimulator
+                                          key={`md-op-comp-${segIdx}`}
+                                          onInteract={handleSimulatorInteract}
+                                          className="my-3"
+                                        />
+                                      );
+                                    }
+
+                                    if (/^<iframe\b/i.test(trimmedSegment)) {
+                                      const safeIframeHtml = sanitizeHtml(trimmedSegment);
+                                      if (!safeIframeHtml) return null;
+                                      return (
+                                        <div
+                                          key={`md-iframe-${segIdx}`}
+                                          className="dba-embed-block my-3"
+                                          dangerouslySetInnerHTML={{ __html: safeIframeHtml }}
+                                        />
+                                      );
+                                    }
+
+                                    const imgMatch = segment.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
                             if (imgMatch) {
                               const [, altText, imgSrc] = imgMatch;
+                              const normalizedImgSrc = normalizarUrlImagen(imgSrc);
                               const isSafeSrc =
-                                /^https?:\/\//i.test(imgSrc) ||
-                                imgSrc.startsWith('/') ||
-                                /^data:image\//i.test(imgSrc);
+                                Boolean(normalizedImgSrc) &&
+                                (/^https?:\/\//i.test(normalizedImgSrc) ||
+                                  normalizedImgSrc.startsWith('/') ||
+                                  /^data:image\//i.test(normalizedImgSrc));
                               if (!isSafeSrc) return null;
                               return (
                                 <figure
@@ -1523,7 +1588,7 @@ export const CoursePlayerView: React.FC = () => {
                                       setLightboxImage({
                                         id: `md-img-${segIdx}`,
                                         name: altText || 'Imagen de la lección',
-                                        url: imgSrc,
+                                        url: normalizedImgSrc,
                                         type: 'image',
                                         sizeByte: 0,
                                         uploadedAt: '',
@@ -1532,7 +1597,7 @@ export const CoursePlayerView: React.FC = () => {
                                     className="group relative block w-full bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
                                   >
                                     <img
-                                      src={normalizarUrlImagen(imgSrc)}
+                                      src={normalizedImgSrc}
                                       alt={altText || 'Imagen de la lección'}
                                       loading="lazy"
                                       decoding="async"
@@ -1604,72 +1669,20 @@ export const CoursePlayerView: React.FC = () => {
                                 }
                               }
 
-                              if (trimmed === COMPARISON_SIM_TOKEN) {
-                                flushTextBuf();
-                                nodes.push(
-                                  <div key={`cmp-sim-${segIdx}-${nodes.length}`} className="my-4">
-                                    <OperadoresComparacionSimulator />
-                                  </div>
-                                );
-                                continue;
-                              }
-
-                              if (trimmed.startsWith('<iframe')) {
-                                const iframeMatch = segment.slice(segment.indexOf(rawLine)).match(/<iframe\b[\s\S]*?<\/iframe>/i);
-                                const iframeHtml = iframeMatch ? iframeMatch[0] : trimmed;
-                                const srcMatch = iframeHtml.match(/\bsrc=["']([^"']+)["']/i);
-                                if (srcMatch && isComparisonSimulatorSource(srcMatch[1])) {
-                                  flushTextBuf();
-                                  nodes.push(
-                                    <div key={`cmp-sim-${segIdx}-${nodes.length}`} className="my-4">
-                                      <OperadoresComparacionSimulator />
-                                    </div>
-                                  );
-                                  if (iframeMatch) {
-                                    const consumed = iframeMatch[0].split('\n').length - 1;
-                                    i += Math.max(0, consumed);
-                                  }
-                                  continue;
-                                }
-                                const sanitizedIframe = renderLessonContent(iframeHtml);
-                                if (sanitizedIframe && /<iframe\b/i.test(sanitizedIframe)) {
-                                  flushTextBuf();
-                                  nodes.push(
-                                    <div
-                                      key={`embed-${segIdx}-${nodes.length}`}
-                                      className="dba-embed-block"
-                                      dangerouslySetInnerHTML={{ __html: sanitizedIframe }}
-                                    />
-                                  );
-                                  // skip lines consumed by iframe block
-                                  if (iframeMatch) {
-                                    const consumed = iframeMatch[0].split('\n').length - 1;
-                                    i += Math.max(0, consumed);
-                                  }
-                                  continue;
-                                }
-                              }
-
                               textBuf.push(rawLine);
                             }
 
-                            flushTextBuf();
-                            return <React.Fragment key={`seg-${segIdx}`}>{nodes}</React.Fragment>;
-                          })}
-                        </div>
-                      );
-                    })()}
+                                    flushTextBuf();
+                                    return <React.Fragment key={`seg-${segIdx}`}>{nodes}</React.Fragment>;
+                                  })}
+                                </div>
+                              );
+                            })()
+                          ))}
 
-                    {(() => {
-                      const lessonId = String(currentLesson.id || '');
-                      const title = String(currentLesson.title || '').toLowerCase();
-                      const isComparisonLesson = lessonId === 'm1-l1' || /operador(es)?\s+de\s+comparaci[oó]n/.test(title);
-                      if (!isComparisonLesson) return null;
-                      const content = currentLesson.content || '';
-                      if (hasComparisonSimulatorEmbed(content)) return null;
-                      return (
-                        <div className="my-4">
-                          <OperadoresComparacionSimulator />
+                          {shouldShowTagSimulator && (
+                            <LogicOperatorSimulator onInteract={handleSimulatorInteract} />
+                          )}
                         </div>
                       );
                     })()}
@@ -2176,7 +2189,7 @@ export const CoursePlayerView: React.FC = () => {
                     </div>
                   )}
 
-                  {screenViewerMode === 'html-guide' && topicHtmlGuide ? (
+                  {screenViewerMode === 'html-guide' && topicHtmlGuide?.url?.trim() ? (
                     <div className="rounded-xl overflow-hidden border border-emerald-200 dark:border-emerald-800 shadow-md">
                       <div className="bg-emerald-50 dark:bg-emerald-950/40 px-4 py-2.5 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-800">
                         <div className="flex items-center gap-2">
@@ -2187,7 +2200,7 @@ export const CoursePlayerView: React.FC = () => {
                         </div>
                       </div>
                       <iframe
-                        src={topicHtmlGuide.url}
+                        src={topicHtmlGuide.url.trim()}
                         title={topicHtmlGuide.title}
                         className="w-full border-0"
                         style={{ height: '70vh', minHeight: '500px' }}

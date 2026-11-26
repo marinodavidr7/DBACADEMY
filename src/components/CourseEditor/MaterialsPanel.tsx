@@ -268,14 +268,16 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
 
       {materials.length > 0 && (
         <ul className="mt-3 space-y-1.5">
-          {materials.map((material) => (
+          {materials.map((material) => {
+            const materialImgSrc = material.type === 'image' ? normalizarUrlImagen(material.url) : '';
+            return (
             <li
               key={material.id}
               className="group flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2"
             >
-              {material.type === 'image' ? (
+              {material.type === 'image' && materialImgSrc ? (
                 <img
-                  src={normalizarUrlImagen(material.url)}
+                  src={materialImgSrc}
                   alt={material.name}
                   referrerPolicy="no-referrer"
                   className="h-9 w-12 shrink-0 rounded border border-slate-200 dark:border-slate-700 object-cover bg-white"
@@ -359,7 +361,8 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
                 )}
               </span>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

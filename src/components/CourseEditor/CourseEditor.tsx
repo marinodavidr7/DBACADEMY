@@ -82,6 +82,7 @@ export interface CourseInput {
   modulesCount: number;
   totalLessons: number;
   modules: CourseModule[];
+  tags?: string[];
 }
 
 export interface CourseEditorLabels {
@@ -392,6 +393,7 @@ function courseToInput(course: Course): CourseInput {
     modulesCount: course.modulesCount ?? course.modules.length,
     totalLessons: course.totalLessons ?? course.modules.reduce((acc, m) => acc + m.lessons.length, 0),
     modules: cloneModules(course.modules),
+    tags: Array.isArray(course.tags) ? [...course.tags] : [],
   };
 }
 
@@ -401,6 +403,9 @@ function buildCourseFromInput(input: CourseInput, base: Course | null): Course {
     durationMinutes: module.lessons.reduce((acc, lesson) => acc + (Number(lesson.durationMinutes) || 0), 0),
   }));
   const totalLessons = modules.reduce((acc, module) => acc + module.lessons.length, 0);
+  const cleanTags = Array.from(
+    new Set((input.tags ?? base?.tags ?? []).map((t) => String(t).trim()).filter(Boolean))
+  );
   return {
     id: base?.id ?? `crs_${newId('').replace('_', '')}`,
     title: input.title.trim(),
@@ -417,6 +422,9 @@ function buildCourseFromInput(input: CourseInput, base: Course | null): Course {
     modulesCount: modules.length,
     totalLessons,
     modules,
+    ...(base?.technologies ? { technologies: base.technologies } : {}),
+    ...(base?.prerequisites ? { prerequisites: base.prerequisites } : {}),
+    tags: cleanTags,
     createdAt: base?.createdAt,
     updatedAt: base?.updatedAt,
   };
@@ -430,6 +438,7 @@ interface CourseDetailsSectionProps {
   currency: Course['currency'];
   description: string;
   coverImage: string;
+  tags: string[];
   uploadingCover: boolean;
   generatingCover: boolean;
   courseDetailsLabel: string;
@@ -450,6 +459,7 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
   currency,
   description,
   coverImage,
+  tags,
   uploadingCover,
   generatingCover,
   courseDetailsLabel,
@@ -541,6 +551,30 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
             className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
           />
         </label>
+        <div className="md:col-span-2 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/50 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+              Simulador lógico nativo (<code className="font-mono text-[11px] text-blue-600 dark:text-blue-400">requires-simulator</code>)
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Activa esta etiqueta para inyectar automáticamente el simulador de operadores de comparación dentro de las lecciones del curso.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200 min-h-[36px]">
+            <input
+              type="checkbox"
+              checked={tags.some((t) => t.trim().toLowerCase() === 'requires-simulator')}
+              onChange={(event) => {
+                const rest = tags.filter((t) => t.trim().toLowerCase() !== 'requires-simulator');
+                onUpdateField({
+                  tags: event.target.checked ? [...rest, 'requires-simulator'] : rest,
+                });
+              }}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>Habilitar simulador</span>
+          </label>
+        </div>
       </div>
 
       <input
@@ -694,7 +728,7 @@ const CourseDetailsSection: React.FC<CourseDetailsSectionProps> = memo(({
               <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
               <span className="text-xs font-semibold">Subiendo imagen...</span>
             </div>
-          ) : coverImage ? (
+          ) : normalizarUrlImagen(coverImage) ? (
             <>
               <img src={normalizarUrlImagen(coverImage)} alt={title} decoding="async" className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-3 text-center">
@@ -1495,6 +1529,7 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
             currency={input.currency}
             description={input.description}
             coverImage={input.coverImage}
+            tags={input.tags ?? []}
             uploadingCover={uploadingCover}
             generatingCover={generatingCover}
             courseDetailsLabel={labels.actions.courseDetails}

@@ -26,18 +26,13 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-weight', 'font-style', 'text-decoration', 'text-decoration-line',
   'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom',
   'padding', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom',
-  'line-height', 'border', 'border-radius', 'width', 'max-width', 'height', 'min-height',
+  'line-height', 'border', 'border-radius', 'width', 'max-width', 'height',
   'display', 'list-style-type',
 ]);
 
 export function isSafeIframeSrc(src: string): boolean {
   const clean = (src || '').trim();
-  if (!clean) return false;
-  if (/^(javascript:|data:|vbscript:)/i.test(clean)) return false;
-  if (clean.startsWith('//')) return false;
-  if (/^https:\/\//i.test(clean)) return true;
-  if (clean.startsWith('/') && !clean.startsWith('//')) return true;
-  return false;
+  return /^https:\/\//i.test(clean) || /^\/(?!\/)/.test(clean);
 }
 
 export function sanitizeStyle(style: string): string {
@@ -52,7 +47,7 @@ export function sanitizeStyle(style: string): string {
       const val = decl.slice(idx + 1).trim();
       if (!ALLOWED_STYLE_PROPS.has(prop)) return null;
       // Block dangerous values
-      if (/url\s*\(|expression\s*\(|javascript:|@import|vbscript:/i.test(val)) return null;
+      if (/url\s*\(|expression\s*\(|javascript:|@import/i.test(val)) return null;
       return `${prop}: ${val}`;
     })
     .filter((d): d is string => Boolean(d))
@@ -126,10 +121,39 @@ export function isHtmlContent(content: string): boolean {
   if (!t) return false;
   // Quill/HTML typically starts with <p>, <h1-6>, <ul>, <ol>, <blockquote>, <div>, <pre>, <iframe>
   if (/^<(p|div|h[1-6]|ul|ol|blockquote|pre|table|hr|img|iframe)\b/i.test(t)) return true;
-  // Or contains common HTML tags (including iframe embeds)
-  if (/<\/(p|div|h[1-6]|ul|ol|li|blockquote|pre|table|span|strong|em|a|br|iframe)>/i.test(t)) return true;
-  if (/<iframe\b/i.test(t)) return true;
+  // Or contains common HTML tags
+  if (/<\/(p|div|h[1-6]|ul|ol|li|blockquote|pre|table|span|strong|em|a|br)>/i.test(t)) return true;
+  if (/<iframe\b[\s\S]*<\/iframe>/i.test(t) && !/^(#{1,6}\s|[-*]\s|\d+\.\s)/m.test(t)) return true;
   return false;
+}
+
+export const COMPARISON_SIM_TOKEN = '[[simulador:operadores-comparacion]]';
+
+export function isComparisonSimulatorSource(value: string): boolean {
+  const raw = value || '';
+  return /simulador-de-operadores-de-comparacion|operadores-comparacion\.html|dba-sim-operadores-comparacion|\[\[?simulador:operadores-comparacion\]\]?/i.test(raw);
+}
+
+export function replaceSimulatorEmbedsWithPortals(sanitizedHtml: string): string {
+  if (!sanitizedHtml) return '';
+  const portalMarkup = '<div class="dba-sim-portal dba-sim-operadores-comparacion"></div>';
+  return sanitizedHtml
+    // Wrapped iframe in embed block
+    .replace(
+      /<div\b[^>]*class=["'][^"']*dba-embed-block[^"']*["'][^>]*>\s*<iframe\b[^>]*src=["'][^"']*(?:simulador-de-operadores-de-comparacion|operadores-comparacion\.html)[^"']*["'][^>]*>\s*<\/iframe>\s*<\/div>/gi,
+      portalMarkup
+    )
+    // Standalone iframe pointing to comparison simulator
+    .replace(
+      /<iframe\b[^>]*src=["'][^"']*(?:simulador-de-operadores-de-comparacion|operadores-comparacion\.html)[^"']*["'][^>]*>\s*<\/iframe>/gi,
+      portalMarkup
+    )
+    // Paragraph-wrapped or raw simulator token
+    .replace(
+      /<p\b[^>]*>\s*\[\[?simulador:operadores-comparacion\]\]?\s*<\/p>/gi,
+      portalMarkup
+    )
+    .replace(/\[\[?simulador:operadores-comparacion\]\]?/gi, portalMarkup);
 }
 
 /** Render lesson content: HTML is sanitized; legacy Markdown is converted then returned. */
@@ -152,54 +176,7 @@ export function htmlToPlainText(html: string): string {
 export function hasMeaningfulContent(content: string): boolean {
   const raw = (content || '').trim();
   if (!raw) return false;
+  if (isComparisonSimulatorSource(raw)) return true;
   if (isHtmlContent(raw)) return htmlToPlainText(raw).length > 0 || /<img\b/i.test(raw) || /<iframe\b/i.test(raw);
   return raw.length > 0;
-}
-
-
-/** Token especial para incrustar el simulador nativo de operadores de comparación. */
-export const COMPARISON_SIM_TOKEN = '[[simulador:operadores-comparacion]]';
-
-const COMPARISON_SIM_IFRAME_RE = /<iframe\b[^>]*\bsrc=["']([^"']*operadores-comparacion(?:\.html)?[^"']*)["'][^>]*>[\s\S]*?<\/iframe>/gi;
-const COMPARISON_SIM_IFRAME_SELF_RE = /<iframe\b[^>]*\bsrc=["']([^"']*operadores-comparacion(?:\.html)?[^"']*)["'][^>]*\/?>/gi;
-
-export function isComparisonSimulatorSource(src: string): boolean {
-  const s = (src || '').trim().toLowerCase();
-  if (!s) return false;
-  return (
-    s.includes('operadores-comparacion.html') ||
-    s.includes('/simuladores/operadores-comparacion') ||
-    s.endsWith('operadores-comparacion')
-  );
-}
-
-export function hasComparisonSimulatorEmbed(content: string): boolean {
-  const t = content || '';
-  if (t.includes(COMPARISON_SIM_TOKEN)) return true;
-  COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
-  COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
-  if (COMPARISON_SIM_IFRAME_RE.test(t) || COMPARISON_SIM_IFRAME_SELF_RE.test(t)) {
-    COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
-    COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
-    return true;
-  }
-  COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
-  COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
-  return /<iframe\b[^>]*operadores-comparacion/i.test(t);
-}
-
-/** Reemplaza tokens/iframes del simulador por un div marcador para montar el componente React vía portal. */
-export function replaceComparisonSimulatorEmbeds(html: string): string {
-  let out = html || '';
-  if (!out) return out;
-  // Token en texto (puede venir dentro de <p>...)</p>
-  out = out.split(COMPARISON_SIM_TOKEN).join('<div data-sim="operadores-comparacion" class="dba-sim-operadores-comparacion"></div>');
-  // iframes que apuntan al simulador
-  out = out.replace(/<iframe\b[^>]*\bsrc=["']([^"']+)["'][^>]*>(?:[\s\S]*?<\/iframe>)?/gi, (match, src) => {
-    if (isComparisonSimulatorSource(String(src || ''))) {
-      return '<div data-sim="operadores-comparacion" class="dba-sim-operadores-comparacion"></div>';
-    }
-    return match;
-  });
-  return out;
 }

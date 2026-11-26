@@ -11,7 +11,7 @@
  * (construcción lazy: el error sucede en la primera operación).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { cleanWrite, rowToSnapshot, toSnake, type DocRef, type DocSnapshot, type Snapshot } from './firestoreAdapter';
+import { cleanWrite, rowToSnapshot, toSnake, type DocRef, type DocSnapshot, type Snapshot } from './utils.ts';
 
 let client: SupabaseClient | null = null;
 

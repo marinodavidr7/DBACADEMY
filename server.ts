@@ -5,15 +5,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import express from 'express';
+import nodemailer from 'nodemailer';
 import Stripe from 'stripe';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   getSupabaseServiceClient,
   isSupabaseAdminConfigured,
   serverDb,
-} from './src/lib/supabase/serverClient';
-import { getLegalDocumentByFile } from './src/services/legalDocuments';
-import type { Coupon, CouponRedemption, Referral, ReferralSettings } from './src/types';
+} from './src/lib/supabase/serverClient.ts';
+import { getLegalDocumentByFile } from './src/services/legalDocuments.ts';
+import type { Coupon, CouponRedemption, Referral, ReferralSettings } from './src/types.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2047,6 +2048,10 @@ export function createApp(): express.Express {
 
   // Lectura pública: la landing debe mostrar lo mismo para todos los visitantes.
   app.get('/api/landing-config', async (_req, res) => {
+    if (!isSupabaseAdminConfigured()) {
+      res.json({ config: null });
+      return;
+    }
     try {
       const { data, error } = await getSupabaseServiceClient()
         .from('settings')
@@ -2666,6 +2671,329 @@ export function createApp(): express.Express {
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.end(data);
     });
+  });
+
+  // ─── NOTIFICACIONES POR CORREO DE NUEVAS INSCRIPCIONES ─────────────────
+  const sentEnrollmentEmailIds = new Set<string>();
+
+  function escapeEmailHtml(raw: unknown): string {
+    return String(raw ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getAdminNotificationRecipient(): string {
+    const raw = (process.env.ADMIN_NOTIFICATION_EMAIL || AUTHORIZED_ADMIN_EMAIL).trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : AUTHORIZED_ADMIN_EMAIL;
+  }
+
+  function getEmailProviderStatus(): {
+    configured: boolean;
+    provider: 'resend' | 'smtp' | 'none';
+    recipient: string;
+  } {
+    const recipient = getAdminNotificationRecipient();
+    if (process.env.RESEND_API_KEY?.trim()) {
+      return { configured: true, provider: 'resend', recipient };
+    }
+    if (process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim()) {
+      return { configured: true, provider: 'smtp', recipient };
+    }
+    return { configured: false, provider: 'none', recipient };
+  }
+
+  async function sendTransactionalEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<{ sent: boolean; provider: 'resend' | 'smtp' | 'none'; reason?: string }> {
+    const status = getEmailProviderStatus();
+    if (!status.configured) {
+      return {
+        sent: false,
+        provider: 'none',
+        reason: 'Configura SMTP_USER + SMTP_PASS (Gmail App Password) o RESEND_API_KEY en las variables de entorno del servidor.',
+      };
+    }
+
+    if (status.provider === 'resend') {
+      const apiKey = process.env.RESEND_API_KEY!.trim();
+      const from = process.env.RESEND_FROM_EMAIL?.trim() || 'Cátedra DB Academy <onboarding@resend.dev>';
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: [params.to],
+          subject: params.subject,
+          html: params.html,
+          text: params.text,
+        }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        throw new Error(`Resend HTTP ${resp.status}: ${detail.slice(0, 200)}`);
+      }
+      return { sent: true, provider: 'resend' };
+    }
+
+    const smtpUser = process.env.SMTP_USER!.trim();
+    const smtpPass = process.env.SMTP_PASS!.trim();
+    const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+    const smtpPort = Number(process.env.SMTP_PORT || 465);
+    const smtpFrom = process.env.SMTP_FROM?.trim() || `Cátedra DB Academy <${smtpUser}>`;
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+    });
+
+    return { sent: true, provider: 'smtp' };
+  }
+
+  function buildEnrollmentEmailContent(params: {
+    studentName: string;
+    studentEmail: string;
+    studentId: string;
+    courseTitle: string;
+    courseId: string;
+    gateway: string;
+    amountCents: number;
+    currency: string;
+    couponCode?: string;
+    isTest?: boolean;
+  }) {
+    const safeName = escapeEmailHtml(params.studentName || 'Estudiante');
+    const safeEmail = escapeEmailHtml(params.studentEmail || 'Sin correo');
+    const safeCourse = escapeEmailHtml(params.courseTitle || params.courseId);
+    const safeGateway = escapeEmailHtml(params.gateway.toUpperCase());
+    const safeCoupon = params.couponCode ? escapeEmailHtml(params.couponCode) : '';
+    const amountLabel =
+      params.amountCents <= 0
+        ? 'Gratuito'
+        : `${escapeEmailHtml(params.currency)} ${(params.amountCents / 100).toFixed(2)}`;
+    const timestamp = new Date().toLocaleString('es-DO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    const subjectPrefix = params.isTest ? '[PRUEBA] ' : '';
+    const subject = `${subjectPrefix}Nueva inscripción en ${params.courseTitle.slice(0, 80)}: ${params.studentName.slice(0, 50)}`;
+
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:24px;background-color:#f8fafc;font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+    <div style="background:#0f172a;padding:20px 24px;color:#ffffff;">
+      <p style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#38bdf8;font-weight:700;">
+        Cátedra DB Academy · Alerta de Matrícula
+      </p>
+      <h1 style="margin:6px 0 0;font-size:20px;line-height:1.3;">
+        ${params.isTest ? 'Prueba de notificación de inscripción' : '¡Se inscribió un alumno nuevo!'}
+      </h1>
+    </div>
+    <div style="padding:24px;font-size:14px;line-height:1.6;">
+      <p style="margin:0 0 16px;">Se ha registrado una nueva matrícula en la plataforma con los siguientes detalles:</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;width:140px;">Alumno</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;">${safeName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Correo</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeEmail}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Curso</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1d4ed8;">${safeCourse}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Método / Pasarela</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeGateway}${safeCoupon ? ` (Cupón: ${safeCoupon})` : ''}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Importe</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:700;">${amountLabel}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;">Fecha</td>
+          <td style="padding:8px 0;">${escapeEmailHtml(timestamp)}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+
+    const text = [
+      params.isTest ? '[PRUEBA] Nueva inscripción en Cátedra DB Academy' : '¡Se inscribió un alumno nuevo en Cátedra DB Academy!',
+      `Alumno: ${params.studentName}`,
+      `Correo: ${params.studentEmail}`,
+      `Curso: ${params.courseTitle}`,
+      `Método: ${params.gateway.toUpperCase()}${params.couponCode ? ` (Cupón: ${params.couponCode})` : ''}`,
+      `Importe: ${params.amountCents <= 0 ? 'Gratuito' : `${params.currency} ${(params.amountCents / 100).toFixed(2)}`}`,
+      `Fecha: ${timestamp}`,
+    ].join('\n');
+
+    return { subject, html, text };
+  }
+
+  app.post('/api/notifications/enrollment', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    if (!checkRateLimit(`enroll_email:${auth.uid}`, 15, 60 * 60 * 1000)) {
+      res.status(429).json({ error: 'Límite de notificaciones de matrícula alcanzado.' });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const courseId = String(body.courseId || '').trim().slice(0, 128);
+    const courseTitle = String(body.courseTitle || '').trim().slice(0, 140);
+    if (!courseId || !courseTitle) {
+      res.status(400).json({ error: 'courseId y courseTitle son obligatorios.' });
+      return;
+    }
+
+    const enrollmentId = String(body.enrollmentId || `${courseId}_${auth.uid}`).trim().slice(0, 180);
+    const studentEmail = (auth.email || String(body.studentEmail || '')).trim().slice(0, 200);
+    const studentName = String(body.studentName || studentEmail || 'Estudiante').trim().slice(0, 100);
+    const gateway = String(body.gateway || 'free').trim().slice(0, 32);
+    const currency = String(body.currency || 'DOP').trim().slice(0, 8).toUpperCase();
+    const amountCents = Math.max(0, Math.round(Number(body.amountCents || 0)));
+    const couponCode = typeof body.couponCode === 'string' ? body.couponCode.trim().slice(0, 40) : undefined;
+
+    if (sentEnrollmentEmailIds.has(enrollmentId)) {
+      res.json({ ok: true, emailed: false, deduplicated: true, recipient: getAdminNotificationRecipient() });
+      return;
+    }
+    if (sentEnrollmentEmailIds.size >= 5000) {
+      sentEnrollmentEmailIds.clear();
+    }
+    sentEnrollmentEmailIds.add(enrollmentId);
+
+    broadcastEvent({
+      type: 'NEW_ENROLLMENT',
+      scope: 'global',
+      enrollmentId,
+      courseId,
+      courseTitle,
+      studentId: auth.uid,
+      studentName,
+      studentEmail,
+      gateway,
+      amountCents,
+      currency,
+    });
+
+    const recipient = getAdminNotificationRecipient();
+    try {
+      const content = buildEnrollmentEmailContent({
+        studentName,
+        studentEmail,
+        studentId: auth.uid,
+        courseTitle,
+        courseId,
+        gateway,
+        amountCents,
+        currency,
+        couponCode,
+      });
+      const result = await sendTransactionalEmail({
+        to: recipient,
+        ...content,
+      });
+      if (!result.sent) {
+        console.info(`[enrollment-email] Matrícula ${enrollmentId} registrada sin envío SMTP/Resend (${result.reason})`);
+      }
+      res.json({
+        ok: true,
+        emailed: result.sent,
+        provider: result.provider,
+        recipient,
+        ...(result.reason ? { reason: result.reason } : {}),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error enviando correo de inscripción';
+      console.error('[enrollment-email] Error al enviar notificación:', msg);
+      res.json({
+        ok: true,
+        emailed: false,
+        provider: getEmailProviderStatus().provider,
+        recipient,
+        reason: msg,
+      });
+    }
+  });
+
+  app.get('/api/admin/email-status', async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    res.json(getEmailProviderStatus());
+  });
+
+  app.post('/api/admin/test-enrollment-email', async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    if (!checkRateLimit('admin_test_email', 10, 60 * 60 * 1000)) {
+      res.status(429).json({ error: 'Espera unos minutos antes de enviar otro correo de prueba.' });
+      return;
+    }
+
+    const status = getEmailProviderStatus();
+    if (!status.configured) {
+      res.status(400).json({
+        error: 'Falta configurar SMTP_USER y SMTP_PASS (contraseña de aplicación de Gmail) o RESEND_API_KEY en Settings → Secrets.',
+        ...status,
+      });
+      return;
+    }
+
+    try {
+      const content = buildEnrollmentEmailContent({
+        studentName: 'Alumno de Prueba',
+        studentEmail: 'prueba@catedradbacademy.com',
+        studentId: 'test-student',
+        courseTitle: 'Excel Intermedio: Funciones Avanzadas',
+        courseId: 'excel-intermedio-01',
+        gateway: 'free',
+        amountCents: 0,
+        currency: 'DOP',
+        isTest: true,
+      });
+      const result = await sendTransactionalEmail({
+        to: status.recipient,
+        ...content,
+      });
+      res.json({
+        ok: true,
+        emailed: result.sent,
+        provider: result.provider,
+        recipient: status.recipient,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo enviar el correo de prueba.';
+      res.status(502).json({ error: msg, provider: status.provider, recipient: status.recipient });
+    }
   });
 
   return app;

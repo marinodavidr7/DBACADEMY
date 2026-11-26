@@ -1,119 +1,103 @@
 /**
- * Firestore API adapter → Supabase (Postgres).
- *
- * DBACADEMY está en proceso de migrar a Supabase; este adaptador expone la
- * superficie de la API de Firestore que usan PlatformContext, ForumView,
- * StudentManagement y CertificatesView (collection/doc/query/where/getDocs/
- * setDoc/updateDoc/deleteDoc/serverTimestamp/writeBatch/onSnapshot).
- *
- * Semántica v1:
- * - `serverTimestamp()` se materializa como ISO 8601 en writes.
- * - `onSnapshot()` funciona con polling (1.5 s), es un PUENTE temporal;
- *   Postgres con PostgREST streams su propia forma de hacerlo en el futuro.
- * - Tablas: una tabla por colección de Firestore (ver supabase/migrations/).
- *
- * Nota: `Timestamp` es un shim mínimo para cumplir imports de tipos antiguos.
+ * Firestore API adapter → Supabase (Postgres), con fallback automático a Firebase Firestore
+ * cuando las variables de entorno de Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+ * no están configuradas en el entorno actual (p. ej. preview de AI Studio).
  */
-import { getSupabaseClient } from './client';
-import { auth, isAuthorizedAdminEmail } from '../../firebase';
+import {
+  collection as fsCollection,
+  deleteDoc as fsDeleteDoc,
+  doc as fsDoc,
+  enableNetwork as fsEnableNetwork,
+  getDoc as fsGetDoc,
+  getDocs as fsGetDocs,
+  onSnapshot as fsOnSnapshot,
+  orderBy as fsOrderBy,
+  query as fsQuery,
+  runTransaction as fsRunTransaction,
+  serverTimestamp as fsServerTimestamp,
+  setDoc as fsSetDoc,
+  Timestamp,
+  updateDoc as fsUpdateDoc,
+  where as fsWhere,
+  writeBatch as fsWriteBatch,
+  type DocumentData,
+  type DocumentReference,
+  type DocumentSnapshot as FsDocumentSnapshot,
+  type Query,
+  type QueryConstraint,
+  type SetOptions,
+  type WhereFilterOp,
+} from 'firebase/firestore';
+import { getSupabaseClient, isSupabaseConfigured } from './client';
+import {
+  cleanWrite,
+  pkFor,
+  rowToSnapshot,
+  snakeToCamel,
+  toSnake,
+  type DocRef,
+  type DocSnapshot,
+  type Row,
+  type Snapshot,
+} from './utils';
+import { auth, db as firestoreDb, isAuthorizedAdminEmail } from '../../firebase';
 
-export { getSupabaseClient };
+export { getSupabaseClient, isSupabaseConfigured };
+export { cleanWrite, rowToSnapshot, toSnake, snakeToCamel };
+export type { DocRef, DocSnapshot, Snapshot };
+export { Timestamp };
 
-type Row = Record<string, any>;
 type Where = { col: string; op: string; val: any };
-
-export interface DocRef {
-  id: string;
-  _table: string;
-}
-
-export interface DocSnapshot {
-  id: string;
-  data: () => Row;
-  exists: () => boolean;
-  ref: DocRef;
-}
-
-export interface Snapshot {
-  docs: DocSnapshot[];
-  empty: boolean;
-}
-
-/* ---------------------------------- utilidades ---------------------------------- */
 
 const SERVER_TS_MARKER = { __serverTimestamp: true as const };
 
-function pkFor(table: string): string {
-  if (table === 'users' || table === 'users_private') return 'uid';
-  if (table === 'settings') return 'key';
-  return 'id';
-}
-
 /** Marcador de firebase-compat para usar en writes (Placeholder de Firestore). */
-export function serverTimestamp(): typeof SERVER_TS_MARKER {
-  return { ...SERVER_TS_MARKER };
+export function serverTimestamp(): any {
+  return isSupabaseConfigured() ? { ...SERVER_TS_MARKER } : fsServerTimestamp();
 }
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
+/* -------------------------- Firestore fallback helpers -------------------------- */
 
-function cleanWriteValue(v: any): any {
-  if (v && typeof v === 'object' && v.__serverTimestamp === true) return nowIso();
-  if (Array.isArray(v)) return v.map(cleanWriteValue);
-  if (v && typeof v === 'object' && !(v instanceof Date) && !(v instanceof Uint8Array)) {
-    const out: Row = {};
-    for (const k of Object.keys(v)) out[k] = cleanWriteValue((v as Row)[k]);
-    return out;
+function toFsDocRef(ref: DocRef): DocumentReference<DocumentData> {
+  if (ref._fsPath && ref._fsPath.length >= 2) {
+    const [first, ...rest] = ref._fsPath;
+    return fsDoc(firestoreDb, first, ...rest);
   }
-  return v;
+  return fsDoc(firestoreDb, ref._table, ref.id);
 }
 
-export function cleanWrite(data: Row): Row {
-  const out: Row = {};
-  for (const k of Object.keys(data ?? {})) {
-    const key = toSnake(k);
-    out[key === 'id' ? 'id' : key] = cleanWriteValue(data[k]);
+function toFsQuery(q: CollectionQuery): Query<DocumentData> {
+  const [first, ...rest] = q.path.length > 0 ? q.path : [q.table];
+  const base = fsCollection(firestoreDb, first, ...rest);
+  const constraints: QueryConstraint[] = q.filters.map((f) =>
+    fsWhere(f.col, f.op as WhereFilterOp, f.val)
+  );
+  if (q.order) {
+    constraints.push(fsOrderBy(q.order.col, q.order.desc ? 'desc' : 'asc'));
   }
-  return out;
+  return constraints.length > 0 ? fsQuery(base, ...constraints) : base;
 }
 
-export function toSnake(key: string): string {
-  if (!/[A-Z]/.test(key)) return key;
-  return key
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-    .replace(/([a-z\d])([A-Z])/g, '$1_$2')
-    .toLowerCase();
-}
-
-export function snakeToCamel(key: string): string {
-  return key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
-}
-
-export function rowToSnapshot(row: Row | null, table = 'unknown_table'): DocSnapshot {
-  const pk = pkFor(table);
-  const rowId = row ? String(row[pk] ?? row.id ?? '') : '';
-  const out: Row = {};
-  if (row) {
-    for (const key of Object.keys(row)) {
-      out[snakeToCamel(key)] = row[key];
-    }
-    // Ensure both id and pk alias are present in data for compatibility
-    out.id = rowId;
-    if (pk !== 'id') out[snakeToCamel(pk)] = rowId;
-  }
+function wrapFsDocSnap(
+  fsSnap: FsDocumentSnapshot<DocumentData>,
+  table: string,
+  fsPath?: string[]
+): DocSnapshot {
+  const pathParts =
+    fsPath ?? (fsSnap.ref?.path ? fsSnap.ref.path.split('/') : [table, fsSnap.id]);
+  const raw = fsSnap.exists() ? (fsSnap.data() as Row) : null;
   return {
-    id: rowId,
-    data: () => out,
-    exists: () => Boolean(row),
-    ref: { id: rowId, _table: table },
+    id: fsSnap.id,
+    data: () => (raw ? { ...raw, id: raw.id ?? fsSnap.id } : {}),
+    exists: () => fsSnap.exists(),
+    ref: { id: fsSnap.id, _table: table, _fsPath: pathParts },
   };
 }
 
+/* ---------------------------------- Supabase helpers ---------------------------------- */
+
 async function singleRow(table: string, id: string): Promise<Row | null> {
   if (SERVER_TABLES.has(table)) {
-    // El admin always usa el proxy con service_role. Un estudiante sólo puede
-    // ver su propia gift card por código; el resto mantiene el comportamiento previo.
     if (isAdminUser()) {
       const res = await adminFetch('GET', `/api/admin/${table}/${encodeURIComponent(id)}`);
       if (res.status === 404) return null;
@@ -177,26 +161,25 @@ class CollectionQuery {
   constructor(
     public table: string,
     public filters: Where[] = [],
-    public order?: { col: string; desc?: boolean }
+    public order?: { col: string; desc?: boolean },
+    public path: string[] = [table]
   ) {}
 
   where(col: string, op: string, val: any): CollectionQuery {
-    return new CollectionQuery(this.table, [...this.filters, { col, op, val }], this.order);
+    return new CollectionQuery(this.table, [...this.filters, { col, op, val }], this.order, this.path);
   }
 
   orderBy(col: string, dir: 'asc' | 'desc' = 'asc'): CollectionQuery {
-    return new CollectionQuery(this.table, this.filters, { col, desc: dir === 'desc' });
+    return new CollectionQuery(this.table, this.filters, { col, desc: dir === 'desc' }, this.path);
   }
 
   doc(id: string): DocRef {
-    return { id, _table: this.table };
+    return { id, _table: this.table, _fsPath: [...this.path, id] };
   }
 
   async get(): Promise<Snapshot> {
     return getDocs(this);
   }
-
-  /* Interfaz usada: PlatformContext */
 }
 
 function collectionTable(path: string[]): string {
@@ -206,7 +189,7 @@ function collectionTable(path: string[]): string {
 }
 
 export function collection(_db: unknown, ...path: string[]): CollectionQuery {
-  return new CollectionQuery(collectionTable(path));
+  return new CollectionQuery(collectionTable(path), [], undefined, path);
 }
 
 export function where(col: string, op: string, val: any): Where {
@@ -220,6 +203,11 @@ export function query(q: CollectionQuery, ...wheres: Where[]): CollectionQuery {
 }
 
 export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
+  if (!isSupabaseConfigured()) {
+    const snap = await fsGetDocs(toFsQuery(q));
+    const docs = snap.docs.map((d) => wrapFsDocSnap(d, q.table, [...q.path, d.id]));
+    return { docs, empty: docs.length === 0 };
+  }
   if (SERVER_TABLES.has(q.table) && isAdminUser()) {
     // Listados del panel de administración: se sirven con service_role.
     const res = await adminFetch('GET', `/api/admin/${q.table}`);
@@ -251,14 +239,8 @@ export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
 
 /* --------------------------------- refs --------------------------------- */
 
-/**
- * Tablas cuyas escrituras (insert/update/delete) se redirigen al backend
- * admin (server.ts con service_role) porque RLS solo permite lectura pública.
- */
 const ADMIN_WRITE_TABLES = new Set(['courses', 'gift_cards', 'gift_card_redemptions']);
 
-/** Tablas con RLS sólo para service_role: se leen/escriben vía backend, nunca con la key anónima. */
-// `courses` tiene lectura pública (public_read) y se sigue leyendo con la key del cliente.
 const SERVER_TABLES = new Set([
   'gift_cards', 'gift_card_redemptions', 'enrollments', 'payments', 'certificates', 'users_private',
 ]);
@@ -277,7 +259,6 @@ async function adminFetch(
   return fetch(path, { method, headers, body: body != null ? JSON.stringify(body) : undefined });
 }
 
-/** Extrae el motivo real del error del backend (antes sólo se veía "Not Found"). */
 async function adminError(res: Response): Promise<string> {
   const body = await res.json().catch(() => null) as { error?: unknown } | null;
   const detail = typeof body?.error === 'string' && body.error.trim() ? body.error.trim() : res.statusText;
@@ -285,15 +266,24 @@ async function adminError(res: Response): Promise<string> {
 }
 
 export async function getDoc(ref: DocRef): Promise<DocSnapshot> {
+  if (!isSupabaseConfigured()) {
+    const fsSnap = await fsGetDoc(toFsDocRef(ref));
+    return wrapFsDocSnap(fsSnap, ref._table, ref._fsPath);
+  }
   const row = await singleRow(ref._table, ref.id);
-  return rowToSnapshot(row);
+  return rowToSnapshot(row, ref._table);
 }
 
-export async function setDoc(ref: DocRef, data: Row, _options?: unknown): Promise<void> {
+export async function setDoc(ref: DocRef, data: Row, options?: unknown): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    if (options && typeof options === 'object') {
+      await fsSetDoc(toFsDocRef(ref), data, options as SetOptions);
+    } else {
+      await fsSetDoc(toFsDocRef(ref), data);
+    }
+    return;
+  }
   if (ADMIN_WRITE_TABLES.has(ref._table)) {
-    // PUT /api/admin/:table/:id ya es un UPSERT en el servidor (crea o actualiza).
-    // No se hace fallback a POST: si la ruta PUT no existe, el POST tampoco y
-    // sólo convierte el error en un engañoso "Not Found" (issue courses.set).
     const res = await adminFetch(
       'PUT',
       `/api/admin/${ref._table}/${encodeURIComponent(ref.id)}`,
@@ -322,6 +312,10 @@ export async function setDoc(ref: DocRef, data: Row, _options?: unknown): Promis
 }
 
 export async function updateDoc(ref: DocRef, data: Row, _options?: unknown): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    await fsUpdateDoc(toFsDocRef(ref), data);
+    return;
+  }
   if (ADMIN_WRITE_TABLES.has(ref._table)) {
     const res = await adminFetch(
       'PUT',
@@ -341,6 +335,10 @@ export async function updateDoc(ref: DocRef, data: Row, _options?: unknown): Pro
 }
 
 export async function deleteDoc(ref: DocRef): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    await fsDeleteDoc(toFsDocRef(ref));
+    return;
+  }
   if (ADMIN_WRITE_TABLES.has(ref._table)) {
     const res = await adminFetch('DELETE', `/api/admin/${ref._table}/${encodeURIComponent(ref.id)}`);
     if (!res.ok) throw new Error(`Admin ${ref._table}.delete failed: ${await adminError(res)}`);
@@ -352,21 +350,18 @@ export async function deleteDoc(ref: DocRef): Promise<void> {
 }
 
 /**
- * Marcador aplicado por PlatformContext con `collection(db, 'x')`; el valor
- * real no se usa porque todas las operaciones vienen argumentadas.
+ * En Supabase no se usa el objeto `db`; cuando cae en fallback Firestore usa la instancia real.
  */
-export const db: unknown = undefined;
+export const db: unknown = firestoreDb;
 
-export function doc(db: unknown, ...path: string[]): DocRef {
+export function doc(_db: unknown, ...path: string[]): DocRef {
   // Documentos anidados: users/{uid}/private/info → tabla users_private (id = uid)
   if (path[0] === 'users' && path.length >= 3 && path[2]?.toLowerCase() === 'private') {
-    return { id: String(path[1]), _table: 'users_private' };
+    return { id: String(path[1]), _table: 'users_private', _fsPath: path };
   }
-  // path = ['collection', 'docId']  → table=collection, id=docId
-  // path = ['col', 'parentId', 'subCol', 'docId'] → table=subCol, id=docId
-  const table = toSnake(path[path.length - 2]);  // colección (penúltimo)
-  const id    = path[path.length - 1];           // id del documento (último)
-  return { id: String(id), _table: table };
+  const table = toSnake(path[path.length - 2]);
+  const id = path[path.length - 1];
+  return { id: String(id), _table: table, _fsPath: path };
 }
 
 /* ------------------------------ write batch ------------------------------ */
@@ -386,6 +381,32 @@ interface PendingOp {
 }
 
 export function writeBatch(_db: unknown): Batch {
+  if (!isSupabaseConfigured()) {
+    const fsBatch = fsWriteBatch(firestoreDb);
+    const wrapped: Batch = {
+      set(ref, data, options) {
+        if (options && typeof options === 'object') {
+          fsBatch.set(toFsDocRef(ref), data, options as SetOptions);
+        } else {
+          fsBatch.set(toFsDocRef(ref), data);
+        }
+        return wrapped;
+      },
+      update(ref, data) {
+        fsBatch.update(toFsDocRef(ref), data);
+        return wrapped;
+      },
+      delete(ref) {
+        fsBatch.delete(toFsDocRef(ref));
+        return wrapped;
+      },
+      commit() {
+        return fsBatch.commit();
+      },
+    };
+    return wrapped;
+  }
+
   const ops: PendingOp[] = [];
   return {
     set(ref: DocRef, data: Row, _options?: unknown) {
@@ -424,7 +445,6 @@ export function writeBatch(_db: unknown): Batch {
           const { error } = await getSupabaseClient().from(op.table).delete().eq(pk, op.id).select(pk).maybeSingle();
           if (error) throw new Error(`Supabase ${op.table}.batch.delete failed: ${error.message}`);
         } else if (op.type === 'insert') {
-          // upsert semantics for set
           const { error } = await getSupabaseClient().from(op.table).upsert(op.data ?? {}, { onConflict: pk }).select(pk).maybeSingle();
           if (error) throw new Error(`Supabase ${op.table}.batch.insert failed: ${error.message}`);
         } else {
@@ -439,19 +459,33 @@ export function writeBatch(_db: unknown): Batch {
 /* --------------------------------- misc API --------------------------------- */
 
 export function enableNetwork(_db: unknown): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    return fsEnableNetwork(firestoreDb);
+  }
   return Promise.resolve();
 }
 
-export class Timestamp {
-  private readonly _iso: string;
-  private constructor(iso: string) { this._iso = iso; }
-  static fromDate(date: Date): Timestamp { return new Timestamp(date.toISOString()); }
-  toDate(): Date { return new Date(this._iso); }
-  toMillis(): number { return this.toDate().getTime(); }
-  toISOString(): string { return this._iso; }
-}
-
 export async function runTransaction(_db: unknown, fn: (tx: any) => Promise<any> | any): Promise<any> {
+  if (!isSupabaseConfigured()) {
+    return fsRunTransaction(firestoreDb, async (fsTx) => {
+      const tx = {
+        get: async (ref: DocRef) => {
+          const snap = await fsTx.get(toFsDocRef(ref));
+          return wrapFsDocSnap(snap, ref._table, ref._fsPath);
+        },
+        set: (ref: DocRef, data: Row, options?: unknown) => {
+          if (options && typeof options === 'object') {
+            fsTx.set(toFsDocRef(ref), data, options as SetOptions);
+          } else {
+            fsTx.set(toFsDocRef(ref), data);
+          }
+        },
+        update: (ref: DocRef, data: Row) => fsTx.update(toFsDocRef(ref), data),
+        delete: (ref: DocRef) => fsTx.delete(toFsDocRef(ref)),
+      };
+      return fn(tx);
+    });
+  }
   const tx = {
     get: (ref: DocRef) => getDoc(ref),
     set: (ref: DocRef, data: Row) => setDoc(ref, data),
@@ -479,6 +513,35 @@ export function onSnapshot(
   errorListener?: (err: any) => void
 ): () => void {
   const isQuery = 'table' in target && 'filters' in target;
+
+  if (!isSupabaseConfigured()) {
+    if (isQuery) {
+      const q = target as CollectionQuery;
+      return fsOnSnapshot(
+        toFsQuery(q),
+        (fsSnap) => {
+          const docs = fsSnap.docs.map((d) => wrapFsDocSnap(d, q.table, [...q.path, d.id]));
+          listener({ docs, empty: docs.length === 0 });
+        },
+        (err) => {
+          if (errorListener) errorListener(err);
+          else console.warn('Firestore onSnapshot query error:', err);
+        }
+      );
+    }
+    const ref = target as DocRef;
+    return fsOnSnapshot(
+      toFsDocRef(ref),
+      (fsSnap) => {
+        listener(wrapFsDocSnap(fsSnap, ref._table, ref._fsPath));
+      },
+      (err) => {
+        if (errorListener) errorListener(err);
+        else console.warn('Firestore onSnapshot doc error:', err);
+      }
+    );
+  }
+
   let lastHash = '';
   const poll = async () => {
     try {

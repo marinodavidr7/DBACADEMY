@@ -328,7 +328,7 @@ export const CourseDetailView: React.FC = () => {
         {/* Sticky Sidebar Card */}
         <aside className="xl:sticky xl:top-20 rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-surface)] overflow-hidden">
           <div className="w-full aspect-[16/10] bg-zinc-900 relative overflow-hidden">
-            {course.coverImage ? (
+            {normalizarUrlImagen(course.coverImage) ? (
               <img
                 src={normalizarUrlImagen(course.coverImage)}
                 alt={course.title}

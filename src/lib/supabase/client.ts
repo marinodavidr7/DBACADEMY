@@ -13,8 +13,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let client: SupabaseClient | null = null;
 
-export function getSupabaseClient(): SupabaseClient {
-  if (client) return client;
+export function getSupabaseEnv(): { url: string; key: string } {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
   const procEnv = typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>) : {};
   const url =
@@ -36,6 +35,17 @@ export function getSupabaseClient(): SupabaseClient {
     procEnv.VITE_SUPABASE_ANON_KEY?.trim() ||
     procEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
     '';
+  return { url, key };
+}
+
+export function isSupabaseConfigured(): boolean {
+  const { url, key } = getSupabaseEnv();
+  return Boolean(url && key);
+}
+
+export function getSupabaseClient(): SupabaseClient {
+  if (client) return client;
+  const { url, key } = getSupabaseEnv();
   if (!url || !key) {
     throw new Error(
       'DBACADEMY usa Supabase para datos: falta VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY o VITE_SUPABASE_PUBLISHABLE_KEY en .env.local'
