@@ -531,8 +531,12 @@
 .dark .dba-quill-wrap .ql-picker-item:hover, .dark .dba-quill-wrap .ql-picker-label:hover { color: #22d3ee; }
 .dark .dba-quill-wrap .ql-picker-item:hover .ql-stroke, .dark .dba-quill-wrap .ql-picker-label:hover .ql-stroke { stroke: #22d3ee; }
 .dba-quill-wrap .ql-editor img { max-width: 100%; height: auto; border-radius: 0.5rem; }
-.dba-quill-wrap .ql-editor iframe { display: block; width: 100%; max-width: 100%; min-height: 320px; border: 1px solid rgb(203 213 225); border-radius: 0.5rem; margin: 0.75rem 0; background: rgb(248 250 252); }
+.dba-quill-wrap .ql-editor iframe { display: block; width: 100%; max-width: 100%; min-height: 320px; border: 1px solid rgb(203 213 225); border-radius: 0.5rem; margin: 0.75rem 0; background: rgb(248 250 252); pointer-events: none; cursor: pointer; }
 .dark .dba-quill-wrap .ql-editor iframe { border-color: rgb(51 65 85); background: rgb(15 23 42); }
+.dba-quill-wrap .ql-editor iframe:hover { outline: 2px solid rgb(59 130 246); outline-offset: 2px; }
+.dark .dba-quill-wrap .ql-editor iframe:hover { outline-color: rgb(34 211 238); }
+/* Permitir seleccionar el embed en el editor; el overlay lo captura Quill */
+.dba-quill-wrap .ql-editor [data-dba-embed="iframe"] { user-select: none; }
 .dba-quill-wrap .ql-editor a { color: #2563eb; }
 .dark .dba-quill-wrap .ql-editor a { color: #22d3ee; }
 

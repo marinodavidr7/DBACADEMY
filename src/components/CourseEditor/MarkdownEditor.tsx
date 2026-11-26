@@ -88,6 +88,8 @@ function ensureCustomQuillBlots(): void {
           node.setAttribute('loading', 'lazy');
           node.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
           node.setAttribute('frameborder', '0');
+          node.setAttribute('contenteditable', 'false');
+          node.setAttribute('data-dba-embed', 'iframe');
           return node;
         }
 
@@ -428,6 +430,43 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
       ['link', 'clean'],
     ],
     clipboard: { matchVisual: false },
+    keyboard: {
+      bindings: {
+        backspaceEmbed: {
+          key: 'Backspace',
+          handler(this: any, range: { index: number; length: number }) {
+            const quill = this.quill;
+            if (!quill || range.length > 0) return true;
+            const [leaf] = quill.getLeaf(range.index);
+            if (leaf && leaf.statics?.blotName === 'embedIframe') {
+              quill.deleteText(range.index, 1, 'user');
+              return false;
+            }
+            if (range.index > 0) {
+              const [prev] = quill.getLeaf(range.index - 1);
+              if (prev && prev.statics?.blotName === 'embedIframe') {
+                quill.deleteText(range.index - 1, 1, 'user');
+                return false;
+              }
+            }
+            return true;
+          },
+        },
+        deleteEmbed: {
+          key: 'Delete',
+          handler(this: any, range: { index: number; length: number }) {
+            const quill = this.quill;
+            if (!quill || range.length > 0) return true;
+            const [leaf] = quill.getLeaf(range.index);
+            if (leaf && leaf.statics?.blotName === 'embedIframe') {
+              quill.deleteText(range.index, 1, 'user');
+              return false;
+            }
+            return true;
+          },
+        },
+      },
+    },
   }), []);
 
   const formats = useMemo(() => [
