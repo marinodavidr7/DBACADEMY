@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
-  CreditCard,
+  ChevronDown,
   ExternalLink,
   Gift,
-  Globe2,
+  Lock,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -25,6 +24,7 @@ import type {
 import { formatCurrency } from '../utils/currency';
 import { legalConsentService } from '../services/legalConsentService';
 import { legalDocumentPath } from '../services/legalDocuments';
+import { PayPalButtonsBox } from './PayPalButtonsBox';
 
 interface CheckoutModalProps {
   course: Course;
@@ -86,6 +86,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [couponError, setCouponError] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationResult | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [codePanelOpen, setCodePanelOpen] = useState(() => Boolean(initialGiftCardCode.trim()));
 
   const formatMoney = (cents: number) => formatCurrency(cents, course.currency);
 
@@ -179,6 +180,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   useEffect(() => {
     const initialNormalized = initialGiftCardCode.trim().toUpperCase();
+    if (initialNormalized) {
+      setCodePanelOpen(true);
+    }
     if (initialNormalized && user) {
       setLiveGiftCardCode(initialNormalized);
       setGiftCardSubNonce((n) => n + 1);
@@ -259,6 +263,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         userEmail: user.email || undefined,
       });
     });
+  };
+
+  const handlePayPalApproved = async ({
+    orderId,
+    captureId,
+  }: {
+    orderId: string;
+    captureId: string;
+  }) => {
+    setError('');
+    let recordedPayment: PaymentRecord;
+    if (appliedGiftCard?.valid && appliedGiftCard.card) {
+      const res = await redeemGiftCardForCourse(appliedGiftCard.card.code, course, 'paypal', {
+        externalPaymentId: 'pp_' + orderId,
+        externalTransactionRef: captureId || orderId,
+      });
+      recordedPayment = res.payment;
+    } else {
+      recordedPayment = await enrollWithPayment(course, 'paypal', {
+        couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
+        testMode: isAdmin ? testMode : false,
+        externalPaymentId: 'pp_' + orderId,
+        externalTransactionRef: captureId || orderId,
+      });
+    }
+    recordCheckoutConsent();
+    setReceipt(recordedPayment);
+    setTimeout(() => onSuccess(course.id), 700);
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -368,36 +400,43 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl mx-auto mt-8 bg-[var(--dba-bg-surface)] border border-[var(--dba-border)] rounded-2xl shadow-2xl overflow-hidden"
+        className="max-w-[560px] w-full mx-auto mt-8 bg-white dark:bg-zinc-950 border border-stone-200 dark:border-zinc-800 rounded-[16px] shadow-2xl overflow-hidden font-sans"
       >
-        <div className="flex items-center justify-between px-6 py-4 bg-[var(--dba-bg-hero)] text-white">
-          <div>
-            <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300">
-              {t('secureCheckout')}
+        <div className="flex items-center justify-between gap-3 px-7 py-5 bg-[#0d0d0f] text-white">
+          <div className="min-w-0">
+            <p className="text-[11px] font-mono uppercase tracking-wider text-[#ffd23f]">
+              PAGO SEGURO
             </p>
-            <h3 className="text-lg font-semibold text-white">{t('checkoutTitle')}</h3>
+            <h3 className="text-[20px] font-bold text-white leading-tight mt-0.5">Finalizar compra</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            aria-label="Cerrar modal de pago"
+            className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
-          <div className="rounded-xl border border-[var(--dba-border)] p-4 bg-[var(--dba-bg-canvas)]">
-            <p className="text-sm font-semibold text-[var(--dba-text-primary)]">{course.title}</p>
-            <div className="mt-2 space-y-1 text-sm">
-              <div className="flex justify-between text-[var(--dba-text-secondary)]">
-                <span>{t('originalPrice')}</span>
-                <span className={discountCents > 0 ? 'line-through opacity-60' : 'font-semibold'}>
+        <div className="px-7 py-5 space-y-4">
+          <div className="rounded-[12px] border border-stone-200 dark:border-zinc-800 p-4 bg-[#f7f5ef] dark:bg-zinc-900/80">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-600 dark:text-zinc-400">
+              TU CURSO
+            </p>
+            <p className="text-[16px] font-semibold text-stone-900 dark:text-zinc-100 mt-1">
+              {course.title}
+            </p>
+            <div className="border-t border-stone-200 dark:border-zinc-700 my-2.5" />
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-4 text-stone-600 dark:text-zinc-400">
+                <span>Precio original</span>
+                <span className={discountCents > 0 ? 'line-through opacity-70' : 'font-medium text-stone-900 dark:text-zinc-100'}>
                   {formatMoney(originalPrice)}
                 </span>
               </div>
               {discountCents > 0 && (
-                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+                <div className="flex justify-between gap-4 text-[#0b6b4a] dark:text-emerald-400 font-medium">
                   <span>
                     {appliedGiftCard?.valid
                       ? `Gift Card (${appliedGiftCard.card?.code})`
@@ -406,130 +445,145 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span>-{formatMoney(discountCents)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-[var(--dba-text-primary)] pt-1.5 border-t border-[var(--dba-border)]">
-                <span>{t('total')}</span>
-                <span className="font-mono">{formatMoney(finalPrice)}</span>
+              <div className="flex justify-between items-baseline gap-4 pt-1">
+                <span className="font-semibold text-stone-900 dark:text-zinc-100">Total</span>
+                <span className="text-[22px] font-bold tabular-nums text-stone-900 dark:text-zinc-100">
+                  {formatMoney(finalPrice)}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Gift Card / Cupón */}
-          {!lemonSession && !receipt && (
-            <div className="rounded-xl border border-[var(--dba-border)] p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-0.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => setCodeMode('gift_card')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                      codeMode === 'gift_card'
-                        ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)]'
-                        : 'text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'
-                    }`}
-                  >
-                    <Gift className="w-3.5 h-3.5" />
-                    <span>Gift Card</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCodeMode('coupon')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                      codeMode === 'coupon'
-                        ? 'bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)]'
-                        : 'text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'
-                    }`}
-                  >
-                    <Tag className="w-3.5 h-3.5" />
-                    <span>Cupón</span>
-                  </button>
-                </div>
-                <span className="text-[11px] text-[var(--dba-text-secondary)]">
-                  {codeMode === 'gift_card'
-                    ? 'Cubre hasta el 100% del curso al instante'
-                    : 'Aplica un código promocional'}
-                </span>
-              </div>
+          {!receipt && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setCodePanelOpen((open) => !open)}
+                className="min-h-[44px] inline-flex items-center gap-2 text-[#1d4ed8] dark:text-blue-400 text-sm font-medium hover:underline"
+                aria-expanded={codePanelOpen}
+              >
+                <Tag className="w-4 h-4" aria-hidden="true" />
+                <span>¿Tienes un cupón o una gift card?</span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${codePanelOpen ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
 
-              {codeMode === 'gift_card' ? (
-                <div>
-                  <div className="flex gap-2">
-                    <input
-                      value={giftCardCode}
-                      onChange={(e) => {
-                        setGiftCardCode(e.target.value.toUpperCase());
-                        if (liveGiftCardCode) setLiveGiftCardCode('');
-                        if (giftCardError) setGiftCardError('');
-                        if (giftCardLoading) setGiftCardLoading(false);
-                      }}
-                      placeholder="Ej: DBA-XXXX-XXXX"
-                      disabled={!!appliedGiftCard?.valid || giftCardLoading}
-                      className="flex-1 px-3 py-2.5 rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] text-sm font-mono uppercase text-[var(--dba-text-primary)]"
-                    />
-                    {appliedGiftCard?.valid ? (
+              {codePanelOpen && !lemonSession && (
+                <div className="rounded-[12px] border border-stone-200 dark:border-zinc-800 p-4 space-y-3 bg-white dark:bg-zinc-900/40">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="inline-flex rounded-lg border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 p-0.5 text-xs font-semibold">
                       <button
                         type="button"
-                        onClick={removeGiftCard}
-                        className="px-4 py-2.5 rounded-lg border border-[var(--dba-border)] text-xs font-semibold hover:bg-stone-100 dark:hover:bg-zinc-800"
+                        onClick={() => setCodeMode('gift_card')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md transition-colors min-h-[44px] ${
+                          codeMode === 'gift_card'
+                            ? 'bg-stone-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                            : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-zinc-100'
+                        }`}
                       >
-                        Quitar
+                        <Gift className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Gift Card</span>
                       </button>
-                    ) : (
                       <button
                         type="button"
-                        onClick={() => handleValidateGiftCard()}
-                        disabled={giftCardLoading || !giftCardCode.trim()}
-                        className="px-4 py-2.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-50"
+                        onClick={() => setCodeMode('coupon')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md transition-colors min-h-[44px] ${
+                          codeMode === 'coupon'
+                            ? 'bg-stone-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                            : 'text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-zinc-100'
+                        }`}
                       >
-                        {giftCardLoading ? 'Verificando...' : 'Aplicar código'}
+                        <Tag className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Cupón</span>
                       </button>
-                    )}
+                    </div>
                   </div>
-                  {giftCardError && <p className="text-xs text-red-500 mt-2">{giftCardError}</p>}
-                  {appliedGiftCard?.valid && appliedGiftCard.card && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
-                      Gift Card {appliedGiftCard.card.code} aplicada: cubre{' '}
-                      {formatMoney(appliedGiftCard.coveredCents)}
-                      {appliedGiftCard.coversFullCourse
-                        ? ' (100% cubierto — no necesitas pasarela externa)'
-                        : `. Saldo restante a pagar: ${formatMoney(appliedGiftCard.remainingToPayCents)}`}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <div className="flex gap-2">
-                    <input
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      placeholder={t('couponPlaceholder')}
-                      disabled={!!appliedCoupon?.valid || couponLoading}
-                      className="flex-1 px-3 py-2.5 rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] text-sm uppercase text-[var(--dba-text-primary)]"
-                    />
-                    {appliedCoupon?.valid ? (
-                      <button
-                        type="button"
-                        onClick={removeCoupon}
-                        className="px-4 py-2.5 rounded-lg border border-[var(--dba-border)] text-xs font-semibold hover:bg-stone-100 dark:hover:bg-zinc-800"
-                      >
-                        {t('removeCoupon')}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void validateCoupon()}
-                        disabled={couponLoading || !couponCode.trim()}
-                        className="px-4 py-2.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-50"
-                      >
-                        {couponLoading ? '...' : t('applyCoupon')}
-                      </button>
-                    )}
-                  </div>
-                  {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
-                  {appliedCoupon?.valid && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
-                      {t('couponApplied')}: {appliedCoupon.coupon?.code} —{' '}
-                      {appliedCoupon.coupon?.description}
-                    </p>
+
+                  {codeMode === 'gift_card' ? (
+                    <div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          value={giftCardCode}
+                          onChange={(e) => {
+                            setGiftCardCode(e.target.value.toUpperCase());
+                            if (liveGiftCardCode) setLiveGiftCardCode('');
+                            if (giftCardError) setGiftCardError('');
+                            if (giftCardLoading) setGiftCardLoading(false);
+                          }}
+                          placeholder="Ej: DBA-XXXX-XXXX"
+                          disabled={!!appliedGiftCard?.valid || giftCardLoading}
+                          className="flex-1 px-3 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-mono uppercase text-stone-900 dark:text-zinc-100 min-h-[44px]"
+                        />
+                        {appliedGiftCard?.valid ? (
+                          <button
+                            type="button"
+                            onClick={removeGiftCard}
+                            className="px-4 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 text-sm font-medium text-stone-700 dark:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800 min-h-[44px]"
+                          >
+                            Quitar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleValidateGiftCard()}
+                            disabled={giftCardLoading || !giftCardCode.trim()}
+                            className="px-4 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-medium text-stone-700 dark:text-zinc-200 hover:bg-stone-50 dark:hover:bg-zinc-900 disabled:opacity-50 min-h-[44px]"
+                          >
+                            {giftCardLoading ? 'Verificando...' : 'Aplicar código'}
+                          </button>
+                        )}
+                      </div>
+                      {giftCardError && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{giftCardError}</p>}
+                      {appliedGiftCard?.valid && appliedGiftCard.card && (
+                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium">
+                          Gift Card {appliedGiftCard.card.code} aplicada: cubre{' '}
+                          {formatMoney(appliedGiftCard.coveredCents)}
+                          {appliedGiftCard.coversFullCourse
+                            ? ' (100% cubierto — no necesitas pasarela externa)'
+                            : `. Saldo restante a pagar: ${formatMoney(appliedGiftCard.remainingToPayCents)}`}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                          placeholder={t('couponPlaceholder')}
+                          disabled={!!appliedCoupon?.valid || couponLoading}
+                          className="flex-1 px-3 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm uppercase text-stone-900 dark:text-zinc-100 min-h-[44px]"
+                        />
+                        {appliedCoupon?.valid ? (
+                          <button
+                            type="button"
+                            onClick={removeCoupon}
+                            className="px-4 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 text-sm font-medium text-stone-700 dark:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-800 min-h-[44px]"
+                          >
+                            {t('removeCoupon')}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void validateCoupon()}
+                            disabled={couponLoading || !couponCode.trim()}
+                            className="px-4 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-medium text-stone-700 dark:text-zinc-200 hover:bg-stone-50 dark:hover:bg-zinc-900 disabled:opacity-50 min-h-[44px]"
+                          >
+                            {couponLoading ? '...' : 'Aplicar código'}
+                          </button>
+                        )}
+                      </div>
+                      {couponError && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{couponError}</p>}
+                      {appliedCoupon?.valid && (
+                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium">
+                          {t('couponApplied')}: {appliedCoupon.coupon?.code} —{' '}
+                          {appliedCoupon.coupon?.description}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -537,22 +591,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           )}
 
           {!user ? (
-            <div className="rounded-xl border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/60 p-4">
+            <div className="rounded-[12px] border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/60 p-4">
               <p className="text-sm text-amber-900 dark:text-amber-200 mb-3">
                 {t('loginToEnroll')}
               </p>
               <button
                 type="button"
                 onClick={() => void signInWithGoogle()}
-                className="px-4 py-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] text-xs font-semibold"
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-[#ffd23f] hover:bg-[#f5c72f] text-[#0d0d0f] text-sm font-semibold"
               >
                 {t('signInGoogle')}
               </button>
             </div>
           ) : receipt ? (
-            <div className="rounded-xl border border-emerald-300/80 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800/60 p-4">
+            <div className="rounded-[12px] border border-emerald-300/80 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800/60 p-4">
               <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold">
-                <CheckCircle2 className="w-5 h-5" />
+                <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                 {t('paymentConfirmed')}
               </div>
               <p className="text-sm text-emerald-700/90 dark:text-emerald-300/90 mt-1">
@@ -560,11 +614,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </p>
             </div>
           ) : lemonSession ? (
-            <div className="rounded-xl border border-violet-300/80 dark:border-violet-800/70 bg-violet-50/70 dark:bg-violet-950/30 p-5 space-y-4">
+            <div className="rounded-[12px] border border-violet-300/80 dark:border-violet-800/70 bg-violet-50/70 dark:bg-violet-950/30 p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-violet-900 dark:text-violet-200 font-semibold text-sm">
-                    <Sparkles className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                    <Sparkles className="w-4 h-4 text-violet-600 dark:text-violet-400" aria-hidden="true" />
                     <span>Sesión de pago lista en Lemon Squeezy</span>
                   </div>
                   <p className="text-xs text-violet-800/90 dark:text-violet-300/90">
@@ -579,31 +633,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 )}
               </div>
 
-              {error && <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">{error}</p>}
+              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <a
                   href={lemonSession.checkoutUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white min-h-[42px] transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white min-h-[44px] transition-colors"
                 >
                   <span>Abrir checkout en app.lemonsqueezy.com</span>
-                  <ExternalLink className="w-4 h-4 shrink-0" />
+                  <ExternalLink className="w-4 h-4 shrink-0" aria-hidden="true" />
                 </a>
                 <button
                   type="button"
                   disabled={verifyingLemon}
                   onClick={() => void handleVerifyLemonPayment()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-zinc-900 hover:bg-violet-50 dark:hover:bg-violet-950/60 px-4 py-2.5 text-xs font-semibold text-violet-800 dark:text-violet-200 min-h-[42px] disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-zinc-900 hover:bg-violet-50 dark:hover:bg-violet-950/60 px-4 py-2.5 text-sm font-semibold text-violet-800 dark:text-violet-200 min-h-[44px] disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${verifyingLemon ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${verifyingLemon ? 'animate-spin' : ''}`} aria-hidden="true" />
                   <span>{t('lemonSqueezyVerifyBtn')}</span>
                 </button>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] font-mono text-[var(--dba-text-secondary)]">
+              <div className="flex items-center justify-between pt-1 gap-2">
+                <span className="text-[11px] font-mono text-stone-500 dark:text-zinc-400 truncate">
                   ID: {lemonSession.paymentId}
                 </span>
                 <button
@@ -612,7 +666,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     setLemonSession(null);
                     setError('');
                   }}
-                  className="text-xs font-medium text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)] underline"
+                  className="min-h-[44px] text-sm font-medium text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-zinc-100 underline"
                 >
                   Cambiar método de pago
                 </button>
@@ -621,49 +675,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           ) : (
             <div className="space-y-4">
               {finalPrice > 0 && (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--dba-text-primary)] mb-2">
-                      {t('selectGateway')}
-                    </p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { id: 'paypal', label: 'PayPal (Tarjetas y Cuenta PayPal)', Icon: ShieldCheck },
-                      ].map(({ id, label, Icon }) => (
-                        <button
-                          type="button"
-                          key={id}
-                          onClick={() => {
-                            setGateway(id as PaymentGateway);
-                            setError('');
-                          }}
-                          className={`px-3 py-2.5 rounded-lg border text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                            gateway === id
-                              ? 'border-[var(--dba-accent-ink)] bg-amber-50/70 text-[var(--dba-accent-ink)] dark:bg-amber-950/30 dark:text-amber-300'
-                              : 'border-[var(--dba-border)] text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)]'
-                          }`}
-                        >
-                          <Icon className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{label}</span>
-                        </button>
-                      ))}
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-stone-900 dark:text-zinc-100">Método de pago</p>
+                  <div className="rounded-[12px] border-2 border-[#b27b00] bg-[#fbf8ef] dark:bg-amber-950/20 p-3.5">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#b27b00]"
+                        aria-hidden="true"
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#b27b00]" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold text-stone-900 dark:text-zinc-100">PayPal</p>
+                          <span className="text-xs font-semibold text-[#0b6b4a] dark:text-emerald-400 shrink-0">Pago seguro</span>
+                        </div>
+                        <p className="text-sm text-stone-600 dark:text-zinc-400 mt-0.5">
+                          Paga con tarjeta de débito/crédito, sin necesidad de cuenta PayPal.
+                        </p>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3.5 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-[var(--dba-text-primary)]">
-                        PayPal Checkout
-                      </span>
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
-                        Pago seguro
-                      </span>
-                    </div>
-                    <p className="text-xs text-[var(--dba-text-secondary)]">
-                      Completa tu compra de forma segura con tarjeta de débito/crédito o tu cuenta de PayPal.
-                    </p>
-                  </div>
-                </>
+                </div>
               )}
 
               {isAdmin &&
@@ -671,115 +704,115 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 !appliedGiftCard?.valid &&
                 gateway !== 'lemonsqueezy' &&
                 gateway !== 'stripe' && (
-                  <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                  <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 min-h-[44px]">
                     <input
                       type="checkbox"
                       checked={testMode}
                       onChange={(e) => setTestMode(e.target.checked)}
+                      className="w-4 h-4"
                     />
                     Modo prueba admin: no genera canjes/recompensas reales
                   </label>
                 )}
 
-              <div className="rounded-lg border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-3 space-y-2">
-                <label className="flex items-start gap-2.5 text-xs text-[var(--dba-text-primary)] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={acceptedTerms}
-                    onChange={(e) => {
-                      setAcceptedTerms(e.target.checked);
-                      if (e.target.checked && error.includes('Términos')) setError('');
-                    }}
-                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              <label className="flex items-start gap-3 cursor-pointer min-h-[44px]">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => {
+                    setAcceptedTerms(e.target.checked);
+                    if (e.target.checked && error.includes('Términos')) setError('');
+                  }}
+                  className="w-5 h-5 shrink-0 mt-0.5 rounded border-stone-300 text-[#1d4ed8] focus:ring-[#1d4ed8]"
+                />
+                <span className="text-sm text-stone-700 dark:text-zinc-300 leading-relaxed">
+                  He leído y acepto los{' '}
+                  <a
+                    href={legalDocumentPath('terminos')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#1d4ed8] dark:text-blue-400 underline font-medium"
+                  >
+                    Términos y Condiciones
+                  </a>{' '}
+                  y la{' '}
+                  <a
+                    href={legalDocumentPath('reembolsos')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#1d4ed8] dark:text-blue-400 underline font-medium"
+                  >
+                    Política de Cancelación y Reembolsos
+                  </a>{' '}
+                  (Ley 358-05 y Ley 126-02). Pago único por acceso al curso, sin renovación automática. Impuestos según pasarela y jurisdicción.
+                </span>
+              </label>
+
+              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+              {finalPrice > 0 ? (
+                <div className="space-y-3">
+                  <PayPalButtonsBox
+                    course={course}
+                    finalPriceCents={finalPrice}
+                    acceptedTerms={acceptedTerms}
+                    onTermsRequired={() =>
+                      setError(
+                        'Debes aceptar los Términos y Condiciones y la Política de Cancelación y Reembolsos para continuar.'
+                      )
+                    }
+                    onApproved={handlePayPalApproved}
+                    onError={(message) => setError(message)}
                   />
-                  <span>
-                    He leído y acepto los{' '}
-                    <a
-                      href={legalDocumentPath('terminos')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline font-medium text-blue-600 dark:text-blue-400"
-                    >
-                      Términos y Condiciones
-                    </a>{' '}
-                    y la{' '}
-                    <a
-                      href={legalDocumentPath('reembolsos')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline font-medium text-blue-600 dark:text-blue-400"
-                    >
-                      Política de Cancelación y Reembolsos
-                    </a>{' '}
-                    (Ley 358-05 y Ley 126-02).
-                  </span>
-                </label>
-                <p className="text-[11px] text-[var(--dba-text-secondary)] pl-6">
-                  Pago único por acceso al curso ({formatMoney(finalPrice)}, sin renovación automática). Impuestos aplicables según pasarela y jurisdicción.
-                </p>
-              </div>
 
-              {error && <p className="text-sm text-red-500">{error}</p>}
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 gap-3">
-                <p className="text-xs text-[var(--dba-text-secondary)] flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  {appliedGiftCard?.valid && finalPrice === 0
-                    ? 'Canje atómico sin tarjeta bancaria'
-                    : t('securePayment')}
-                </p>
-                {finalPrice > 0 ? (
-                  <div className="flex justify-center sm:justify-end">
-                    <style>{`.pp-C6AD8SK2GNA3S{text-align:center;border:none;border-radius:0.25rem;min-width:11.625rem;padding:0 2rem;height:2.625rem;font-weight:bold;background-color:#FFD140;color:#000000;font-family:"Helvetica Neue",Arial,sans-serif;font-size:1rem;line-height:1.25rem;cursor:pointer;}`}</style>
-                    <form
-                      action="https://www.paypal.com/ncp/payment/C6AD8SK2GNA3S"
-                      method="post"
-                      target="_blank"
-                      onSubmit={(e) => {
-                        if (!acceptedTerms) {
-                          e.preventDefault();
-                          setError(
-                            'Debes aceptar los Términos y Condiciones y la Política de Cancelación y Reembolsos antes de continuar.'
-                          );
-                          return;
-                        }
-                        recordCheckoutConsent();
-                      }}
-                      style={{
-                        display: 'inline-grid',
-                        justifyItems: 'center',
-                        alignContent: 'start',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <input className="pp-C6AD8SK2GNA3S" type="submit" value="Comprar ahora" />
-                      <img src="https://www.paypalobjects.com/images/Debit_Credit.svg" alt="cards" />
-                      <section style={{ fontSize: '0.75rem' }}>
-                        {' '}
-                        Con la tecnología de{' '}
-                        <img
-                          src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg"
-                          alt="paypal"
-                          style={{ height: '0.875rem', verticalAlign: 'middle' }}
-                        />
-                      </section>
-                    </form>
+                  <div className="text-center space-y-2">
+                    <p className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-[#0b6b4a] dark:text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                      <span>Pago seguro y cifrado</span>
+                    </p>
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      <img
+                        src="https://www.paypalobjects.com/images/Debit_Credit.svg"
+                        alt="Tarjetas aceptadas"
+                        className="h-6"
+                      />
+                      <span className="text-xs text-stone-500 dark:text-zinc-400">y más</span>
+                    </div>
+                    <p className="text-xs text-stone-500 dark:text-zinc-400 flex items-center justify-center gap-1.5">
+                      <span>Con la tecnología de</span>
+                      <img
+                        src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-wordmark-color.svg"
+                        alt="PayPal"
+                        className="h-[14px]"
+                      />
+                    </p>
                   </div>
-                ) : (
+                </div>
+              ) : (
+                <div className="space-y-3">
                   <button
                     type="button"
                     disabled={submitting}
                     onClick={(e) => void onSubmit(e as unknown as React.FormEvent)}
-                    className="px-5 py-2.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] disabled:opacity-50 text-[var(--dba-accent-foreground)] text-xs sm:text-sm font-semibold min-h-[42px]"
+                    className="w-full h-[58px] rounded-[12px] bg-[#ffd23f] hover:bg-[#f5c72f] disabled:opacity-50 text-[#0d0d0f] font-bold text-[18px] flex items-center justify-center gap-2.5 shadow-sm transition-colors cursor-pointer"
                   >
-                    {submitting
-                      ? t('processingPayment')
-                      : appliedGiftCard?.valid && finalPrice === 0
-                        ? 'Canjear Gift Card y obtener curso'
-                        : t('enrollFree')}
+                    <Lock className="w-5 h-5" aria-hidden="true" />
+                    <span>
+                      {submitting
+                        ? t('processingPayment')
+                        : appliedGiftCard?.valid && finalPrice === 0
+                          ? 'Canjear Gift Card y obtener curso'
+                          : t('enrollFree')}
+                    </span>
                   </button>
-                )}
-              </div>
+                  <div className="text-center space-y-2">
+                    <p className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-[#0b6b4a] dark:text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                      <span>Pago seguro y cifrado</span>
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
