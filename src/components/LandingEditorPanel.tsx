@@ -31,6 +31,7 @@ import {
 import {
   DEFAULT_LANDING_CONFIG,
   getLandingConfig,
+  loadLandingConfig,
   saveLandingConfig,
   resetLandingConfig,
   type LandingConfig,
@@ -62,22 +63,22 @@ export const LandingEditorPanel: React.FC<LandingEditorPanelProps> = ({ onPrevie
   >('visibility');
 
   useEffect(() => {
-    setConfig(getLandingConfig());
+    void loadLandingConfig().then(setConfig);
   }, []);
 
-  const handleSave = () => {
-    saveLandingConfig(config);
+  const handleSave = async () => {
+    await saveLandingConfig(config);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 4000);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (
       window.confirm(
         '¿Estás seguro de que deseas restablecer TODOS los textos y visibilidad de secciones del landing a los valores oficiales de DB Academy?'
       )
     ) {
-      const reset = resetLandingConfig();
+      const reset = await resetLandingConfig();
       setConfig(reset);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 4000);

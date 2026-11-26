@@ -66,9 +66,9 @@ export type UploadProgressCallback = (pct: number) => void;
  */
 export async function fileToOptimizedDataUrl(
   file: File,
-  maxWidth = 1280,
+  maxWidth = 1024,
   maxHeight = 720,
-  quality = 0.82
+  quality = 0.78
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
@@ -102,10 +102,22 @@ export async function fileToOptimizedDataUrl(
           return;
         }
 
+        // WebP comprime mucho mejor que PNG/JPEG; si no hay soporte, JPEG con
+        // fondo blanco (evita que las transparencias se vuelvan negras).
+        const probe = canvas.toDataURL('image/webp', 0.1);
+        const supportsWebp = probe.startsWith('data:image/webp');
+        if (!supportsWebp) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+        }
         ctx.drawImage(img, 0, 0, width, height);
-        // Prefer image/webp if supported, fallback to image/jpeg
-        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(mimeType, quality);
+        const mimeType = supportsWebp ? 'image/webp' : 'image/jpeg';
+        let dataUrl = canvas.toDataURL(mimeType, quality);
+        // Segunda pasada agresiva si la imagen sigue siendo demasiado grande
+        // para persistir dentro del JSON del curso.
+        if (dataUrl.length > 1_500_000) {
+          dataUrl = canvas.toDataURL(mimeType, 0.55);
+        }
         resolve(dataUrl);
       };
       img.onerror = () => resolve(e.target?.result as string);

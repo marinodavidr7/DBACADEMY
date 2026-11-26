@@ -7,7 +7,11 @@ import dotenv from 'dotenv';
 import express from 'express';
 import Stripe from 'stripe';
 import { WebSocket, WebSocketServer } from 'ws';
-import { isSupabaseAdminConfigured, serverDb } from './src/lib/supabase/serverClient';
+import {
+  getSupabaseServiceClient,
+  isSupabaseAdminConfigured,
+  serverDb,
+} from './src/lib/supabase/serverClient';
 import { getLegalDocumentByFile } from './src/services/legalDocuments';
 import type { Coupon, CouponRedemption, Referral, ReferralSettings } from './src/types';
 
@@ -594,7 +598,9 @@ export function createApp(): express.Express {
   const app = express();
   app.use(
     express.json({
-      limit: '2mb',
+      // Las imágenes optimizadas pueden viajar como Data URL dentro del JSON
+      // del curso; 2 MB las rechazaba con 413 y el material nunca se guardaba.
+      limit: '20mb',
       verify: (req, _res, buf) => {
         (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
       },
@@ -2033,6 +2039,45 @@ export function createApp(): express.Express {
       res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al listar canjes' });
+    }
+  });
+
+  // ─── LANDING CONFIG (compartida en Supabase, no por navegador) ──────────
+  const LANDING_CONFIG_KEY = 'landing_config';
+
+  // Lectura pública: la landing debe mostrar lo mismo para todos los visitantes.
+  app.get('/api/landing-config', async (_req, res) => {
+    try {
+      const { data, error } = await getSupabaseServiceClient()
+        .from('settings')
+        .select('value')
+        .eq('key', LANDING_CONFIG_KEY)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      res.json({ config: data?.value ?? null });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al leer configuración' });
+    }
+  });
+
+  // Escritura: sólo el administrador autorizado.
+  app.put('/api/landing-config', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).json({ error: 'Cuerpo inválido' });
+      return;
+    }
+    try {
+      const { error } = await getSupabaseServiceClient()
+        .from('settings')
+        .upsert(
+          { key: LANDING_CONFIG_KEY, value: req.body, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      if (error) throw new Error(error.message);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Error al guardar configuración' });
     }
   });
 

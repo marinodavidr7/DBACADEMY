@@ -120,6 +120,7 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
     }));
     setTasks((prev) => [...prev, ...initial]);
 
+    const uploaded: CourseMaterial[] = [];
     for (let index = 0; index < accepted.length; index += 1) {
       const file = accepted[index];
       const task = initial[index];
@@ -132,7 +133,7 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
             setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, pct } : item)));
           }
         );
-        onChange([...materials, material]);
+        uploaded.push(material);
       } catch (error) {
         setTasks((prev) =>
           prev.map((item) =>
@@ -142,6 +143,10 @@ export const MaterialsPanel: React.FC<MaterialsPanelProps> = ({
           )
         );
       }
+    }
+
+    if (uploaded.length > 0) {
+      onChange([...materials, ...uploaded]);
     }
 
     setTimeout(() => {

@@ -342,60 +342,133 @@ export const DEFAULT_LANDING_CONFIG: LandingConfig = {
 
 const STORAGE_KEY = 'dba_landing_config_v2';
 const EVENT_NAME = 'dba_landing_config_updated';
+const API_URL = '/api/landing-config';
+const POLL_INTERVAL_MS = 5000;
 
-export function getLandingConfig(): LandingConfig {
+function normalizeConfig(parsed?: Partial<LandingConfig> | null): LandingConfig {
+  if (!parsed || typeof parsed !== 'object') return DEFAULT_LANDING_CONFIG;
+  return {
+    ...DEFAULT_LANDING_CONFIG,
+    ...parsed,
+    stats: parsed.stats || DEFAULT_LANDING_CONFIG.stats,
+    tracks: parsed.tracks || DEFAULT_LANDING_CONFIG.tracks,
+    aboutPillars: parsed.aboutPillars || DEFAULT_LANDING_CONFIG.aboutPillars,
+    events: parsed.events || DEFAULT_LANDING_CONFIG.events,
+    faqList: parsed.faqList || DEFAULT_LANDING_CONFIG.faqList,
+    technologiesList: parsed.technologiesList || DEFAULT_LANDING_CONFIG.technologiesList,
+    heroTrustChips: parsed.heroTrustChips || DEFAULT_LANDING_CONFIG.heroTrustChips,
+  };
+}
+
+function readCachedConfig(): LandingConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_LANDING_CONFIG;
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_LANDING_CONFIG,
-      ...parsed,
-      stats: parsed.stats || DEFAULT_LANDING_CONFIG.stats,
-      tracks: parsed.tracks || DEFAULT_LANDING_CONFIG.tracks,
-      aboutPillars: parsed.aboutPillars || DEFAULT_LANDING_CONFIG.aboutPillars,
-      events: parsed.events || DEFAULT_LANDING_CONFIG.events,
-      faqList: parsed.faqList || DEFAULT_LANDING_CONFIG.faqList,
-      technologiesList: parsed.technologiesList || DEFAULT_LANDING_CONFIG.technologiesList,
-      heroTrustChips: parsed.heroTrustChips || DEFAULT_LANDING_CONFIG.heroTrustChips,
-    };
+    return normalizeConfig(raw ? JSON.parse(raw) : null);
   } catch (err) {
-    console.warn('Error reading landing config from storage, using defaults:', err);
+    console.warn('Error reading cached landing config:', err);
     return DEFAULT_LANDING_CONFIG;
   }
 }
 
-export function saveLandingConfig(config: LandingConfig): void {
+function publishLocal(config: LandingConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: config }));
   } catch (err) {
-    console.error('Error saving landing config to storage:', err);
+    console.warn('No se pudo cachear la configuración del landing:', err);
+  }
+  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: config }));
+}
+
+/** API síncrona intacta: lee la caché local o los valores por defecto. */
+export function getLandingConfig(): LandingConfig {
+  return readCachedConfig();
+}
+
+/** Carga la configuración compartida desde el servidor (Supabase). */
+export async function loadLandingConfig(): Promise<LandingConfig> {
+  try {
+    const response = await fetch(API_URL, { cache: 'no-store' });
+    if (!response.ok) return readCachedConfig();
+    const payload = (await response.json()) as { config?: Partial<LandingConfig> | null };
+    if (!payload?.config) return readCachedConfig();
+    const config = normalizeConfig(payload.config);
+    publishLocal(config);
+    return config;
+  } catch (err) {
+    console.warn('No se pudo cargar la configuración compartida del landing:', err);
+    return readCachedConfig();
   }
 }
 
-export function resetLandingConfig(): LandingConfig {
+/** Guarda en Supabase (sólo admin en el servidor) y actualiza la caché local. */
+export async function saveLandingConfig(config: LandingConfig): Promise<void> {
+  publishLocal(config);
   try {
-    localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: DEFAULT_LANDING_CONFIG }));
+    const response = await fetch(API_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!response.ok) {
+      console.warn('No se pudo sincronizar la configuración del landing:', response.status);
+    }
   } catch (err) {
-    console.error('Error resetting landing config:', err);
+    console.warn('No se pudo sincronizar la configuración del landing:', err);
   }
+}
+
+/** Restablece los valores oficiales en Supabase y en la caché local. */
+export async function resetLandingConfig(): Promise<LandingConfig> {
+  publishLocal(DEFAULT_LANDING_CONFIG);
+  await saveLandingConfig(DEFAULT_LANDING_CONFIG);
   return DEFAULT_LANDING_CONFIG;
 }
 
+/**
+ * Suscripción con sincronización entre navegadores: mantiene eventos locales
+ * y sondea el backend cada 5 s para reflejar cambios hechos por el administrador.
+ */
 export function subscribeLandingConfig(callback: (config: LandingConfig) => void): () => void {
-  const handler = (e: Event) => {
-    const custom = e as CustomEvent<LandingConfig>;
-    if (custom.detail) {
-      callback(custom.detail);
-    } else {
-      callback(getLandingConfig());
-    }
+  let lastSerialized = JSON.stringify(readCachedConfig());
+
+  const apply = (config: LandingConfig) => {
+    lastSerialized = JSON.stringify(config);
+    callback(config);
+  };
+
+  const handler = (event: Event) => {
+    const custom = event as CustomEvent<LandingConfig>;
+    apply(custom.detail ? normalizeConfig(custom.detail) : readCachedConfig());
   };
   window.addEventListener(EVENT_NAME, handler);
   window.addEventListener('storage', handler);
+
+  const poll = async () => {
+    try {
+      const response = await fetch(API_URL, { cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { config?: Partial<LandingConfig> | null };
+      if (!payload?.config) return;
+      const config = normalizeConfig(payload.config);
+      const serialized = JSON.stringify(config);
+      if (serialized === lastSerialized) return;
+      lastSerialized = serialized;
+      try {
+        localStorage.setItem(STORAGE_KEY, serialized);
+      } catch {
+        // cache opcional
+      }
+      callback(config);
+    } catch {
+      // sin conexión: se conserva la configuración en caché
+    }
+  };
+
+  const interval = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
+  void poll();
+
   return () => {
+    window.clearInterval(interval);
     window.removeEventListener(EVENT_NAME, handler);
     window.removeEventListener('storage', handler);
   };
