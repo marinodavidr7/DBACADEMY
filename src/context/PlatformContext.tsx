@@ -43,6 +43,7 @@ import {
   resolveFirebaseUserEmail,
 } from '../firebase';
 import { normalizarUrlImagen } from '../utils/imageUtils';
+import { sortCoursesByLevel } from '../utils/courseOrder';
 import { translations, type TranslationKeys } from '../i18n/translations';
 import type {
   ApiIntegrationKey,
@@ -560,7 +561,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<'student' | 'instructor'>('student');
 
-  const [courses, setCourses] = useState<Course[]>(SEED_COURSES);
+  const [courses, setCourses] = useState<Course[]>(() => sortCoursesByLevel(SEED_COURSES));
   const coursesRef = useRef<Course[]>(courses);
   coursesRef.current = courses;
   const [courseSyncState, setCourseSyncState] = useState<CourseSyncState>({
@@ -1233,9 +1234,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ...loaded,
           ...SEED_COURSES.filter((s) => !loadedIds.has(s.id)),
         ];
-        setCourses(merged);
+        setCourses(sortCoursesByLevel(merged));
       } else {
-        setCourses(SEED_COURSES);
+        setCourses(sortCoursesByLevel(SEED_COURSES));
       }
     };
 

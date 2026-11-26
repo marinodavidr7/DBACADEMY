@@ -9,6 +9,7 @@ import {
 import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
+import { IntermediateTopicSim, type IntermediateSimKind } from './IntermediateTopicSim';
 
 const ExcelSimulator3D = lazy(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
@@ -35,7 +36,8 @@ export type TopicSimulatorKind =
   | 'conditional-calc'
   | 'subtotals-filter'
   | 'random-gen'
-  | 'if-logic';
+  | 'if-logic'
+  | IntermediateSimKind;
 
 export interface TopicSimulatorMeta {
   kind: TopicSimulatorKind;
@@ -44,7 +46,72 @@ export interface TopicSimulatorMeta {
   subtitle: string;
 }
 
+/** Simuladores específicos del curso Excel Intermedio (módulos 1 al 8). */
+const INTERMEDIATE_MODULES: Record<
+  number,
+  { kind: IntermediateSimKind; topic: string; badges: string[]; subtitle: string }
+> = {
+  1: {
+    kind: 'logic-advanced', topic: 'Funciones lógicas avanzadas',
+    badges: ['SI', 'Y / O / NO', 'SI anidado', 'SI.CONJUNTO', 'SI.ERROR', 'CAMBIAR', 'SI + CONTAR.SI', 'Caso: calificaciones'],
+    subtitle: 'Cambia notas, ventas y asistencia para evaluar SI, Y/O, IFS y SI.ERROR en vivo.',
+  },
+  2: {
+    kind: 'text-functions', topic: 'Funciones de texto',
+    badges: ['IZQUIERDA / DERECHA', 'LARGO / HALLAR', 'MAYUSC / NOMPROPIO', 'LIMPIAR / SUSTITUIR', 'UNIRCADENAS', 'TEXTO', 'Texto en columnas', 'Caso: limpieza'],
+    subtitle: 'Edita un texto y compara IZQUIERDA, DERECHA, EXTRAE, LARGO, NOMPROPIO y UNIRCADENAS.',
+  },
+  3: {
+    kind: 'date-functions', topic: 'Fechas y horas',
+    badges: ['Serie de fecha', 'HOY / FECHA', 'DIASEM', 'FIN.MES', 'DIAS.LAB', 'SIFECHA', 'Horas', 'Caso: vencimientos'],
+    subtitle: 'Observa el número de serie, FIN.MES, DIAS.LAB y la edad calculada con SIFECHA.',
+  },
+  4: {
+    kind: 'lookup-functions', topic: 'Búsqueda y referencia',
+    badges: ['BUSCARV', 'BUSCARH', 'Exacta / aprox.', 'INDICE', 'INDICE + COINCIDIR', 'BUSCARX', 'ELEGIR / DESREF', 'Varios criterios', 'Caso: facturación'],
+    subtitle: 'Busca un código en el catálogo y compara BUSCARV, INDICE+COINCIDIR y BUSCARX.',
+  },
+  5: {
+    kind: 'table-data', topic: 'Tablas y gestión de datos',
+    badges: ['Ctrl + T', 'Referencias', 'Ordenar', 'Filtros', 'Slicers', 'Duplicados', 'Validación', 'Listas dependientes', 'Caso: inventario'],
+    subtitle: 'Activa la tabla, aplica filtros y quita duplicados para ver cómo cambian las filas.',
+  },
+  6: {
+    kind: 'conditional-format', topic: 'Formato condicional y protección',
+    badges: ['Resaltar', 'Barras / iconos', 'Fórmulas', 'Prioridad de reglas', 'Vencidos', 'Proteger', 'Ocultar fórmulas', 'Caso: semáforo'],
+    subtitle: 'Prueba reglas de resaltado, barras de datos, semáforo y fórmulas personalizadas.',
+  },
+  7: {
+    kind: 'pivot-chart', topic: 'Tablas dinámicas y gráficos',
+    badges: ['Qué es un pivote', 'Crear pivote', 'Agrupar', 'Campos calculados', 'Segmentación', 'Gráfico dinámico', 'Gráficos básicos', 'Combinados', 'Caso: reporte'],
+    subtitle: 'Cambia las filas y los valores del pivote para ver el resumen agrupado al instante.',
+  },
+  8: {
+    kind: 'productivity-final', topic: 'Productividad y proyecto final',
+    badges: ['Atajos', 'Nombres definidos', 'Vistas', 'Vincular hojas', 'Impresión', 'Auditoría', 'Hipótesis', 'Power Query / Macros', 'Proyecto final', 'Evaluación'],
+    subtitle: 'Explora atajos y calcula con Buscar objetivo el ajuste necesario para tu meta.',
+  },
+};
+
+const INTERMEDIATE_KINDS = new Set<IntermediateSimKind>(
+  Object.values(INTERMEDIATE_MODULES).map((module) => module.kind)
+);
+
 export function getTopicSimulatorMeta(lessonId?: string | null): TopicSimulatorMeta {
+  const intermediate = lessonId?.match(/^m([1-8])-l(\d+)$/);
+  if (intermediate) {
+    const moduleNumber = Number(intermediate[1]);
+    const lessonNumber = Number(intermediate[2]);
+    const config = INTERMEDIATE_MODULES[moduleNumber];
+    const badge = config.badges[Math.min(Math.max(lessonNumber - 1, 0), config.badges.length - 1)];
+    return {
+      kind: config.kind,
+      shortBadge: badge,
+      topicLabel: `Simulador: ${badge} · ${config.topic}`,
+      subtitle: config.subtitle,
+    };
+  }
+
   switch (lessonId) {
     case 'les-excel-0-0':
       return {
@@ -2114,6 +2181,9 @@ export const ExcelTopicSimulator: React.FC<ExcelTopicSimulatorProps> = ({ lesson
         </div>
       </div>
 
+      {INTERMEDIATE_KINDS.has(meta.kind as IntermediateSimKind) && (
+        <IntermediateTopicSim kind={meta.kind as IntermediateSimKind} lessonTitle={lessonId} />
+      )}
       {meta.kind === 'screen-9' && <ExcelScreenInterfaceViewer />}
       {meta.kind === 'grid-basics' && <ExcelGridBasicsViewer />}
       {meta.kind === 'f4-references' && <ExcelF4ReferenceViewer />}
