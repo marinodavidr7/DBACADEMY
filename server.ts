@@ -282,7 +282,10 @@ async function verifyFirebaseTokenAny(authHeader?: string): Promise<{ uid: strin
 async function requireAdmin(req: express.Request, res: express.Response): Promise<boolean> {
   try {
     const auth = await verifyFirebaseTokenAny(req.headers.authorization);
-    if (auth.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+    if (
+      auth.emailVerified !== true ||
+      auth.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()
+    ) {
       res.status(403).json({ error: 'Admin access required' });
       return false;
     }
@@ -597,6 +600,19 @@ function convertCourseCentsToStoreCents(
 
 export function createApp(): express.Express {
   const app = express();
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self "https://www.paypal.com" "https://www.sandbox.paypal.com")');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    res.setHeader(
+      'Content-Security-Policy-Report-Only',
+      "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.paypal.com https://www.sandbox.paypal.com https://apis.google.com; connect-src 'self' https: wss:; frame-src 'self' https:; worker-src 'self' blob:;"
+    );
+    next();
+  });
   app.use(
     express.json({
       // Las imágenes optimizadas pueden viajar como Data URL dentro del JSON
@@ -1568,9 +1584,9 @@ export function createApp(): express.Express {
       res.status(400).json({ error: 'Missing required payment fields' });
       return;
     }
-    const allowedGateways = ['lemonsqueezy', 'stripe', 'mercadopago', 'paypal'];
+    const allowedGateways = ['paypal'];
     if (!allowedGateways.includes(String(gateway))) {
-      res.status(400).json({ error: 'Unsupported payment gateway' });
+      res.status(400).json({ error: 'Unsupported payment gateway. Only PayPal is accepted.' });
       return;
     }
 
@@ -1709,15 +1725,18 @@ export function createApp(): express.Express {
 
       // Si el precio final es 0, no pasamos por pasarela
       const isFree = finalAmountCents === 0;
-      const prefix = isFree
-        ? 'free'
-        : gateway === 'lemonsqueezy'
-          ? 'ls'
-          : gateway === 'stripe'
-            ? 'pi'
-            : gateway === 'mercadopago'
-              ? 'mp'
-              : 'pp';
+
+      // Pagos pagados requieren verificación server-side real con la pasarela.
+      // Sin verificación, no confirmamos ni inscribimos.
+      if (!isFree && !isTestModeAdmin) {
+        res.status(400).json({
+          error: 'No se pudo verificar el pago con el proveedor. Completa la captura en PayPal y vuelve a intentarlo.',
+          code: 'PAYMENT_VERIFICATION_REQUIRED',
+        });
+        return;
+      }
+
+      const prefix = isFree ? 'free' : 'pp_test';
       const transactionRef = `${prefix}_${crypto.randomBytes(8).toString('hex')}`;
       const paymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
 
@@ -1740,10 +1759,12 @@ export function createApp(): express.Express {
         authorizedAt: new Date().toISOString(),
       };
 
-      broadcastEvent({ type: 'PAYMENT_COMPLETED', scope: 'user', ...receipt }, auth.uid);
-      if (course.instructorId) {
-        broadcastEvent({ type: 'INSTRUCTOR_SALE', scope: 'user', ...receipt }, String(course.instructorId));
-        void dispatchWebhooks(String(course.instructorId), 'payment.succeeded', receipt);
+      if (!isTestModeAdmin) {
+        broadcastEvent({ type: 'PAYMENT_COMPLETED', scope: 'user', ...receipt }, auth.uid);
+        if (course.instructorId) {
+          broadcastEvent({ type: 'INSTRUCTOR_SALE', scope: 'user', ...receipt }, String(course.instructorId));
+          void dispatchWebhooks(String(course.instructorId), 'payment.succeeded', receipt);
+        }
       }
 
       res.json(receipt);
@@ -2462,10 +2483,45 @@ export function createApp(): express.Express {
     }
   });
 
-  app.post('/api/v1/webhooks/register', (req, res) => {
+  const isBlockedWebhookHostname = (hostname: string): boolean => {
+    const h = hostname.toLowerCase().replace(/\.$/, '');
+    if (h === 'localhost' || h === '::1' || h === '0.0.0.0') return true;
+    if (h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
+    const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+      const [a, b] = ipv4.slice(1, 3).map(Number);
+      if (a === 10 || a === 127 || a === 0) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b >= 64 && b <= 127) return true;
+    }
+    if (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80:')) return true; // IPv6 private/link-local
+    return false;
+  };
+
+  const isAllowedWebhookUrl = (value: string): boolean => {
+    try {
+      const u = new URL(value);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+      if (u.username || u.password) return false;
+      if (isBlockedWebhookHostname(u.hostname)) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  app.post('/api/v1/webhooks/register', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
     const { id, ownerId, keyHash, label, webhookUrl } = req.body ?? {};
     if (!id || !ownerId || !keyHash) {
       res.status(400).json({ error: 'Missing id, ownerId, or keyHash' });
+      return;
+    }
+    const normalizedWebhookUrl = webhookUrl ? String(webhookUrl) : undefined;
+    if (normalizedWebhookUrl && !isAllowedWebhookUrl(normalizedWebhookUrl)) {
+      res.status(400).json({ error: 'webhookUrl inválida o apunta a un destino no permitido.' });
       return;
     }
     registeredKeys.set(String(id), {
@@ -2473,12 +2529,13 @@ export function createApp(): express.Express {
       ownerId: String(ownerId),
       keyHash: String(keyHash),
       label: String(label || 'Integration Key'),
-      webhookUrl: webhookUrl ? String(webhookUrl) : undefined,
+      webhookUrl: normalizedWebhookUrl,
     });
     res.json({ registered: true, id, activeKeys: registeredKeys.size });
   });
 
   app.post('/api/v1/webhooks/test', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
     const { ownerId, event, webhookUrl, samplePayload } = req.body ?? {};
     const eventName = String(event || 'course.progress.updated');
     const payload = {
@@ -2495,7 +2552,11 @@ export function createApp(): express.Express {
 
     let deliveryStatus = 200;
     let deliveryNote = 'Verified local HMAC-SHA256 payload signed';
-    if (webhookUrl && typeof webhookUrl === 'string' && webhookUrl.startsWith('http')) {
+    if (webhookUrl && typeof webhookUrl === 'string') {
+      if (!isAllowedWebhookUrl(webhookUrl)) {
+        res.status(400).json({ error: 'webhookUrl inválida o apunta a un destino no permitido.' });
+        return;
+      }
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 3000);
@@ -2537,7 +2598,8 @@ export function createApp(): express.Express {
     });
   });
 
-  app.get('/api/v1/webhooks/logs', (_req, res) => {
+  app.get('/api/v1/webhooks/logs', async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
     res.json({ deliveries: recentWebhooks });
   });
 
