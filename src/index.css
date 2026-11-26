@@ -521,6 +521,7 @@
   line-height: 1.7;
   color: rgb(15 23 42);
 }
+.dba-quill-wrap .ql-editor p { margin: 0.35em 0; }
 .dark .dba-quill-wrap .ql-editor { color: rgb(241 245 249); }
 .dba-quill-wrap .ql-editor.ql-blank::before { color: rgb(148 163 184); font-style: normal; }
 .dark .dba-quill-wrap .ql-editor.ql-blank::before { color: rgb(100 116 139); }
