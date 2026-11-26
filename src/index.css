@@ -563,3 +563,7 @@
 .dark .dba-embed-block iframe { border-color: rgb(51 65 85); }
 .dba-rich-content iframe { width: 100%; max-width: 100%; min-height: 320px; border: 1px solid rgb(203 213 225); border-radius: 0.5rem; }
 .dark .dba-rich-content iframe { border-color: rgb(51 65 85); }
+
+/* Quill editor iframe */
+.dba-quill-wrap .ql-editor iframe { width: 100%; max-width: 100%; min-height: 320px; border: 1px solid rgb(203 213 225); border-radius: 0.5rem; background: #000; }
+.dark .dba-quill-wrap .ql-editor iframe { border-color: rgb(51 65 85); }

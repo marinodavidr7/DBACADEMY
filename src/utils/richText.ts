@@ -26,11 +26,21 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-weight', 'font-style', 'text-decoration', 'text-decoration-line',
   'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom',
   'padding', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom',
-  'line-height', 'border', 'border-radius', 'width', 'max-width', 'height',
+  'line-height', 'border', 'border-radius', 'width', 'max-width', 'height', 'min-height',
   'display', 'list-style-type',
 ]);
 
-function sanitizeStyle(style: string): string {
+export function isSafeIframeSrc(src: string): boolean {
+  const clean = (src || '').trim();
+  if (!clean) return false;
+  if (/^(javascript:|data:|vbscript:)/i.test(clean)) return false;
+  if (clean.startsWith('//')) return false;
+  if (/^https:\/\//i.test(clean)) return true;
+  if (clean.startsWith('/') && !clean.startsWith('//')) return true;
+  return false;
+}
+
+export function sanitizeStyle(style: string): string {
   return style
     .split(';')
     .map((decl) => decl.trim())
@@ -42,7 +52,7 @@ function sanitizeStyle(style: string): string {
       const val = decl.slice(idx + 1).trim();
       if (!ALLOWED_STYLE_PROPS.has(prop)) return null;
       // Block dangerous values
-      if (/url\s*\(|expression\s*\(|javascript:|@import/i.test(val)) return null;
+      if (/url\s*\(|expression\s*\(|javascript:|@import|vbscript:/i.test(val)) return null;
       return `${prop}: ${val}`;
     })
     .filter((d): d is string => Boolean(d))
@@ -82,7 +92,7 @@ function ensureHooks() {
     }
     if (node.tagName === 'IFRAME') {
       const src = node.getAttribute('src') || '';
-      if (!/^https:\/\//i.test(src)) {
+      if (!isSafeIframeSrc(src)) {
         node.remove();
         return;
       }
@@ -114,10 +124,11 @@ export function sanitizeHtml(html: string): string {
 export function isHtmlContent(content: string): boolean {
   const t = (content || '').trim();
   if (!t) return false;
-  // Quill/HTML typically starts with <p>, <h1-6>, <ul>, <ol>, <blockquote>, <div>, <pre>
-  if (/^<(p|div|h[1-6]|ul|ol|blockquote|pre|table|hr|img)\b/i.test(t)) return true;
-  // Or contains common HTML tags
-  if (/<\/(p|div|h[1-6]|ul|ol|li|blockquote|pre|table|span|strong|em|a|br)>/i.test(t)) return true;
+  // Quill/HTML typically starts with <p>, <h1-6>, <ul>, <ol>, <blockquote>, <div>, <pre>, <iframe>
+  if (/^<(p|div|h[1-6]|ul|ol|blockquote|pre|table|hr|img|iframe)\b/i.test(t)) return true;
+  // Or contains common HTML tags (including iframe embeds)
+  if (/<\/(p|div|h[1-6]|ul|ol|li|blockquote|pre|table|span|strong|em|a|br|iframe)>/i.test(t)) return true;
+  if (/<iframe\b/i.test(t)) return true;
   return false;
 }
 

@@ -1602,6 +1602,28 @@ export const CoursePlayerView: React.FC = () => {
                                 }
                               }
 
+                              if (trimmed.startsWith('<iframe')) {
+                                const iframeMatch = segment.slice(segment.indexOf(rawLine)).match(/<iframe\b[\s\S]*?<\/iframe>/i);
+                                const iframeHtml = iframeMatch ? iframeMatch[0] : trimmed;
+                                const sanitizedIframe = renderLessonContent(iframeHtml);
+                                if (sanitizedIframe && /<iframe\b/i.test(sanitizedIframe)) {
+                                  flushTextBuf();
+                                  nodes.push(
+                                    <div
+                                      key={`embed-${segIdx}-${nodes.length}`}
+                                      className="dba-embed-block"
+                                      dangerouslySetInnerHTML={{ __html: sanitizedIframe }}
+                                    />
+                                  );
+                                  // skip lines consumed by iframe block
+                                  if (iframeMatch) {
+                                    const consumed = iframeMatch[0].split('\n').length - 1;
+                                    i += Math.max(0, consumed);
+                                  }
+                                  continue;
+                                }
+                              }
+
                               textBuf.push(rawLine);
                             }
 
