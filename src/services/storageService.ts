@@ -70,62 +70,82 @@ export async function fileToOptimizedDataUrl(
   maxHeight = 720,
   quality = 0.78
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
+  const originalDataUrl = () =>
+    new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => resolve(String(reader.result || ''));
       reader.onerror = reject;
       reader.readAsDataURL(file);
-      return;
+    });
+
+  const extension = file.name.toLowerCase().split('.').pop() || '';
+  const IMAGE_EXTENSIONS = new Set([
+    'png', 'jpg', 'jpeg', 'jfif', 'webp', 'gif', 'svg', 'avif', 'bmp',
+  ]);
+  const isImage =
+    (file.type && file.type.startsWith('image/')) || IMAGE_EXTENSIONS.has(extension);
+
+  if (!isImage) return originalDataUrl();
+
+  try {
+    const rawDataUrl = await originalDataUrl();
+    // SVG no puede rasterizarse de forma fiable en todos los navegadores.
+    if (/^data:image\/svg/i.test(rawDataUrl)) return rawDataUrl;
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = rawDataUrl;
+    });
+
+    if (!img.naturalWidth || !img.naturalHeight) {
+      throw new Error('La imagen no tiene dimensiones válidas.');
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height);
-          height = maxHeight;
-        }
+    let { naturalWidth: width, naturalHeight: height } = img;
+    if (width > maxWidth) {
+      height = Math.round((height * maxWidth) / width);
+      width = maxWidth;
+    }
+    if (height > maxHeight) {
+      width = Math.round((width * maxHeight) / height);
+      height = maxHeight;
+    }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas no disponible.');
 
-        // WebP comprime mucho mejor que PNG/JPEG; si no hay soporte, JPEG con
-        // fondo blanco (evita que las transparencias se vuelvan negras).
-        const probe = canvas.toDataURL('image/webp', 0.1);
-        const supportsWebp = probe.startsWith('data:image/webp');
-        if (!supportsWebp) {
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        const mimeType = supportsWebp ? 'image/webp' : 'image/jpeg';
-        let dataUrl = canvas.toDataURL(mimeType, quality);
-        // Segunda pasada agresiva si la imagen sigue siendo demasiado grande
-        // para persistir dentro del JSON del curso.
-        if (dataUrl.length > 1_500_000) {
-          dataUrl = canvas.toDataURL(mimeType, 0.55);
-        }
-        resolve(dataUrl);
-      };
-      img.onerror = () => resolve(e.target?.result as string);
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+    // WebP comprime mejor; si no hay soporte, JPEG con fondo blanco.
+    const probe = canvas.toDataURL('image/webp', 0.1);
+    const supportsWebp = probe.startsWith('data:image/webp');
+    if (!supportsWebp) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
+    }
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const mimeType = supportsWebp ? 'image/webp' : 'image/jpeg';
+    let dataUrl = canvas.toDataURL(mimeType, quality);
+    if (!dataUrl.startsWith('data:image/')) {
+      throw new Error('El navegador devolvió una imagen inválida.');
+    }
+    if (dataUrl.length > 1_500_000) {
+      const smaller = canvas.toDataURL(mimeType, 0.55);
+      if (smaller.startsWith('data:image/')) dataUrl = smaller;
+    }
+    return dataUrl;
+  } catch (err) {
+    console.warn('No se pudo optimizar la imagen; se usa el original:', err);
+    const fallback = await originalDataUrl();
+    if (!fallback.startsWith('data:image/')) {
+      throw new Error('No se pudo generar una imagen válida.');
+    }
+    return fallback;
+  }
 }
 
 /**
