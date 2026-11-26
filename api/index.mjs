@@ -6,91 +6,37 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
+import nodemailer from "nodemailer";
 import Stripe from "stripe";
 import { WebSocket, WebSocketServer } from "ws";
 
 // src/lib/supabase/serverClient.ts
-import { createClient as createClient2 } from "@supabase/supabase-js";
-
-// src/lib/supabase/client.ts
 import { createClient } from "@supabase/supabase-js";
 
-// src/firebase.ts
-import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import {
-  doc,
-  getDocFromServer,
-  getFirestore,
-  initializeFirestore
-} from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-
-// firebase-applet-config.json
-var firebase_applet_config_default = {
-  projectId: "river-pipe-m6tvw",
-  appId: "1:103296721510:web:bf528f9d5f2f210585c3a7",
-  apiKey: "AIzaSyDKZakPPo5rVbjz5OUblwqTx-hlzgGa2ug",
-  authDomain: "river-pipe-m6tvw.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-53dee1f7-6e52-4d31-96d4-504a084c64e0",
-  storageBucket: "river-pipe-m6tvw.firebasestorage.app",
-  messagingSenderId: "103296721510",
-  measurementId: "",
-  oAuthClientId: "103296721510-tln06afa1aer16i1pjs0ksljp36va393.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
-
-// src/firebase.ts
-var app = initializeApp(firebase_applet_config_default);
-function initDb() {
-  const settings = {
-    experimentalAutoDetectLongPolling: true,
-    ignoreUndefinedProperties: true
-  };
-  try {
-    return initializeFirestore(app, settings, firebase_applet_config_default.firestoreDatabaseId);
-  } catch {
-    return getFirestore(app, firebase_applet_config_default.firestoreDatabaseId);
-  }
-}
-var db = initDb();
-var auth = getAuth(app);
-var googleProvider = new GoogleAuthProvider();
-googleProvider.addScope("email");
-googleProvider.addScope("profile");
-var storage = getStorage(app);
-var FIREBASE_PROJECT_ID = firebase_applet_config_default.projectId;
-var FIREBASE_AUTH_SETTINGS_URL = `https://console.firebase.google.com/project/${firebase_applet_config_default.projectId}/authentication/settings`;
-async function testConnection() {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    return false;
-  }
-  try {
-    await getDocFromServer(doc(db, "test", "connection"));
-    return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.error("Please check your Firebase configuration.");
-      return false;
-    }
-    return true;
-  }
-}
-void testConnection();
-
-// src/lib/supabase/firestoreAdapter.ts
+// src/lib/supabase/utils.ts
 function pkFor(table) {
   if (table === "users" || table === "users_private") return "uid";
   if (table === "settings") return "key";
   return "id";
+}
+function toSnake(key) {
+  if (!/[A-Z]/.test(key)) return key;
+  return key.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+}
+function snakeToCamel(key) {
+  return key.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function cleanWriteValue(v) {
   if (v && typeof v === "object" && v.__serverTimestamp === true) return nowIso();
+  if (v instanceof Date) return v.toISOString();
+  if (v && typeof v === "object" && typeof v.toDate === "function") {
+    return v.toDate().toISOString();
+  }
   if (Array.isArray(v)) return v.map(cleanWriteValue);
-  if (v && typeof v === "object" && !(v instanceof Date) && !(v instanceof Uint8Array)) {
+  if (v && typeof v === "object" && !(v instanceof Uint8Array)) {
     const out = {};
     for (const k of Object.keys(v)) out[k] = cleanWriteValue(v[k]);
     return out;
@@ -104,13 +50,6 @@ function cleanWrite(data) {
     out[key === "id" ? "id" : key] = cleanWriteValue(data[k]);
   }
   return out;
-}
-function toSnake(key) {
-  if (!/[A-Z]/.test(key)) return key;
-  return key.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
-}
-function snakeToCamel(key) {
-  return key.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
 function rowToSnapshot(row, table = "unknown_table") {
   const pk = pkFor(table);
@@ -150,7 +89,7 @@ function getSupabaseServiceClient() {
     );
   }
   if (!client) {
-    client = createClient2(url, key, { auth: { autoRefreshToken: false } });
+    client = createClient(url, key, { auth: { autoRefreshToken: false } });
   }
   return client;
 }
@@ -325,7 +264,7 @@ var LEGAL_DOCUMENTS = [
     description: "Hallazgos, matriz de riesgos y puntos de revisi\xF3n profesional."
   }
 ];
-var getLegalDocumentByFile = (file) => LEGAL_DOCUMENTS.find((doc2) => doc2.file.toLowerCase() === String(file || "").toLowerCase());
+var getLegalDocumentByFile = (file) => LEGAL_DOCUMENTS.find((doc) => doc.file.toLowerCase() === String(file || "").toLowerCase());
 
 // server.ts
 var __filename = fileURLToPath(import.meta.url);
@@ -383,7 +322,7 @@ function loadFirebaseConfig() {
   }
 }
 var FIREBASE_APP_CONFIG = loadFirebaseConfig();
-var FIREBASE_PROJECT_ID2 = FIREBASE_APP_CONFIG.projectId;
+var FIREBASE_PROJECT_ID = FIREBASE_APP_CONFIG.projectId;
 var cachedGoogleCerts = {
   certs: {},
   expiresAt: 0
@@ -450,7 +389,7 @@ async function verifyFirebaseAdminBearerToken(authHeader) {
     throw new AuthValidationError(401, "Firma del token de Firebase inv\xE1lida.");
   }
   const nowSec = Math.floor(Date.now() / 1e3);
-  if (payload.aud !== FIREBASE_PROJECT_ID2 || payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID2}` || typeof payload.sub !== "string" || payload.sub.length === 0 || typeof payload.exp !== "number" || payload.exp <= nowSec || typeof payload.iat !== "number" || payload.iat > nowSec + 60) {
+  if (payload.aud !== FIREBASE_PROJECT_ID || payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}` || typeof payload.sub !== "string" || payload.sub.length === 0 || typeof payload.exp !== "number" || payload.exp <= nowSec || typeof payload.iat !== "number" || payload.iat > nowSec + 60) {
     throw new AuthValidationError(401, "Token expirado o emitido para otro proyecto.");
   }
   const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
@@ -495,7 +434,7 @@ async function verifyFirebaseTokenAny(authHeader) {
     throw new AuthValidationError(401, "Firma del token de Firebase inv\xE1lida.");
   }
   const nowSec = Math.floor(Date.now() / 1e3);
-  if (payload.aud !== FIREBASE_PROJECT_ID2 || payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID2}` || typeof payload.sub !== "string" || payload.sub.length === 0 || typeof payload.exp !== "number" || payload.exp <= nowSec || typeof payload.iat !== "number" || payload.iat > nowSec + 60) {
+  if (payload.aud !== FIREBASE_PROJECT_ID || payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}` || typeof payload.sub !== "string" || payload.sub.length === 0 || typeof payload.exp !== "number" || payload.exp <= nowSec || typeof payload.iat !== "number" || payload.iat > nowSec + 60) {
     throw new AuthValidationError(401, "Token expirado o emitido para otro proyecto.");
   }
   const nowMs = Date.now();
@@ -514,8 +453,8 @@ async function verifyFirebaseTokenAny(authHeader) {
 }
 async function requireAdmin(req, res) {
   try {
-    const auth2 = await verifyFirebaseTokenAny(req.headers.authorization);
-    if (auth2.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
+    const auth = await verifyFirebaseTokenAny(req.headers.authorization);
+    if (auth.email?.toLowerCase() !== AUTHORIZED_ADMIN_EMAIL.toLowerCase()) {
       res.status(403).json({ error: "Admin access required" });
       return false;
     }
@@ -528,8 +467,8 @@ async function requireAdmin(req, res) {
 }
 async function requireAuth(req, res) {
   try {
-    const auth2 = await verifyFirebaseTokenAny(req.headers.authorization);
-    return { uid: auth2.uid, email: auth2.email };
+    const auth = await verifyFirebaseTokenAny(req.headers.authorization);
+    return { uid: auth.uid, email: auth.email };
   } catch (err) {
     const status = err instanceof AuthValidationError ? err.status : 401;
     res.status(status).json({ error: err instanceof Error ? err.message : "Invalid token" });
@@ -715,8 +654,8 @@ function convertCourseCentsToStoreCents(amountCents, courseCurrency, config) {
   return Math.max(50, Math.round(amountCents));
 }
 function createApp() {
-  const app3 = express();
-  app3.use(
+  const app2 = express();
+  app2.use(
     express.json({
       // Las imágenes optimizadas pueden viajar como Data URL dentro del JSON
       // del curso; 2 MB las rechazaba con 413 y el material nunca se guardaba.
@@ -726,7 +665,7 @@ function createApp() {
       }
     })
   );
-  app3.get("/api/v1/health", (_req, res) => {
+  app2.get("/api/v1/health", (_req, res) => {
     res.json({
       status: "ok",
       service: "catedra-lms-api",
@@ -737,7 +676,7 @@ function createApp() {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   });
-  app3.get("/api/v1/openapi.json", (req, res) => {
+  app2.get("/api/v1/openapi.json", (req, res) => {
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     res.json({
       openapi: "3.0.3",
@@ -764,7 +703,7 @@ function createApp() {
       }
     });
   });
-  app3.get("/api/v1/payments/lemonsqueezy/status", (_req, res) => {
+  app2.get("/api/v1/payments/lemonsqueezy/status", (_req, res) => {
     const cfg = getLemonSqueezyConfig();
     res.json({
       configured: cfg.configured,
@@ -775,9 +714,9 @@ function createApp() {
       missingKeys: cfg.missingKeys
     });
   });
-  app3.post("/api/v1/payments/lemonsqueezy/checkout", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.post("/api/v1/payments/lemonsqueezy/checkout", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const { courseId, couponCode, giftCardCode, customerName } = req.body ?? {};
     const safeCourseId = typeof courseId === "string" ? courseId.trim() : "";
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(safeCourseId)) {
@@ -901,12 +840,12 @@ function createApp() {
               logo: true
             },
             checkout_data: {
-              ...auth2.email ? { email: auth2.email } : {},
+              ...auth.email ? { email: auth.email } : {},
               ...typeof customerName === "string" && customerName.trim() ? { name: customerName.trim().slice(0, 100) } : {},
               custom: {
                 payment_id: paymentId,
                 course_id: safeCourseId,
-                user_id: auth2.uid,
+                user_id: auth.uid,
                 coupon_code: appliedCouponCode || "",
                 gift_card_code: appliedGiftCardCode || ""
               }
@@ -953,8 +892,8 @@ function createApp() {
         checkoutId,
         courseId: safeCourseId,
         courseTitle,
-        userId: auth2.uid,
-        userEmail: auth2.email,
+        userId: auth.uid,
+        userEmail: auth.email,
         instructorId,
         amountCents: finalAmountCents,
         originalAmountCents,
@@ -989,7 +928,7 @@ function createApp() {
       });
     }
   });
-  app3.post("/api/v1/payments/lemonsqueezy/webhook", (req, res) => {
+  app2.post("/api/v1/payments/lemonsqueezy/webhook", (req, res) => {
     const lsConfig = getLemonSqueezyConfig();
     if (!lsConfig.webhookSecret) {
       res.status(503).json({ error: "LEMONSQUEEZY_WEBHOOK_SECRET not configured" });
@@ -1061,9 +1000,9 @@ function createApp() {
     }
     res.json({ received: true });
   });
-  app3.get("/api/v1/payments/lemonsqueezy/verify", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.get("/api/v1/payments/lemonsqueezy/verify", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const paymentId = typeof req.query.paymentId === "string" ? req.query.paymentId.trim() : "";
     const courseId = typeof req.query.courseId === "string" ? req.query.courseId.trim() : "";
     const orderIdQuery = typeof req.query.orderId === "string" ? req.query.orderId.trim() : "";
@@ -1072,7 +1011,7 @@ function createApp() {
       return;
     }
     const pending = pendingLemonCheckouts.get(paymentId);
-    if (pending && pending.userId !== auth2.uid) {
+    if (pending && pending.userId !== auth.uid) {
       res.status(403).json({ error: "Esta sesi\xF3n de pago pertenece a otro usuario." });
       return;
     }
@@ -1081,7 +1020,7 @@ function createApp() {
       return;
     }
     let verified = verifiedLemonOrders.get(paymentId);
-    if (verified && verified.userId && verified.userId !== auth2.uid) {
+    if (verified && verified.userId && verified.userId !== auth.uid) {
       res.status(403).json({ error: "La orden verificada pertenece a otro usuario." });
       return;
     }
@@ -1098,7 +1037,7 @@ function createApp() {
           if (orderResp.ok) {
             const orderJson = await orderResp.json();
             const attrs = orderJson.data?.attributes;
-            const emailMatches = !auth2.email || !attrs?.user_email || attrs.user_email.trim().toLowerCase() === auth2.email.toLowerCase();
+            const emailMatches = !auth.email || !attrs?.user_email || attrs.user_email.trim().toLowerCase() === auth.email.toLowerCase();
             if (orderJson.data?.id && attrs?.status === "paid" && emailMatches) {
               verified = {
                 paymentId,
@@ -1106,7 +1045,7 @@ function createApp() {
                 orderNumber: String(attrs.order_number || orderJson.data.id),
                 identifier: String(attrs.identifier || orderJson.data.id),
                 courseId: pending?.courseId || courseId,
-                userId: auth2.uid,
+                userId: auth.uid,
                 status: "paid",
                 receiptUrl: attrs.urls?.receipt,
                 totalCents: Number(attrs.total ?? 0),
@@ -1116,10 +1055,10 @@ function createApp() {
               verifiedLemonOrders.set(paymentId, verified);
             }
           }
-        } else if (pending && auth2.email) {
+        } else if (pending && auth.email) {
           const ordersUrl = new URL("https://api.lemonsqueezy.com/v1/orders");
           ordersUrl.searchParams.set("filter[store_id]", lsConfig.storeId);
-          ordersUrl.searchParams.set("filter[user_email]", auth2.email);
+          ordersUrl.searchParams.set("filter[user_email]", auth.email);
           ordersUrl.searchParams.set("sort", "-createdAt");
           ordersUrl.searchParams.set("page[size]", "10");
           const ordersResp = await fetch(ordersUrl.toString(), {
@@ -1145,7 +1084,7 @@ function createApp() {
                 orderNumber: String(matched.attributes.order_number || matched.id),
                 identifier: String(matched.attributes.identifier || matched.id),
                 courseId: pending.courseId,
-                userId: auth2.uid,
+                userId: auth.uid,
                 status: "paid",
                 receiptUrl: matched.attributes.urls?.receipt,
                 totalCents: Number(matched.attributes.total ?? 0),
@@ -1201,7 +1140,7 @@ function createApp() {
       webhookSecret
     };
   };
-  app3.get("/api/v1/payments/stripe/status", (_req, res) => {
+  app2.get("/api/v1/payments/stripe/status", (_req, res) => {
     const { stripe, testMode, webhookConfigured } = getStripeClient();
     res.json({
       configured: Boolean(stripe),
@@ -1210,9 +1149,9 @@ function createApp() {
       currency: "DOP"
     });
   });
-  app3.post("/api/v1/payments/stripe/checkout", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.post("/api/v1/payments/stripe/checkout", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const { stripe, testMode } = getStripeClient();
     if (!stripe) {
       res.status(503).json({
@@ -1316,7 +1255,7 @@ function createApp() {
       const cancelUrl = `${appBaseUrl}/?stripe_checkout=cancelled&course_id=${encodeURIComponent(safeCourseId)}`;
       const baseSessionParams = {
         mode: "payment",
-        customer_email: auth2.email || void 0,
+        customer_email: auth.email || void 0,
         line_items: [
           {
             price_data: {
@@ -1345,7 +1284,7 @@ function createApp() {
           paymentId,
           courseId: safeCourseId,
           courseTitle,
-          studentId: auth2.uid,
+          studentId: auth.uid,
           instructorId,
           couponCode: appliedCouponCode || "",
           giftCardCode: appliedGiftCardCode || "",
@@ -1390,9 +1329,9 @@ function createApp() {
       });
     }
   });
-  app3.get("/api/v1/payments/stripe/verify", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.get("/api/v1/payments/stripe/verify", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const { stripe } = getStripeClient();
     if (!stripe) {
       res.status(503).json({ error: "Stripe no est\xE1 configurado en el servidor." });
@@ -1409,7 +1348,7 @@ function createApp() {
         expand: ["payment_intent", "invoice"]
       });
       const meta = session.metadata || {};
-      if (meta.studentId && meta.studentId !== auth2.uid) {
+      if (meta.studentId && meta.studentId !== auth.uid) {
         res.status(403).json({ error: "Esta sesi\xF3n de pago pertenece a otro usuario." });
         return;
       }
@@ -1448,7 +1387,7 @@ function createApp() {
       });
     }
   });
-  app3.post("/api/v1/payments/stripe/webhook", (req, res) => {
+  app2.post("/api/v1/payments/stripe/webhook", (req, res) => {
     const { stripe, webhookSecret } = getStripeClient();
     if (!stripe || !webhookSecret) {
       res.status(503).json({ error: "STRIPE_WEBHOOK_SECRET no configurado." });
@@ -1497,11 +1436,11 @@ function createApp() {
     }
     res.json({ received: true, eventType: event.type });
   });
-  app3.post("/api/v1/payments/checkout", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.post("/api/v1/payments/checkout", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const { courseId, gateway, couponCode, referralWelcome, testMode } = req.body ?? {};
-    const isTestModeAdmin = testMode === true && auth2.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
+    const isTestModeAdmin = testMode === true && auth.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
     if (!courseId || !gateway) {
       res.status(400).json({ error: "Missing required payment fields" });
       return;
@@ -1512,8 +1451,8 @@ function createApp() {
       return;
     }
     try {
-      const db2 = serverDb;
-      const courseSnap = await db2.collection("courses").doc(String(courseId)).get();
+      const db = serverDb;
+      const courseSnap = await db.collection("courses").doc(String(courseId)).get();
       if (!courseSnap.exists()) {
         res.status(404).json({ error: "Curso no encontrado" });
         return;
@@ -1527,13 +1466,13 @@ function createApp() {
       let discountSource = "none";
       let welcomeDiscountCents = 0;
       if (referralWelcome === true && originalAmountCents > 0) {
-        const settingsSnap = await db2.collection("settings").doc("referrals").get();
+        const settingsSnap = await db.collection("settings").doc("referrals").get();
         const settings = settingsSnap.exists() ? settingsSnap.data() : null;
         if (settings?.active) {
-          const userSnap = await db2.collection("users").doc(auth2.uid).get();
+          const userSnap = await db.collection("users").doc(auth.uid).get();
           const userData = userSnap.exists() ? userSnap.data() : {};
-          if (userData.referredBy && userData.referredBy !== auth2.uid) {
-            const prevPayments = await db2.collection("payments").where("studentId", "==", auth2.uid).where("status", "==", "succeeded").limit(1).get();
+          if (userData.referredBy && userData.referredBy !== auth.uid) {
+            const prevPayments = await db.collection("payments").where("studentId", "==", auth.uid).where("status", "==", "succeeded").limit(1).get();
             if (prevPayments.empty) {
               const pct = Math.min(100, Math.max(0, Number(settings.welcomeDiscountPercent ?? 10)));
               welcomeDiscountCents = Math.min(originalAmountCents, Math.round(originalAmountCents * pct / 100));
@@ -1545,7 +1484,7 @@ function createApp() {
       let couponToApply = null;
       const normalizedCoupon = typeof couponCode === "string" && couponCode.trim() ? normalizeCode(couponCode) : "";
       if (normalizedCoupon && originalAmountCents > 0) {
-        const couponRef = db2.collection("coupons").doc(normalizedCoupon);
+        const couponRef = db.collection("coupons").doc(normalizedCoupon);
         const couponSnap = await couponRef.get();
         if (!couponSnap.exists()) {
           res.status(400).json({ error: "C\xF3digo de cup\xF3n no encontrado." });
@@ -1576,10 +1515,10 @@ function createApp() {
       }
       const finalAmountCents = Math.max(0, originalAmountCents - discountCents);
       if (discountSource === "coupon" && couponToApply && appliedCouponCode && !isTestModeAdmin) {
-        const couponRef = db2.collection("coupons").doc(appliedCouponCode);
+        const couponRef = db.collection("coupons").doc(appliedCouponCode);
         redemptionId = `cr_${crypto.randomBytes(8).toString("hex")}`;
-        const redemptionRef = db2.collection("couponRedemptions").doc(redemptionId);
-        await db2.runTransaction(async (tx) => {
+        const redemptionRef = db.collection("couponRedemptions").doc(redemptionId);
+        await db.runTransaction(async (tx) => {
           const freshCouponSnap = await tx.get(couponRef);
           if (!freshCouponSnap.exists()) throw new Error("Cup\xF3n no encontrado.");
           const freshCoupon = freshCouponSnap.data();
@@ -1591,7 +1530,7 @@ function createApp() {
             throw new Error("El cup\xF3n ha agotado sus usos.");
           }
           const userRedemptionsSnap = await tx.get(
-            db2.collection("couponRedemptions").where("couponCode", "==", appliedCouponCode).where("userId", "==", auth2.uid)
+            db.collection("couponRedemptions").where("couponCode", "==", appliedCouponCode).where("userId", "==", auth.uid)
           );
           const usedByUser = userRedemptionsSnap.docs.filter((d) => {
             const st = d.data().status;
@@ -1604,7 +1543,7 @@ function createApp() {
           const redemption = {
             id: redemptionId,
             couponCode: appliedCouponCode,
-            userId: auth2.uid,
+            userId: auth.uid,
             courseId: String(courseId),
             discountCents,
             status: "confirmed",
@@ -1626,7 +1565,7 @@ function createApp() {
         paymentId,
         courseId: String(courseId),
         courseTitle: String(course.title || ""),
-        studentId: auth2.uid,
+        studentId: auth.uid,
         instructorId: String(course.instructorId || ""),
         amountCents: finalAmountCents,
         originalAmountCents,
@@ -1640,7 +1579,7 @@ function createApp() {
         transactionRef,
         authorizedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      broadcastEvent({ type: "PAYMENT_COMPLETED", scope: "user", ...receipt }, auth2.uid);
+      broadcastEvent({ type: "PAYMENT_COMPLETED", scope: "user", ...receipt }, auth.uid);
       if (course.instructorId) {
         broadcastEvent({ type: "INSTRUCTOR_SALE", scope: "user", ...receipt }, String(course.instructorId));
         void dispatchWebhooks(String(course.instructorId), "payment.succeeded", receipt);
@@ -1678,7 +1617,7 @@ function createApp() {
       finalPriceCents: Math.max(0, priceCents - discount)
     };
   }
-  app3.post("/api/coupons/validate", async (req, res) => {
+  app2.post("/api/coupons/validate", async (req, res) => {
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
     if (!checkRateLimit(clientIp, 30, 6e4)) {
       res.status(429).json({ error: "Demasiadas solicitudes. Intenta de nuevo m\xE1s tarde." });
@@ -1690,9 +1629,9 @@ function createApp() {
       return;
     }
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const normalizedCode = normalizeCode(code);
-      const couponRef = db2.collection("coupons").doc(normalizedCode);
+      const couponRef = db.collection("coupons").doc(normalizedCode);
       const couponSnap = await couponRef.get();
       if (!couponSnap.exists()) {
         res.status(404).json({
@@ -1765,7 +1704,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error validando cup\xF3n." });
     }
   });
-  app3.get("/api/admin/courses", async (req, res) => {
+  app2.get("/api/admin/courses", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
       const snap = await serverDb.collection("courses").get();
@@ -1774,7 +1713,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al listar cursos" });
     }
   });
-  app3.put("/api/admin/courses/:id", async (req, res) => {
+  app2.put("/api/admin/courses/:id", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     const { id } = req.params;
     if (!id) {
@@ -1791,7 +1730,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al actualizar curso" });
     }
   });
-  app3.post("/api/admin/courses", async (req, res) => {
+  app2.post("/api/admin/courses", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     const data = req.body;
     const id = data.id?.trim();
@@ -1806,7 +1745,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al crear curso" });
     }
   });
-  app3.delete("/api/admin/courses/:id", async (req, res) => {
+  app2.delete("/api/admin/courses/:id", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     const { id } = req.params;
     try {
@@ -1825,7 +1764,7 @@ function createApp() {
     "users_private"
   ]);
   const isAdminProxyTable = (table) => ADMIN_PROXY_TABLES.has(table);
-  app3.get("/api/admin/:table", async (req, res) => {
+  app2.get("/api/admin/:table", async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) {
       res.status(404).json({ error: "Tabla no disponible" });
       return;
@@ -1838,7 +1777,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al listar" });
     }
   });
-  app3.get("/api/admin/:table/:id", async (req, res) => {
+  app2.get("/api/admin/:table/:id", async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) {
       res.status(404).json({ error: "Tabla no disponible" });
       return;
@@ -1855,7 +1794,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al leer" });
     }
   });
-  app3.put("/api/admin/:table/:id", async (req, res) => {
+  app2.put("/api/admin/:table/:id", async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) {
       res.status(404).json({ error: "Tabla no disponible" });
       return;
@@ -1871,7 +1810,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al guardar" });
     }
   });
-  app3.post("/api/admin/:table", async (req, res) => {
+  app2.post("/api/admin/:table", async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) {
       res.status(404).json({ error: "Tabla no disponible" });
       return;
@@ -1889,7 +1828,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al crear" });
     }
   });
-  app3.delete("/api/admin/:table/:id", async (req, res) => {
+  app2.delete("/api/admin/:table/:id", async (req, res) => {
     if (!isAdminProxyTable(req.params.table)) {
       res.status(404).json({ error: "Tabla no disponible" });
       return;
@@ -1902,9 +1841,9 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al eliminar" });
     }
   });
-  app3.get("/api/gift-cards/:code", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.get("/api/gift-cards/:code", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     const code = String(req.params.code || "").trim().toUpperCase();
     if (!/^[A-Z0-9_-]{6,64}$/.test(code)) {
       res.status(400).json({ error: "C\xF3digo inv\xE1lido" });
@@ -1921,18 +1860,22 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al verificar" });
     }
   });
-  app3.get("/api/gift-card-redemptions", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.get("/api/gift-card-redemptions", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
-      const snap = await serverDb.collection("gift_card_redemptions").where("studentId", "==", auth2.uid).get();
+      const snap = await serverDb.collection("gift_card_redemptions").where("studentId", "==", auth.uid).get();
       res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al listar canjes" });
     }
   });
   const LANDING_CONFIG_KEY = "landing_config";
-  app3.get("/api/landing-config", async (_req, res) => {
+  app2.get("/api/landing-config", async (_req, res) => {
+    if (!isSupabaseAdminConfigured()) {
+      res.json({ config: null });
+      return;
+    }
     try {
       const { data, error } = await getSupabaseServiceClient().from("settings").select("value").eq("key", LANDING_CONFIG_KEY).maybeSingle();
       if (error) throw new Error(error.message);
@@ -1941,7 +1884,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al leer configuraci\xF3n" });
     }
   });
-  app3.put("/api/landing-config", async (req, res) => {
+  app2.put("/api/landing-config", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     if (!req.body || typeof req.body !== "object") {
       res.status(400).json({ error: "Cuerpo inv\xE1lido" });
@@ -1958,11 +1901,11 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al guardar configuraci\xF3n" });
     }
   });
-  app3.get("/api/coupons", async (req, res) => {
+  app2.get("/api/coupons", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
-      const snap = await db2.collection("coupons").orderBy("createdAt", "desc").get();
+      const db = serverDb;
+      const snap = await db.collection("coupons").orderBy("createdAt", "desc").get();
       const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       res.json({ coupons });
     } catch (err) {
@@ -1970,10 +1913,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error listando cupones." });
     }
   });
-  app3.post("/api/coupons", async (req, res) => {
+  app2.post("/api/coupons", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const {
         code,
         description,
@@ -2019,7 +1962,7 @@ function createApp() {
         createdAt: now,
         updatedAt: now
       };
-      await db2.collection("coupons").doc(couponId).set(coupon);
+      await db.collection("coupons").doc(couponId).set(coupon);
       res.status(201).json({ coupon });
     } catch (err) {
       console.error("Create coupon error:", err);
@@ -2030,13 +1973,13 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error creando cup\xF3n." });
     }
   });
-  app3.put("/api/coupons/:code", async (req, res) => {
+  app2.put("/api/coupons/:code", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
-      const couponRef = db2.collection("coupons").doc(normalizedCode);
+      const couponRef = db.collection("coupons").doc(normalizedCode);
       const snap = await couponRef.get();
       if (!snap.exists()) {
         res.status(404).json({ error: "Cup\xF3n no encontrado." });
@@ -2053,13 +1996,13 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error actualizando cup\xF3n." });
     }
   });
-  app3.delete("/api/coupons/:code", async (req, res) => {
+  app2.delete("/api/coupons/:code", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
-      const couponRef = db2.collection("coupons").doc(normalizedCode);
+      const couponRef = db.collection("coupons").doc(normalizedCode);
       const snap = await couponRef.get();
       if (!snap.exists()) {
         res.status(404).json({ error: "Cup\xF3n no encontrado." });
@@ -2077,10 +2020,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error eliminando cup\xF3n." });
     }
   });
-  app3.post("/api/coupons/:code/toggle", async (req, res) => {
+  app2.post("/api/coupons/:code/toggle", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
       const { active } = req.body ?? {};
@@ -2088,7 +2031,7 @@ function createApp() {
         res.status(400).json({ error: "El campo active es requerido (boolean)." });
         return;
       }
-      const couponRef = db2.collection("coupons").doc(normalizedCode);
+      const couponRef = db.collection("coupons").doc(normalizedCode);
       await couponRef.update({ active, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
       res.json({ success: true, active });
     } catch (err) {
@@ -2096,13 +2039,13 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error cambiando estado del cup\xF3n." });
     }
   });
-  app3.get("/api/coupons/:code/redemptions", async (req, res) => {
+  app2.get("/api/coupons/:code/redemptions", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { code } = req.params;
       const normalizedCode = normalizeCode(code);
-      const snap = await db2.collection("couponRedemptions").where("couponCode", "==", normalizedCode).orderBy("createdAt", "desc").get();
+      const snap = await db.collection("couponRedemptions").where("couponCode", "==", normalizedCode).orderBy("createdAt", "desc").get();
       const redemptions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const totalDiscount = redemptions.filter((r) => r.status === "confirmed").reduce((acc, r) => acc + r.discountCents, 0);
       res.json({ redemptions, totalDiscountCents: totalDiscount });
@@ -2111,11 +2054,11 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error listando redenciones." });
     }
   });
-  app3.get("/api/referrals/settings", async (req, res) => {
+  app2.get("/api/referrals/settings", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
-      const snap = await db2.collection("settings").doc("referrals").get();
+      const db = serverDb;
+      const snap = await db.collection("settings").doc("referrals").get();
       if (!snap.exists()) {
         const defaults = {
           id: "default",
@@ -2126,7 +2069,7 @@ function createApp() {
           active: true,
           updatedAt: (/* @__PURE__ */ new Date()).toISOString()
         };
-        await db2.collection("settings").doc("referrals").set(defaults);
+        await db.collection("settings").doc("referrals").set(defaults);
         res.json({ settings: defaults });
         return;
       }
@@ -2136,12 +2079,12 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error obteniendo configuraci\xF3n de referidos." });
     }
   });
-  app3.put("/api/referrals/settings", async (req, res) => {
+  app2.put("/api/referrals/settings", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { welcomeDiscountPercent, referrerRewardPercent, retentionDays, maxRewardsPerReferrerPerMonth, active } = req.body ?? {};
-      const settingsRef = db2.collection("settings").doc("referrals");
+      const settingsRef = db.collection("settings").doc("referrals");
       const updates = {
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
@@ -2158,11 +2101,11 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error actualizando configuraci\xF3n de referidos." });
     }
   });
-  app3.get("/api/referrals", async (req, res) => {
+  app2.get("/api/referrals", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
-      const snap = await db2.collection("referrals").orderBy("createdAt", "desc").get();
+      const db = serverDb;
+      const snap = await db.collection("referrals").orderBy("createdAt", "desc").get();
       const referrals = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       res.json({ referrals });
     } catch (err) {
@@ -2170,16 +2113,16 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error listando referidos." });
     }
   });
-  app3.get("/api/referrals/my", async (req, res) => {
-    const auth2 = await requireAuth(req, res);
-    if (!auth2) return;
+  app2.get("/api/referrals/my", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
-      const db2 = serverDb;
-      const userId = auth2.uid;
-      const userSnap = await db2.collection("users").doc(userId).get();
+      const db = serverDb;
+      const userId = auth.uid;
+      const userSnap = await db.collection("users").doc(userId).get();
       const userData = userSnap.exists() ? userSnap.data() : {};
       const referralCode = userData.referralCode;
-      const referralsSnap = await db2.collection("referrals").where("referrerId", "==", userId).orderBy("createdAt", "desc").get();
+      const referralsSnap = await db.collection("referrals").where("referrerId", "==", userId).orderBy("createdAt", "desc").get();
       const myReferrals = referralsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const totalRewards = myReferrals.filter((r) => r.status === "rewarded").reduce((acc, r) => acc + r.rewardValue, 0);
       const pendingRewards = myReferrals.filter((r) => r.status === "qualified").reduce((acc, r) => acc + r.rewardValue, 0);
@@ -2195,10 +2138,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error obteniendo referidos." });
     }
   });
-  app3.post("/api/referrals/record", async (req, res) => {
+  app2.post("/api/referrals/record", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
+      const db = serverDb;
       const { referrerId, referredId, orderId, rewardValue } = req.body ?? {};
       if (!referrerId || !referredId || !orderId || typeof rewardValue !== "number") {
         res.status(400).json({ error: "Faltan campos requeridos." });
@@ -2208,7 +2151,7 @@ function createApp() {
         res.status(400).json({ error: "No se permite autorreferido." });
         return;
       }
-      const existing = await db2.collection("referrals").where("referredId", "==", referredId).limit(1).get();
+      const existing = await db.collection("referrals").where("referredId", "==", referredId).limit(1).get();
       if (!existing.empty) {
         res.status(400).json({ error: "El usuario ya tiene un referidor asignado." });
         return;
@@ -2224,18 +2167,18 @@ function createApp() {
         rewardValue,
         createdAt: now
       };
-      await db2.collection("referrals").doc(referral.id).set(referral);
+      await db.collection("referrals").doc(referral.id).set(referral);
       res.status(201).json({ referral });
     } catch (err) {
       console.error("Record referral error:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : "Error registrando referido." });
     }
   });
-  app3.post("/api/referrals/reconcile", async (req, res) => {
+  app2.post("/api/referrals/reconcile", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const db2 = serverDb;
-      const settingsSnap = await db2.collection("settings").doc("referrals").get();
+      const db = serverDb;
+      const settingsSnap = await db.collection("settings").doc("referrals").get();
       const settings = settingsSnap.exists() ? settingsSnap.data() : {
         retentionDays: 7,
         active: true
@@ -2246,8 +2189,8 @@ function createApp() {
       }
       const retentionMs = (settings.retentionDays || 7) * 24 * 60 * 60 * 1e3;
       const cutoff = new Date(Date.now() - retentionMs).toISOString();
-      const pendingSnap = await db2.collection("referrals").where("status", "==", "pending").get();
-      const batch = db2.batch();
+      const pendingSnap = await db.collection("referrals").where("status", "==", "pending").get();
+      const batch = db.batch();
       let processed = 0;
       for (const docSnap of pendingSnap.docs) {
         const referral = docSnap.data();
@@ -2263,7 +2206,7 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error reconociendo referidos." });
     }
   });
-  app3.post("/api/v1/webhooks/register", (req, res) => {
+  app2.post("/api/v1/webhooks/register", (req, res) => {
     const { id, ownerId, keyHash, label, webhookUrl } = req.body ?? {};
     if (!id || !ownerId || !keyHash) {
       res.status(400).json({ error: "Missing id, ownerId, or keyHash" });
@@ -2278,7 +2221,7 @@ function createApp() {
     });
     res.json({ registered: true, id, activeKeys: registeredKeys.size });
   });
-  app3.post("/api/v1/webhooks/test", async (req, res) => {
+  app2.post("/api/v1/webhooks/test", async (req, res) => {
     const { ownerId, event, webhookUrl, samplePayload } = req.body ?? {};
     const eventName = String(event || "course.progress.updated");
     const payload = {
@@ -2333,10 +2276,10 @@ function createApp() {
       recentDeliveries: recentWebhooks.slice(0, 8)
     });
   });
-  app3.get("/api/v1/webhooks/logs", (_req, res) => {
+  app2.get("/api/v1/webhooks/logs", (_req, res) => {
     res.json({ deliveries: recentWebhooks });
   });
-  app3.post("/api/v1/cloud-storage/sync", (req, res) => {
+  app2.post("/api/v1/cloud-storage/sync", (req, res) => {
     const { ownerId, provider, folder, encryptedEnvelope } = req.body ?? {};
     if (!ownerId || !provider || !encryptedEnvelope || encryptedEnvelope.algorithm !== "AES-GCM-256") {
       res.status(400).json({ error: "Encrypted AES-GCM-256 envelope required for zero-knowledge cloud sync" });
@@ -2364,10 +2307,10 @@ function createApp() {
   const generatedCoversDir = path.resolve(__dirname, "public", "generated-covers");
   try {
     fs.mkdirSync(generatedCoversDir, { recursive: true });
-    app3.use("/generated-covers", express.static(generatedCoversDir));
+    app2.use("/generated-covers", express.static(generatedCoversDir));
   } catch {
   }
-  app3.post("/api/v1/courses/generate-cover", async (req, res) => {
+  app2.post("/api/v1/courses/generate-cover", async (req, res) => {
     try {
       await verifyFirebaseAdminBearerToken(req.headers.authorization);
     } catch (err) {
@@ -2428,7 +2371,7 @@ function createApp() {
     });
   });
   const legalDocsDir = path.resolve(__dirname, "public", "legal");
-  app3.get(/^\/legal\/([A-Za-z0-9_-]+\.md)$/, (req, res, next) => {
+  app2.get(/^\/legal\/([A-Za-z0-9_-]+\.md)$/, (req, res, next) => {
     const fileName = String(req.params[0] || "");
     if (!getLegalDocumentByFile(fileName)) {
       next();
@@ -2444,11 +2387,279 @@ function createApp() {
       res.end(data);
     });
   });
-  return app3;
+  const sentEnrollmentEmailIds = /* @__PURE__ */ new Set();
+  function escapeEmailHtml(raw) {
+    return String(raw ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function getAdminNotificationRecipient() {
+    const raw = (process.env.ADMIN_NOTIFICATION_EMAIL || AUTHORIZED_ADMIN_EMAIL).trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : AUTHORIZED_ADMIN_EMAIL;
+  }
+  function getEmailProviderStatus() {
+    const recipient = getAdminNotificationRecipient();
+    if (process.env.RESEND_API_KEY?.trim()) {
+      return { configured: true, provider: "resend", recipient };
+    }
+    if (process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim()) {
+      return { configured: true, provider: "smtp", recipient };
+    }
+    return { configured: false, provider: "none", recipient };
+  }
+  async function sendTransactionalEmail(params) {
+    const status = getEmailProviderStatus();
+    if (!status.configured) {
+      return {
+        sent: false,
+        provider: "none",
+        reason: "Configura SMTP_USER + SMTP_PASS (Gmail App Password) o RESEND_API_KEY en las variables de entorno del servidor."
+      };
+    }
+    if (status.provider === "resend") {
+      const apiKey = process.env.RESEND_API_KEY.trim();
+      const from = process.env.RESEND_FROM_EMAIL?.trim() || "C\xE1tedra DB Academy <onboarding@resend.dev>";
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from,
+          to: [params.to],
+          subject: params.subject,
+          html: params.html,
+          text: params.text
+        })
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(`Resend HTTP ${resp.status}: ${detail.slice(0, 200)}`);
+      }
+      return { sent: true, provider: "resend" };
+    }
+    const smtpUser = process.env.SMTP_USER.trim();
+    const smtpPass = process.env.SMTP_PASS.trim();
+    const smtpHost = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+    const smtpPort = Number(process.env.SMTP_PORT || 465);
+    const smtpFrom = process.env.SMTP_FROM?.trim() || `C\xE1tedra DB Academy <${smtpUser}>`;
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      }
+    });
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html
+    });
+    return { sent: true, provider: "smtp" };
+  }
+  function buildEnrollmentEmailContent(params) {
+    const safeName = escapeEmailHtml(params.studentName || "Estudiante");
+    const safeEmail = escapeEmailHtml(params.studentEmail || "Sin correo");
+    const safeCourse = escapeEmailHtml(params.courseTitle || params.courseId);
+    const safeGateway = escapeEmailHtml(params.gateway.toUpperCase());
+    const safeCoupon = params.couponCode ? escapeEmailHtml(params.couponCode) : "";
+    const amountLabel = params.amountCents <= 0 ? "Gratuito" : `${escapeEmailHtml(params.currency)} ${(params.amountCents / 100).toFixed(2)}`;
+    const timestamp = (/* @__PURE__ */ new Date()).toLocaleString("es-DO", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
+    const subjectPrefix = params.isTest ? "[PRUEBA] " : "";
+    const subject = `${subjectPrefix}Nueva inscripci\xF3n en ${params.courseTitle.slice(0, 80)}: ${params.studentName.slice(0, 50)}`;
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:24px;background-color:#f8fafc;font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+    <div style="background:#0f172a;padding:20px 24px;color:#ffffff;">
+      <p style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#38bdf8;font-weight:700;">
+        C\xE1tedra DB Academy \xB7 Alerta de Matr\xEDcula
+      </p>
+      <h1 style="margin:6px 0 0;font-size:20px;line-height:1.3;">
+        ${params.isTest ? "Prueba de notificaci\xF3n de inscripci\xF3n" : "\xA1Se inscribi\xF3 un alumno nuevo!"}
+      </h1>
+    </div>
+    <div style="padding:24px;font-size:14px;line-height:1.6;">
+      <p style="margin:0 0 16px;">Se ha registrado una nueva matr\xEDcula en la plataforma con los siguientes detalles:</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;width:140px;">Alumno</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;">${safeName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Correo</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeEmail}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Curso</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1d4ed8;">${safeCourse}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">M\xE9todo / Pasarela</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeGateway}${safeCoupon ? ` (Cup\xF3n: ${safeCoupon})` : ""}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Importe</td>
+          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:700;">${amountLabel}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;">Fecha</td>
+          <td style="padding:8px 0;">${escapeEmailHtml(timestamp)}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+    const text = [
+      params.isTest ? "[PRUEBA] Nueva inscripci\xF3n en C\xE1tedra DB Academy" : "\xA1Se inscribi\xF3 un alumno nuevo en C\xE1tedra DB Academy!",
+      `Alumno: ${params.studentName}`,
+      `Correo: ${params.studentEmail}`,
+      `Curso: ${params.courseTitle}`,
+      `M\xE9todo: ${params.gateway.toUpperCase()}${params.couponCode ? ` (Cup\xF3n: ${params.couponCode})` : ""}`,
+      `Importe: ${params.amountCents <= 0 ? "Gratuito" : `${params.currency} ${(params.amountCents / 100).toFixed(2)}`}`,
+      `Fecha: ${timestamp}`
+    ].join("\n");
+    return { subject, html, text };
+  }
+  app2.post("/api/notifications/enrollment", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    if (!checkRateLimit(`enroll_email:${auth.uid}`, 15, 60 * 60 * 1e3)) {
+      res.status(429).json({ error: "L\xEDmite de notificaciones de matr\xEDcula alcanzado." });
+      return;
+    }
+    const body = req.body ?? {};
+    const courseId = String(body.courseId || "").trim().slice(0, 128);
+    const courseTitle = String(body.courseTitle || "").trim().slice(0, 140);
+    if (!courseId || !courseTitle) {
+      res.status(400).json({ error: "courseId y courseTitle son obligatorios." });
+      return;
+    }
+    const enrollmentId = String(body.enrollmentId || `${courseId}_${auth.uid}`).trim().slice(0, 180);
+    const studentEmail = (auth.email || String(body.studentEmail || "")).trim().slice(0, 200);
+    const studentName = String(body.studentName || studentEmail || "Estudiante").trim().slice(0, 100);
+    const gateway = String(body.gateway || "free").trim().slice(0, 32);
+    const currency = String(body.currency || "DOP").trim().slice(0, 8).toUpperCase();
+    const amountCents = Math.max(0, Math.round(Number(body.amountCents || 0)));
+    const couponCode = typeof body.couponCode === "string" ? body.couponCode.trim().slice(0, 40) : void 0;
+    if (sentEnrollmentEmailIds.has(enrollmentId)) {
+      res.json({ ok: true, emailed: false, deduplicated: true, recipient: getAdminNotificationRecipient() });
+      return;
+    }
+    if (sentEnrollmentEmailIds.size >= 5e3) {
+      sentEnrollmentEmailIds.clear();
+    }
+    sentEnrollmentEmailIds.add(enrollmentId);
+    broadcastEvent({
+      type: "NEW_ENROLLMENT",
+      scope: "global",
+      enrollmentId,
+      courseId,
+      courseTitle,
+      studentId: auth.uid,
+      studentName,
+      studentEmail,
+      gateway,
+      amountCents,
+      currency
+    });
+    const recipient = getAdminNotificationRecipient();
+    try {
+      const content = buildEnrollmentEmailContent({
+        studentName,
+        studentEmail,
+        studentId: auth.uid,
+        courseTitle,
+        courseId,
+        gateway,
+        amountCents,
+        currency,
+        couponCode
+      });
+      const result = await sendTransactionalEmail({
+        to: recipient,
+        ...content
+      });
+      if (!result.sent) {
+        console.info(`[enrollment-email] Matr\xEDcula ${enrollmentId} registrada sin env\xEDo SMTP/Resend (${result.reason})`);
+      }
+      res.json({
+        ok: true,
+        emailed: result.sent,
+        provider: result.provider,
+        recipient,
+        ...result.reason ? { reason: result.reason } : {}
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error enviando correo de inscripci\xF3n";
+      console.error("[enrollment-email] Error al enviar notificaci\xF3n:", msg);
+      res.json({
+        ok: true,
+        emailed: false,
+        provider: getEmailProviderStatus().provider,
+        recipient,
+        reason: msg
+      });
+    }
+  });
+  app2.get("/api/admin/email-status", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    res.json(getEmailProviderStatus());
+  });
+  app2.post("/api/admin/test-enrollment-email", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    if (!checkRateLimit("admin_test_email", 10, 60 * 60 * 1e3)) {
+      res.status(429).json({ error: "Espera unos minutos antes de enviar otro correo de prueba." });
+      return;
+    }
+    const status = getEmailProviderStatus();
+    if (!status.configured) {
+      res.status(400).json({
+        error: "Falta configurar SMTP_USER y SMTP_PASS (contrase\xF1a de aplicaci\xF3n de Gmail) o RESEND_API_KEY en Settings \u2192 Secrets.",
+        ...status
+      });
+      return;
+    }
+    try {
+      const content = buildEnrollmentEmailContent({
+        studentName: "Alumno de Prueba",
+        studentEmail: "prueba@catedradbacademy.com",
+        studentId: "test-student",
+        courseTitle: "Excel Intermedio: Funciones Avanzadas",
+        courseId: "excel-intermedio-01",
+        gateway: "free",
+        amountCents: 0,
+        currency: "DOP",
+        isTest: true
+      });
+      const result = await sendTransactionalEmail({
+        to: status.recipient,
+        ...content
+      });
+      res.json({
+        ok: true,
+        emailed: result.sent,
+        provider: result.provider,
+        recipient: status.recipient
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo enviar el correo de prueba.";
+      res.status(502).json({ error: msg, provider: status.provider, recipient: status.recipient });
+    }
+  });
+  return app2;
 }
 async function startServer() {
-  const app3 = createApp();
-  const server = http.createServer(app3);
+  const app2 = createApp();
+  const server = http.createServer(app2);
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -2460,11 +2671,11 @@ async function startServer() {
       },
       appType: "spa"
     });
-    app3.use(vite.middlewares);
+    app2.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, "dist");
-    app3.use(express.static(distPath));
-    app3.get("*", (_req, res) => {
+    app2.use(express.static(distPath));
+    app2.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -2557,8 +2768,8 @@ if (!process.env.VERCEL) {
 }
 
 // src/vercelApi.ts
-var app2 = createApp();
-var vercelApi_default = app2;
+var app = createApp();
+var vercelApi_default = app;
 export {
   vercelApi_default as default
 };
