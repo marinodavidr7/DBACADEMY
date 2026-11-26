@@ -270,7 +270,7 @@ export const DEFAULT_COURSE_EDITOR_LABELS: CourseEditorLabels = {
     summary: 'Resumen pedagógico',
     summaryPlaceholder: 'Breve descripción de los objetivos...',
     content: 'Contenido completo',
-    contentPlaceholder: 'Escribe el contenido en formato Markdown...',
+    contentPlaceholder: 'Escribe el contenido de la lección. Usa la barra de herramientas para dar formato, colores y estilos...',
     editTab: 'Editar',
     previewTab: 'Vista previa',
     markdownTitle: 'Formato Markdown',

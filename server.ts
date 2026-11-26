@@ -1894,13 +1894,18 @@ export function createApp(): express.Express {
     }
   });
 
-  // PUT /api/admin/courses/:id — Actualizar o crear curso (upsert, solo admin)
+  // PUT /api/admin/courses/:id — Upsert con merge seguro (solo admin).
+  // Mergea con el documento existente para que actualizaciones parciales (ej. galería/módulos)
+  // no borren campos requeridos como title.
   app.put('/api/admin/courses/:id', async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     const { id } = req.params;
     if (!id) { res.status(400).json({ error: 'Se requiere el id del curso.' }); return; }
     try {
-      await serverDb.collection('courses').doc(id).set({ ...req.body, id });
+      const docRef = serverDb.collection('courses').doc(id);
+      const existing = await docRef.get();
+      const merged = { ...(existing.exists() ? (existing.data() as Record<string, unknown>) : {}), ...(req.body as Record<string, unknown>), id };
+      await docRef.set(merged);
       res.json({ ok: true, id });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al actualizar curso' });
@@ -1968,7 +1973,10 @@ export function createApp(): express.Express {
     if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
     if (!await requireAdmin(req, res)) return;
     try {
-      await serverDb.collection(req.params.table).doc(req.params.id).set({ ...req.body, id: req.params.id });
+      const docRef = serverDb.collection(req.params.table).doc(req.params.id);
+      const existing = await docRef.get();
+      const merged = { ...(existing.exists() ? (existing.data() as Record<string, unknown>) : {}), ...(req.body as Record<string, unknown>), id: req.params.id };
+      await docRef.set(merged);
       res.json({ ok: true, id: req.params.id });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al guardar' });

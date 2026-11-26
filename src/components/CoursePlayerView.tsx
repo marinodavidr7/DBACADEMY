@@ -64,6 +64,7 @@ import { CourseProgressBar } from './ui/CourseProgressBar';
 import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
 import { GradesPanel } from './GradesPanel';
 import { FormattedTheoryContent } from './FormattedTheoryContent';
+import { isHtmlContent, renderLessonContent } from '../utils/richText';
 import { CompletionCelebration, type CelebrationEvent } from './CompletionCelebration';
 
 const ExcelTopicSimulator = lazy(() =>
@@ -1469,21 +1470,34 @@ export const CoursePlayerView: React.FC = () => {
                       );
                     })()}
 
-                    {/* Contenido teórico (Markdown, ilustraciones e incrustaciones de video) */}
+                    {/* Contenido teórico (HTML enriquecido o Markdown legado) */}
                     {(() => {
+                      const content = currentLesson.content || '';
+                      if (!content.trim() && !currentLesson.videoUrl) return null;
+                      if (!content.trim()) return null;
+
+                      // Nuevo contenido HTML (WYSIWYG)
+                      if (isHtmlContent(content)) {
+                        return (
+                          <div
+                            className="dba-rich-content text-slate-700 dark:text-slate-200 leading-relaxed text-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: renderLessonContent(content) }}
+                          />
+                        );
+                      }
+
+                      // Compatibilidad con contenido Markdown legado
                       const mainYtId = currentLesson.videoUrl ? extractYouTubeId(currentLesson.videoUrl) : null;
                       const mainVimeoId = currentLesson.videoUrl ? extractVimeoId(currentLesson.videoUrl) : null;
                       const renderedContentVideoIds = new Set<string>();
                       if (mainYtId) renderedContentVideoIds.add(`yt:${mainYtId}`);
                       if (mainVimeoId) renderedContentVideoIds.add(`vim:${mainVimeoId}`);
 
-                      const rawSegments = currentLesson.content
+                      const rawSegments = content
                         .split(/(!\[[^\]]*\]\([^)\s]+\))/g)
                         .filter(Boolean);
 
-                      if (rawSegments.length === 0 && !currentLesson.videoUrl) {
-                        return null;
-                      }
+                      if (rawSegments.length === 0) return null;
 
                       return (
                         <div className="space-y-3 text-slate-700 dark:text-slate-200 leading-relaxed text-sm">
@@ -1537,7 +1551,6 @@ export const CoursePlayerView: React.FC = () => {
                               );
                             }
 
-                            // Texto que puede contener enlaces o embeds de video
                             const lines = segment.split('\n');
                             const nodes: React.ReactNode[] = [];
                             let textBuf: string[] = [];
@@ -1680,11 +1693,15 @@ export const CoursePlayerView: React.FC = () => {
                           setTheoryImgNotice(successMsg);
                           setTimeout(() => setTheoryImgNotice(null), 3500);
                         } catch (err) {
-                          setTheoryImgError(
-                            err instanceof Error
-                              ? err.message
-                              : 'No se pudo actualizar la galería en Firestore.'
-                          );
+                          const raw = err instanceof Error ? err.message : '';
+                          let msg = 'No se pudo actualizar la galería. Intenta de nuevo.';
+                          try {
+                            const parsed = JSON.parse(raw) as { error?: string };
+                            if (parsed?.error) msg = parsed.error;
+                          } catch {
+                            if (raw && !raw.includes('"authInfo"') && raw.length < 180) msg = raw;
+                          }
+                          setTheoryImgError(msg);
                         } finally {
                           setSavingTheoryImg(false);
                         }

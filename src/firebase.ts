@@ -151,8 +151,10 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // Log completo solo en consola (incluye contexto de auth para depuración).
+  console.error('Firestore Error:', errInfo);
+  // No exponer authInfo/email/IDs en el mensaje mostrado al usuario.
+  throw new Error(JSON.stringify({ error: errInfo.error, operationType, path }));
 }
 
 export function isFirestoreOfflineError(error: unknown): boolean {

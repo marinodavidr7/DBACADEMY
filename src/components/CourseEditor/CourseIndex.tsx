@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { hasMeaningfulContent } from '../../utils/richText';
 import {
   ArrowDown,
   ArrowUp,
@@ -102,7 +103,7 @@ const CourseIndexLessonRow: React.FC<LessonRowProps> = memo(({
   onDragLeaveTarget,
   onDragEnd,
 }) => {
-  const incomplete = !lesson.content.trim() && lesson.type !== 'video';
+  const incomplete = !hasMeaningfulContent(lesson.content) && lesson.type !== 'video';
   const strippedTitle = useMemo(() => stripManualPrefix(lesson.title), [lesson.title]);
 
   return (

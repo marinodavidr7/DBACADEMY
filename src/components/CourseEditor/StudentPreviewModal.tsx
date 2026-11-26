@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { BookOpen, Clock, X } from 'lucide-react';
 import type { Course } from '../../types';
-import { renderMarkdown } from '../../utils/markdown';
+import { renderLessonContent } from '../../utils/richText';
 
 interface StudentPreviewModalProps {
   course: Course | null;
@@ -72,8 +72,8 @@ export const StudentPreviewModal: React.FC<StudentPreviewModalProps> = ({ course
                       )}
                       {lesson.content && (
                         <div
-                          className="mt-2 max-w-[75ch] text-sm leading-relaxed text-slate-700 dark:text-slate-200"
-                          dangerouslySetInnerHTML={{ __html: renderMarkdown(lesson.content) }}
+                          className="mt-2 max-w-[75ch] text-sm leading-relaxed text-slate-700 dark:text-slate-200 dba-rich-content"
+                          dangerouslySetInnerHTML={{ __html: renderLessonContent(lesson.content) }}
                         />
                       )}
                     </article>

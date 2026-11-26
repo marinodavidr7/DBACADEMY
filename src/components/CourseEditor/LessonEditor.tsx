@@ -24,6 +24,7 @@ import { extractYouTubeId, newId } from '../../utils/courseEditor';
 import { esGoogleDriveUrl, normalizarUrlImagen } from '../../utils/imageUtils';
 import { Field } from './Field';
 import { MarkdownEditor } from './MarkdownEditor';
+import { hasMeaningfulContent } from '../../utils/richText';
 import { MaterialsPanel } from './MaterialsPanel';
 
 interface LessonEditorProps {
@@ -458,7 +459,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = memo(({
         canEdit={canEdit}
       />
 
-      {!lesson.content.trim() && lesson.type !== 'video' && !lesson.videoUrl && (
+      {!hasMeaningfulContent(lesson.content) && lesson.type !== 'video' && !lesson.videoUrl && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {labels.contentPlaceholder}

@@ -1780,7 +1780,10 @@ function createApp() {
       return;
     }
     try {
-      await serverDb.collection("courses").doc(id).set({ ...req.body, id });
+      const docRef = serverDb.collection("courses").doc(id);
+      const existing = await docRef.get();
+      const merged = { ...existing.exists() ? existing.data() : {}, ...req.body, id };
+      await docRef.set(merged);
       res.json({ ok: true, id });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al actualizar curso" });
@@ -1857,7 +1860,10 @@ function createApp() {
     }
     if (!await requireAdmin(req, res)) return;
     try {
-      await serverDb.collection(req.params.table).doc(req.params.id).set({ ...req.body, id: req.params.id });
+      const docRef = serverDb.collection(req.params.table).doc(req.params.id);
+      const existing = await docRef.get();
+      const merged = { ...existing.exists() ? existing.data() : {}, ...req.body, id: req.params.id };
+      await docRef.set(merged);
       res.json({ ok: true, id: req.params.id });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al guardar" });
