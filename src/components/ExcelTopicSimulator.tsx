@@ -10,6 +10,7 @@ import { ExcelScreenInterfaceViewer } from './ExcelScreenInterfaceViewer';
 import { ExcelGridBasicsViewer } from './ExcelGridBasicsViewer';
 import { ExcelF4ReferenceViewer } from './ExcelF4ReferenceViewer';
 import { IntermediateTopicSim, type IntermediateSimKind } from './IntermediateTopicSim';
+import { OperadoresComparacionSimulator } from './OperadoresComparacionSimulator';
 
 const ExcelSimulator3D = lazy(() =>
   import('./ExcelSimulator3D').then((m) => ({ default: m.ExcelSimulator3D }))
@@ -2181,7 +2182,8 @@ export const ExcelTopicSimulator: React.FC<ExcelTopicSimulatorProps> = ({ lesson
         </div>
       </div>
 
-      {INTERMEDIATE_KINDS.has(meta.kind as IntermediateSimKind) && (
+      {lessonId === 'm1-l1' && <OperadoresComparacionSimulator onInteract={onInteract} />}
+      {INTERMEDIATE_KINDS.has(meta.kind as IntermediateSimKind) && lessonId !== 'm1-l1' && (
         <IntermediateTopicSim kind={meta.kind as IntermediateSimKind} lessonTitle={lessonId} />
       )}
       {meta.kind === 'screen-9' && <ExcelScreenInterfaceViewer />}

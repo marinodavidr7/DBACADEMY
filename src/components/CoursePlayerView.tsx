@@ -64,7 +64,9 @@ import { CourseProgressBar } from './ui/CourseProgressBar';
 import { AssignmentSubmitPanel } from './AssignmentSubmitPanel';
 import { GradesPanel } from './GradesPanel';
 import { FormattedTheoryContent } from './FormattedTheoryContent';
-import { isHtmlContent, renderLessonContent } from '../utils/richText';
+import { COMPARISON_SIM_TOKEN, hasComparisonSimulatorEmbed, isComparisonSimulatorSource, isHtmlContent, renderLessonContent } from '../utils/richText';
+import { RichLessonContent } from './RichLessonContent';
+import { OperadoresComparacionSimulator } from './OperadoresComparacionSimulator';
 import { CompletionCelebration, type CelebrationEvent } from './CompletionCelebration';
 
 const ExcelTopicSimulator = lazy(() =>
@@ -1476,12 +1478,12 @@ export const CoursePlayerView: React.FC = () => {
                       if (!content.trim() && !currentLesson.videoUrl) return null;
                       if (!content.trim()) return null;
 
-                      // Nuevo contenido HTML (WYSIWYG)
-                      if (isHtmlContent(content)) {
+                      // Nuevo contenido HTML (WYSIWYG) o embeds nativos (simuladores)
+                      if (isHtmlContent(content) || hasComparisonSimulatorEmbed(content)) {
                         return (
-                          <div
+                          <RichLessonContent
+                            content={content}
                             className="dba-rich-content text-slate-700 dark:text-slate-200 leading-relaxed text-sm max-w-none"
-                            dangerouslySetInnerHTML={{ __html: renderLessonContent(content) }}
                           />
                         );
                       }
@@ -1602,9 +1604,33 @@ export const CoursePlayerView: React.FC = () => {
                                 }
                               }
 
+                              if (trimmed === COMPARISON_SIM_TOKEN) {
+                                flushTextBuf();
+                                nodes.push(
+                                  <div key={`cmp-sim-${segIdx}-${nodes.length}`} className="my-4">
+                                    <OperadoresComparacionSimulator />
+                                  </div>
+                                );
+                                continue;
+                              }
+
                               if (trimmed.startsWith('<iframe')) {
                                 const iframeMatch = segment.slice(segment.indexOf(rawLine)).match(/<iframe\b[\s\S]*?<\/iframe>/i);
                                 const iframeHtml = iframeMatch ? iframeMatch[0] : trimmed;
+                                const srcMatch = iframeHtml.match(/\bsrc=["']([^"']+)["']/i);
+                                if (srcMatch && isComparisonSimulatorSource(srcMatch[1])) {
+                                  flushTextBuf();
+                                  nodes.push(
+                                    <div key={`cmp-sim-${segIdx}-${nodes.length}`} className="my-4">
+                                      <OperadoresComparacionSimulator />
+                                    </div>
+                                  );
+                                  if (iframeMatch) {
+                                    const consumed = iframeMatch[0].split('\n').length - 1;
+                                    i += Math.max(0, consumed);
+                                  }
+                                  continue;
+                                }
                                 const sanitizedIframe = renderLessonContent(iframeHtml);
                                 if (sanitizedIframe && /<iframe\b/i.test(sanitizedIframe)) {
                                   flushTextBuf();
@@ -1630,6 +1656,20 @@ export const CoursePlayerView: React.FC = () => {
                             flushTextBuf();
                             return <React.Fragment key={`seg-${segIdx}`}>{nodes}</React.Fragment>;
                           })}
+                        </div>
+                      );
+                    })()}
+
+                    {(() => {
+                      const lessonId = String(currentLesson.id || '');
+                      const title = String(currentLesson.title || '').toLowerCase();
+                      const isComparisonLesson = lessonId === 'm1-l1' || /operador(es)?\s+de\s+comparaci[oó]n/.test(title);
+                      if (!isComparisonLesson) return null;
+                      const content = currentLesson.content || '';
+                      if (hasComparisonSimulatorEmbed(content)) return null;
+                      return (
+                        <div className="my-4">
+                          <OperadoresComparacionSimulator />
                         </div>
                       );
                     })()}

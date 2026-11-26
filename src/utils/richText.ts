@@ -155,3 +155,51 @@ export function hasMeaningfulContent(content: string): boolean {
   if (isHtmlContent(raw)) return htmlToPlainText(raw).length > 0 || /<img\b/i.test(raw) || /<iframe\b/i.test(raw);
   return raw.length > 0;
 }
+
+
+/** Token especial para incrustar el simulador nativo de operadores de comparación. */
+export const COMPARISON_SIM_TOKEN = '[[simulador:operadores-comparacion]]';
+
+const COMPARISON_SIM_IFRAME_RE = /<iframe\b[^>]*\bsrc=["']([^"']*operadores-comparacion(?:\.html)?[^"']*)["'][^>]*>[\s\S]*?<\/iframe>/gi;
+const COMPARISON_SIM_IFRAME_SELF_RE = /<iframe\b[^>]*\bsrc=["']([^"']*operadores-comparacion(?:\.html)?[^"']*)["'][^>]*\/?>/gi;
+
+export function isComparisonSimulatorSource(src: string): boolean {
+  const s = (src || '').trim().toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes('operadores-comparacion.html') ||
+    s.includes('/simuladores/operadores-comparacion') ||
+    s.endsWith('operadores-comparacion')
+  );
+}
+
+export function hasComparisonSimulatorEmbed(content: string): boolean {
+  const t = content || '';
+  if (t.includes(COMPARISON_SIM_TOKEN)) return true;
+  COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
+  COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
+  if (COMPARISON_SIM_IFRAME_RE.test(t) || COMPARISON_SIM_IFRAME_SELF_RE.test(t)) {
+    COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
+    COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
+    return true;
+  }
+  COMPARISON_SIM_IFRAME_RE.lastIndex = 0;
+  COMPARISON_SIM_IFRAME_SELF_RE.lastIndex = 0;
+  return /<iframe\b[^>]*operadores-comparacion/i.test(t);
+}
+
+/** Reemplaza tokens/iframes del simulador por un div marcador para montar el componente React vía portal. */
+export function replaceComparisonSimulatorEmbeds(html: string): string {
+  let out = html || '';
+  if (!out) return out;
+  // Token en texto (puede venir dentro de <p>...)</p>
+  out = out.split(COMPARISON_SIM_TOKEN).join('<div data-sim="operadores-comparacion" class="dba-sim-operadores-comparacion"></div>');
+  // iframes que apuntan al simulador
+  out = out.replace(/<iframe\b[^>]*\bsrc=["']([^"']+)["'][^>]*>(?:[\s\S]*?<\/iframe>)?/gi, (match, src) => {
+    if (isComparisonSimulatorSource(String(src || ''))) {
+      return '<div data-sim="operadores-comparacion" class="dba-sim-operadores-comparacion"></div>';
+    }
+    return match;
+  });
+  return out;
+}
