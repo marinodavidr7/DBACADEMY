@@ -635,6 +635,7 @@ export function createApp(): express.Express {
         '/payments/stripe/checkout': { post: { summary: 'Create hosted Stripe Checkout session in DOP with Invoicing & Tax' } },
         '/payments/stripe/webhook': { post: { summary: 'Receive signed Stripe Checkout webhooks' } },
         '/payments/stripe/verify': { get: { summary: 'Verify Stripe Checkout session completion for authenticated student' } },
+        '/payments/paypal/status': { get: { summary: 'Inspect PayPal JS SDK configuration status' } },
         '/webhooks/register': { post: { summary: 'Register API key hash and webhook endpoint' } },
         '/webhooks/test': { post: { summary: 'Dispatch signed HMAC-SHA256 webhook event' } },
         '/cloud-storage/sync': { post: { summary: 'Upload client-encrypted E2EE backup manifest' } },
@@ -1207,6 +1208,17 @@ export function createApp(): express.Express {
       webhookSecret,
     };
   };
+
+  app.get('/api/v1/payments/paypal/status', (_req, res) => {
+    const clientId = (process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '').trim();
+    const secretConfigured = Boolean((process.env.PAYPAL_CLIENT_SECRET || '').trim());
+    res.json({
+      configured: Boolean(clientId),
+      clientId,
+      secretConfigured,
+      supportedCurrencies: ['USD', 'EUR', 'MXN'],
+    });
+  });
 
   app.get('/api/v1/payments/stripe/status', (_req, res) => {
     const { stripe, testMode, webhookConfigured } = getStripeClient();
