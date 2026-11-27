@@ -50,7 +50,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   } = usePlatform();
 
   const [gateway, setGateway] = useState<PaymentGateway>('paypal');
-  const [testMode, setTestMode] = useState(false);
   const [cardHolder, setCardHolder] = useState(user?.displayName || '');
   const [cardLastFour, setCardLastFour] = useState('4242');
   const [submitting, setSubmitting] = useState(false);
@@ -257,7 +256,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       } else {
         recordedPayment = await enrollWithPayment(course, 'paypal', {
           couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
-          testMode: isAdmin ? testMode : false,
           externalPaymentId: 'pp_' + orderId,
           externalTransactionRef: verifiedCaptureId || orderId,
         });
@@ -304,7 +302,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         payment = await enrollWithPayment(course, gateway, {
           couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
           referralWelcome: true,
-          testMode: isAdmin && testMode,
         });
       }
       recordCheckoutConsent();
@@ -346,7 +343,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-600 dark:text-zinc-400">
               TU CURSO
             </p>
-            <p className="text-[16px] font-semibold text-stone-900 dark:text-zinc-100 mt-1">
+            <p className="text-[16px] font-semibold text-stone-900 dark:text-zinc-100 mt-1 line-clamp-2" title={course.title}>
               {course.title}
             </p>
             <div className="border-t border-stone-200 dark:border-zinc-700 my-2.5" />
@@ -359,12 +356,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
               {discountCents > 0 && (
                 <div className="flex justify-between gap-4 text-[#0b6b4a] dark:text-emerald-400 font-medium">
-                  <span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                     {appliedGiftCard?.valid
                       ? `Gift Card (${appliedGiftCard.card?.code})`
                       : t('discount')}
                   </span>
-                  <span>-{formatMoney(discountCents)}</span>
+                  <span className="shrink-0 tabular-nums">-{formatMoney(discountCents)}</span>
                 </div>
               )}
               <div className="flex justify-between items-baseline gap-4 pt-1">
@@ -437,6 +434,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           }}
                           placeholder="Ej: DBA-XXXX-XXXX"
                           disabled={!!appliedGiftCard?.valid || giftCardLoading}
+                          maxLength={64}
+                          autoComplete="off"
+                          spellCheck={false}
                           className="flex-1 px-3 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm font-mono uppercase text-stone-900 dark:text-zinc-100 min-h-[44px]"
                         />
                         {appliedGiftCard?.valid ? (
@@ -458,9 +458,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           </button>
                         )}
                       </div>
-                      {giftCardError && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{giftCardError}</p>}
+                      {giftCardError && <p className="text-xs text-red-600 dark:text-red-400 mt-2 break-words [overflow-wrap:anywhere]">{giftCardError}</p>}
                       {appliedGiftCard?.valid && appliedGiftCard.card && (
-                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium">
+                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium break-words [overflow-wrap:anywhere]">
                           Gift Card {appliedGiftCard.card.code} aplicada: cubre{' '}
                           {formatMoney(appliedGiftCard.coveredCents)}
                           {appliedGiftCard.coversFullCourse
@@ -477,6 +477,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                           placeholder={t('couponPlaceholder')}
                           disabled={!!appliedCoupon?.valid || couponLoading}
+                          maxLength={40}
+                          autoComplete="off"
+                          spellCheck={false}
                           className="flex-1 px-3 py-2.5 rounded-lg border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm uppercase text-stone-900 dark:text-zinc-100 min-h-[44px]"
                         />
                         {appliedCoupon?.valid ? (
@@ -498,9 +501,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           </button>
                         )}
                       </div>
-                      {couponError && <p className="text-xs text-red-600 dark:text-red-400 mt-2">{couponError}</p>}
+                      {couponError && <p className="text-xs text-red-600 dark:text-red-400 mt-2 break-words [overflow-wrap:anywhere]">{couponError}</p>}
                       {appliedCoupon?.valid && (
-                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium">
+                        <p className="text-xs text-[#0b6b4a] dark:text-emerald-400 mt-2 font-medium break-words [overflow-wrap:anywhere]">
                           {t('couponApplied')}: {appliedCoupon.coupon?.code} —{' '}
                           {appliedCoupon.coupon?.description}
                         </p>
@@ -531,7 +534,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
                 {t('paymentConfirmed')}
               </div>
-              <p className="text-sm text-emerald-700/90 dark:text-emerald-300/90 mt-1">
+              <p className="text-sm text-emerald-700/90 dark:text-emerald-300/90 mt-1 break-words [overflow-wrap:anywhere]">
                 {t('transactionRef')}: {receipt.transactionRef}
               </p>
             </div>
@@ -561,21 +564,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                 </div>
               )}
-
-              {isAdmin &&
-                finalPrice > 0 &&
-                !appliedGiftCard?.valid &&
-                gateway === 'paypal' && (
-                  <label className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 min-h-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={testMode}
-                      onChange={(e) => setTestMode(e.target.checked)}
-                      className="w-4 h-4"
-                    />
-                    Modo prueba admin: no genera canjes/recompensas reales
-                  </label>
-                )}
 
               <label className="flex items-start gap-3 cursor-pointer min-h-[44px]">
                 <input
@@ -610,7 +598,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
               </label>
 
-              {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+              {error && <p className="text-sm text-red-600 dark:text-red-400 break-words [overflow-wrap:anywhere]">{error}</p>}
 
               {finalPrice > 0 ? (
                 <div className="space-y-3">
@@ -656,10 +644,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     type="button"
                     disabled={submitting}
                     onClick={(e) => void onSubmit(e as unknown as React.FormEvent)}
-                    className="w-full h-[58px] rounded-[12px] bg-[#ffd23f] hover:bg-[#f5c72f] disabled:opacity-50 text-[#0d0d0f] font-bold text-[18px] flex items-center justify-center gap-2.5 shadow-sm transition-colors cursor-pointer"
+                    className="w-full min-h-[58px] h-auto py-3 px-4 rounded-[12px] bg-[#ffd23f] hover:bg-[#f5c72f] disabled:opacity-50 text-[#0d0d0f] font-bold text-[18px] flex items-center justify-center gap-2.5 shadow-sm transition-colors cursor-pointer text-center"
                   >
-                    <Lock className="w-5 h-5" aria-hidden="true" />
-                    <span>
+                    <Lock className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                       {submitting
                         ? t('processingPayment')
                         : appliedGiftCard?.valid && finalPrice === 0

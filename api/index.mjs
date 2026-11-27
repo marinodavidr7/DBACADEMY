@@ -1668,6 +1668,106 @@ function createApp() {
       res.status(400).json({ error: message });
     }
   });
+  app2.post("/api/public/gift-cards/purchase", async (req, res) => {
+    const clientIp = req.ip || req.socket.remoteAddress || "unknown";
+    if (!checkRateLimit(`giftcard_purchase:${clientIp}`, 10, 60 * 60 * 1e3)) {
+      res.status(429).json({ error: "Demasiados intentos. Intenta m\xE1s tarde." });
+      return;
+    }
+    const { orderId, courseId, buyerEmail, buyerName } = req.body ?? {};
+    const cleanOrderId = String(orderId || "").trim();
+    const cleanCourseId = String(courseId || "").trim().slice(0, 128);
+    const cleanBuyerEmail = String(buyerEmail || "").trim().toLowerCase().slice(0, 200);
+    const cleanBuyerName = String(buyerName || "").trim().slice(0, 100) || cleanBuyerEmail.split("@")[0] || "Cliente";
+    if (!cleanOrderId || !cleanCourseId) {
+      res.status(400).json({ error: "orderId y courseId son obligatorios." });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanBuyerEmail)) {
+      res.status(400).json({ error: "Debes indicar un correo v\xE1lido para recibir la Gift Card." });
+      return;
+    }
+    try {
+      const db = serverDb;
+      const courseSnap = await db.collection("courses").doc(cleanCourseId).get();
+      if (!courseSnap.exists()) {
+        res.status(404).json({ error: "Curso no encontrado." });
+        return;
+      }
+      const course = courseSnap.data();
+      if (course.published === false) {
+        res.status(400).json({ error: "Este curso no est\xE1 disponible." });
+        return;
+      }
+      const amountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
+      const currency = course.currency === "EUR" || course.currency === "MXN" || course.currency === "USD" ? course.currency : "DOP";
+      if (amountCents < 100) {
+        res.status(400).json({ error: "Este curso no admite compra de Gift Card." });
+        return;
+      }
+      const existingByOrder = await db.collection("giftCards").where("purchaseOrderId", "==", cleanOrderId).limit(1).get();
+      if (!existingByOrder.empty) {
+        const existing = existingByOrder.docs[0].data();
+        res.json({ ok: true, card: { code: existing.code, courseId: existing.courseId, courseTitle: existing.courseTitle, amountCents: existing.initialAmountCents, currency: existing.currency }, emailed: true, deduplicated: true });
+        return;
+      }
+      const verified = await verifyPayPalOrder({
+        orderId: cleanOrderId,
+        expectedAmountCents: amountCents,
+        expectedCurrency: currency
+      });
+      let code = generateGiftCardCodeServer();
+      for (let i = 0; i < 8; i++) {
+        const exists = await db.collection("giftCards").doc(code).get();
+        if (!exists.exists) break;
+        code = generateGiftCardCodeServer();
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const courseTitle = String(course.title || cleanCourseId).slice(0, 140);
+      const card = {
+        id: code,
+        code,
+        initialAmountCents: amountCents,
+        remainingAmountCents: amountCents,
+        currency,
+        courseId: cleanCourseId,
+        courseTitle,
+        singleUse: true,
+        status: "active",
+        active: true,
+        redemptionCount: 0,
+        note: `Comprada en landing por ${cleanBuyerEmail}`.slice(0, 200),
+        createdBy: "public-store",
+        purchasedByEmail: cleanBuyerEmail,
+        purchasedByName: cleanBuyerName,
+        purchaseOrderId: String(verified.orderId),
+        purchaseCaptureId: String(verified.captureId),
+        createdAt: now,
+        updatedAt: now
+      };
+      await db.collection("giftCards").doc(code).set(card);
+      let emailed = false;
+      try {
+        const emailContent = buildGiftCardDeliveryEmailContent({
+          buyerName: cleanBuyerName,
+          buyerEmail: cleanBuyerEmail,
+          courseTitle,
+          giftCardCode: code,
+          amountCents,
+          currency
+        });
+        const emailResult = await sendTransactionalEmail({ to: cleanBuyerEmail, ...emailContent });
+        emailed = emailResult.sent;
+      } catch (emailErr) {
+        console.error("[gift-card-purchase] Error enviando correo:", emailErr);
+      }
+      res.json({ ok: true, emailed, card: { code, courseId: cleanCourseId, courseTitle, amountCents, currency } });
+    } catch (err) {
+      console.error("Public gift card purchase error:", err);
+      const message = err instanceof Error ? err.message : "Error procesando la compra de la Gift Card.";
+      res.status(400).json({ error: message });
+    }
+  });
   app2.post("/api/v1/payments/checkout", async (req, res) => {
     const auth = await requireAuth(req, res);
     if (!auth) return;
@@ -2993,6 +3093,45 @@ ${safeCode ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-rad
 </div></div></body></html>`;
     const text = `\xA1Felicidades ${params.studentName}! Completaste el curso "${params.courseTitle}" en DB-ACADEMY.${params.verificationCode ? `
 C\xF3digo de verificaci\xF3n: ${params.verificationCode}` : ""}`;
+    return { subject, html, text };
+  }
+  function buildGiftCardDeliveryEmailContent(params) {
+    const safeName = escapeEmailHtml(params.buyerName || "Cliente");
+    const safeCourse = escapeEmailHtml(params.courseTitle || "Curso");
+    const safeCode = escapeEmailHtml(params.giftCardCode || "");
+    const amountLabel = `${escapeEmailHtml(params.currency)} ${(params.amountCents / 100).toFixed(2)}`;
+    const appBaseUrl = process.env.APP_URL && !process.env.APP_URL.includes("MY_APP_URL") ? process.env.APP_URL.replace(/\/+$/, "") : "";
+    const logoUrl = appBaseUrl ? `${appBaseUrl}/assets/aistudio/logo-db-academy-mark-dark.png` : "https://dbacademy.vercel.app/assets/aistudio/logo-db-academy-mark-dark.png";
+    const redeemUrl = appBaseUrl ? `${appBaseUrl}/` : "https://dbacademy.vercel.app/";
+    const subject = `Tu Gift Card de DB-ACADEMY: ${params.courseTitle.slice(0, 80)}`;
+    const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:40px 20px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#334155;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(15,23,42,.1);">
+<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px;color:#fff;border-bottom:4px solid #38bdf8;">
+<img src="${escapeEmailHtml(logoUrl)}" alt="DB-ACADEMY" width="130" style="display:block;max-width:130px;height:auto;margin:0 0 20px;border:0;" />
+<span style="display:inline-block;background:#f59e0b;color:#111827;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-bottom:12px;">Gift Card</span>
+<h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">Tu Gift Card est\xE1 lista</h1>
+</div>
+<div style="padding:40px;">
+<p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#475569;">Hola <strong>${safeName}</strong>,<br>Tu pago fue confirmado y generamos tu Gift Card para el curso <strong>${safeCourse}</strong>.</p>
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:20px 24px;margin-bottom:24px;text-align:center;">
+<p style="margin:0;font-size:13px;color:#92400e;">C\xF3digo de tu Gift Card</p>
+<p style="margin:10px 0 0;font-size:28px;font-weight:800;color:#92400e;letter-spacing:.06em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${safeCode}</p>
+<p style="margin:10px 0 0;font-size:13px;color:#92400e;">Valor: ${amountLabel}</p>
+</div>
+<p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">Para canjearla, crea una cuenta o inicia sesi\xF3n en DB-ACADEMY y usa el c\xF3digo en el checkout del curso.</p>
+<div style="text-align:center;margin-bottom:20px;">
+<a href="${escapeEmailHtml(redeemUrl)}" style="display:inline-block;background-color:#0f172a;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;">Ir a DB-ACADEMY</a>
+</div></div>
+<div style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="margin:0 0 8px;font-size:12px;color:#64748b;">Este es un correo autom\xE1tico de <strong>DB-ACADEMY</strong>.</p>
+<p style="margin:0;font-size:12px;color:#94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} DB-ACADEMY. Todos los derechos reservados.</p>
+</div></div></body></html>`;
+    const text = `Tu Gift Card de DB-ACADEMY
+Hola ${params.buyerName}
+Curso: ${params.courseTitle}
+C\xF3digo: ${params.giftCardCode}
+Valor: ${amountLabel}
+Canjea tu c\xF3digo iniciando sesi\xF3n en DB-ACADEMY: ${redeemUrl}`;
     return { subject, html, text };
   }
   app2.post("/api/notifications/payment-receipt", async (req, res) => {

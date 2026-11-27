@@ -729,6 +729,11 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       root.classList.remove('dark');
     }
     localStorage.setItem('dba_theme', theme);
+
+    const themeColor = effectiveDark ? '#090A0D' : '#F3F3F5';
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', themeColor);
+    });
   }, [theme, activeView]);
 
   // Initialize E2EE Vault key fingerprint

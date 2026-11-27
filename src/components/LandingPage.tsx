@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Cpu,
+  Gift,
   Mail,
   MapPin,
   Menu,
@@ -29,6 +30,7 @@ import { BrandLogo } from './ui/BrandLogo';
 import { Container } from './ui/Container';
 import { PWAInstallButton } from './PWAInstallButton';
 import { SnowEffect } from './ui/SnowEffect';
+import { GiftCardLandingModal } from './GiftCardLandingModal';
 import {
   getLandingConfig,
   subscribeLandingConfig,
@@ -77,6 +79,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     city: 'Santo Domingo',
   });
   const [regSuccess, setRegSuccess] = useState(false);
+  const [showGiftCardStore, setShowGiftCardStore] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeLandingConfig((updated) => {
@@ -308,16 +311,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="mt-8 flex flex-wrap items-center gap-4">
                   <a
                     href="#rutas"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-6 py-3.5 text-sm font-bold text-[var(--dba-accent-foreground)] shadow-lg transition-all whitespace-nowrap min-h-[48px] active:scale-95"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-6 py-3.5 text-sm font-bold text-[var(--dba-accent-foreground)] shadow-lg transition-all text-center min-h-[48px] active:scale-95"
                   >
                     <span>{config.heroCtaPrimary}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 shrink-0" />
                   </a>
 
                   <button
                     type="button"
                     onClick={() => (user ? onOpenLearning() : void onSignIn())}
-                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-semibold transition-all whitespace-nowrap min-h-[48px] active:scale-95 ${
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-semibold transition-all text-center min-h-[48px] active:scale-95 ${
                       user
                         ? 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
                         : 'border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-white'
@@ -364,7 +367,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                     {/* Tarjeta de curso destacado abajo */}
                     <div className="absolute bottom-4 left-4 right-4">
-                      <p className="text-xs font-mono font-bold text-amber-300 uppercase tracking-wider">
+                      <p className="text-xs font-mono font-bold text-amber-100 uppercase tracking-wider drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                         {featuredCourse ? `Programa Destacado · ${formatPrice(featuredCourse.priceCents, featuredCourse.currency)}` : config.campusSubtext}
                       </p>
                       <h3 className="mt-1 font-display text-lg font-bold text-white leading-tight">
@@ -537,10 +540,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <Container>
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
                 <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--dba-accent-ink)] font-mono">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--dba-accent-ink)] font-mono text-balance">
                     {config.coursesBadge}
                   </span>
-                  <h2 className="mt-1 font-display text-3xl sm:text-4xl font-extrabold text-[var(--dba-text-primary)]">
+                  <h2 className="mt-1 font-display text-3xl sm:text-4xl font-extrabold text-[var(--dba-text-primary)] text-balance">
                     {config.coursesTitle}
                   </h2>
                   <p className="mt-1 text-sm text-[var(--dba-text-secondary)]">
@@ -551,7 +554,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button
                   type="button"
                   onClick={onExplore}
-                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-[var(--dba-accent-ink)] hover:underline whitespace-nowrap self-start sm:self-auto"
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-[var(--dba-accent-ink)] hover:underline self-start sm:self-auto"
                 >
                   <span>{config.coursesCatalogLinkText}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -619,7 +622,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             <button
                               type="button"
                               onClick={() => onSelectCourse(course.id)}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--dba-border-strong)] px-3 py-2 text-xs font-semibold text-[var(--dba-text-primary)] hover:bg-stone-200/50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[40px]"
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--dba-border-strong)] px-3 py-2 text-xs font-semibold text-[var(--dba-text-primary)] hover:bg-stone-200/50 dark:hover:bg-zinc-800 transition-colors min-h-[40px] text-center"
                             >
                               <span>Ver programa</span>
                             </button>
@@ -629,10 +632,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               onClick={() => {
                                 onSelectCourse(course.id);
                               }}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3 py-2 text-xs font-bold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap min-h-[40px] active:scale-95"
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-3 py-2 text-xs font-bold text-[var(--dba-accent-foreground)] transition-colors min-h-[40px] active:scale-95 text-center"
                             >
                               <span>{isEnrolled ? 'Continuar' : 'Inscribirse'}</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
+                              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                             </button>
                           </div>
                         </div>
@@ -1052,9 +1055,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                 ))}
               </div>
+
             </Container>
           </section>
         )}
+
+
       </main>
 
       {/* FOOTER INSTITUCIONAL COMPLETO */}
@@ -1083,6 +1089,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </a>
                   </li>
                 ))}
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setShowGiftCardStore(true)}
+                    className="hover:text-white transition-colors text-left inline-flex items-center gap-1.5"
+                  >
+                    <Gift className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Comprar Gift Card</span>
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -1168,6 +1184,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </Container>
       </footer>
+
+      <button
+        type="button"
+        onClick={() => setShowGiftCardStore(true)}
+        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex items-center gap-2 rounded-full bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] px-4 py-3 text-sm font-bold shadow-lg transition-colors min-h-[48px]"
+        aria-label="Comprar Gift Card"
+      >
+        <Gift className="w-4 h-4 shrink-0" />
+        <span className="hidden sm:inline">Comprar Gift Card</span>
+      </button>
+
+      {showGiftCardStore && (
+        <GiftCardLandingModal
+          courses={publishedCourses}
+          onClose={() => setShowGiftCardStore(false)}
+        />
+      )}
     </div>
   );
 };

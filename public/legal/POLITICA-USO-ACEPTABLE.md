@@ -2,7 +2,7 @@
 
 > **MARCO REGULATORIO APLICABLE:** Ley No. 65-00 sobre Derecho de Autor, Ley No. 20-00 sobre Propiedad Industrial, Ley No. 53-07 sobre Crímenes y Delitos de Alta Tecnología, Ley No. 172-13 sobre Protección de Datos Personales y Ley No. 358-05 de Protección al Consumidor.
 > **Versión oficial:** `v1.0-2026` · **Última actualización:** 25 de noviembre de 2026.
-> **Responsable del tratamiento:** DB Academy, S.R.L. / David Batista, RNC 1-32-84920-1, Santo Domingo, República Dominicana. Contacto legal: `legal@dbacademy.edu.do`.
+> **Responsable del tratamiento:** DB Academy, S.R.L. / +, +, Santo Domingo, República Dominicana. Contacto legal: `legal.dbacademy@gmail.com`.
 > *Nota de rigor:* Documento elaborado con criterio técnico-legal; su vigencia debe ser validada por abogado dominicano colegiado antes de su publicación definitiva.
 
 ---
@@ -23,7 +23,7 @@ El usuario se abstendrá de:
 El usuario conserva la titularidad de sus aportes y responde por su veracidad y licitud. Al publicar, otorga a DB Academy una licencia no exclusiva, gratuita y limitada al funcionamiento del servicio para almacenar, revisar, moderar, evaluar y, cuando sea necesario, retirar dicho contenido. La plataforma no se hace solidaria de las opiniones personales vertidas por los usuarios en foros.
 
 ## 4. Reporte y retiro (notice-and-takedown)
-Para reportar una presunta infracción, escribir a `legal@dbacademy.edu.do` (o radicar el formulario del Centro Legal, pestaña *Retiro / Propiedad Intelectual*) indicando:
+Para reportar una presunta infracción, escribir a `legal.dbacademy@gmail.com` (o radicar el formulario del Centro Legal, pestaña *Retiro / Propiedad Intelectual*) indicando:
 * Identificación precisa del contenido, URL o módulo afectado y, si es posible, captura de pantalla.
 * Motivo y fundamento legal del reporte (derecho de autor, contenido ilícito, suplantación u otro).
 * Nombre, documento de identidad y datos de contacto del reportante.

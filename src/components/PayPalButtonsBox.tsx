@@ -367,18 +367,18 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
       </div>
 
       {showUsdEquivalent && !loadError && !paymentError && (
-        <p className="text-xs text-stone-500 dark:text-zinc-400 text-center">
-          Total en PayPal: ${value} USD (tasa ref. 1 USD = RD${rate})
+        <p className="text-xs text-stone-500 dark:text-zinc-400 text-center break-words [overflow-wrap:anywhere]">
+          Total en PayPal: ${value} USD (tasa ref. 1 USD = RD${Number(rate).toLocaleString('es-DO', { maximumFractionDigits: 4 })})
         </p>
       )}
 
       {loadError && (
-        <p className="text-sm text-red-600 dark:text-red-400 text-center">{loadError}</p>
+        <p className="text-sm text-red-600 dark:text-red-400 text-center break-words [overflow-wrap:anywhere]">{loadError}</p>
       )}
 
       {paymentError && (
         <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-3 text-center space-y-2">
-          <p className="text-sm text-red-700 dark:text-red-300">{paymentError}</p>
+          <p className="text-sm text-red-700 dark:text-red-300 break-words [overflow-wrap:anywhere]">{paymentError}</p>
           <button
             type="button"
             onClick={() => {

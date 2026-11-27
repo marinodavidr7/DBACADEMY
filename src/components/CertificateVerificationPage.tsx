@@ -61,7 +61,7 @@ export const CertificateVerificationPage: React.FC<CertificateVerificationPagePr
   }, [code]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-[#070E1D] text-slate-900 dark:text-slate-100 px-4 py-8 sm:py-12">
+    <div className="min-h-[100dvh] bg-slate-100 dark:bg-[#070E1D] text-slate-900 dark:text-slate-100 px-4 py-8 sm:py-12">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>

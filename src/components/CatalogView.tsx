@@ -210,7 +210,7 @@ export const CatalogView: React.FC = () => {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <a
                 href="#catalog-grid"
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors whitespace-nowrap min-h-[40px]"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-colors min-h-[40px]"
               >
                 <span>{t('exploreCatalog')}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -218,7 +218,7 @@ export const CatalogView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowRedeemModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-amber-400/50 bg-zinc-900/80 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-amber-300 transition-colors whitespace-nowrap min-h-[40px]"
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-400/50 bg-zinc-900/80 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-amber-300 transition-colors min-h-[40px]"
               >
                 <Gift className="w-4 h-4" />
                 <span>Canjear Gift Card</span>
@@ -230,7 +230,7 @@ export const CatalogView: React.FC = () => {
                     setWorkspaceRole('instructor');
                     setActiveView('instructor');
                   }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-white transition-colors whitespace-nowrap min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 hover:bg-zinc-800 px-4 py-2 text-xs font-semibold text-white transition-colors min-h-[40px]"
                 >
                   <span>{t('openInstructor')}</span>
                 </button>
