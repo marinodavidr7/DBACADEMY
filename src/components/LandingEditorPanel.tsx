@@ -46,6 +46,7 @@ interface LandingEditorPanelProps {
 export const LandingEditorPanel: React.FC<LandingEditorPanelProps> = ({ onPreviewLanding }) => {
   const [config, setConfig] = useState<LandingConfig>(() => getLandingConfig());
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     | 'visibility'
     | 'christmas'
@@ -67,9 +68,14 @@ export const LandingEditorPanel: React.FC<LandingEditorPanelProps> = ({ onPrevie
   }, []);
 
   const handleSave = async () => {
-    await saveLandingConfig(config);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 4000);
+    setSaveError(null);
+    try {
+      await saveLandingConfig(config);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 4000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'No se pudo guardar la configuración del landing.');
+    }
   };
 
   const handleReset = async () => {
@@ -78,10 +84,15 @@ export const LandingEditorPanel: React.FC<LandingEditorPanelProps> = ({ onPrevie
         '¿Estás seguro de que deseas restablecer TODOS los textos y visibilidad de secciones del landing a los valores oficiales de DB Academy?'
       )
     ) {
-      const reset = await resetLandingConfig();
-      setConfig(reset);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 4000);
+      setSaveError(null);
+      try {
+        const reset = await resetLandingConfig();
+        setConfig(reset);
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 4000);
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : 'No se pudo restablecer la configuración del landing.');
+      }
     }
   };
 
@@ -252,6 +263,11 @@ export const LandingEditorPanel: React.FC<LandingEditorPanelProps> = ({ onPrevie
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-3 text-xs font-bold text-emerald-800 dark:text-emerald-300 animate-in fade-in">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>¡Toda la configuración del landing ha sido guardada y publicada en vivo exitosamente!</span>
+          </div>
+        )}
+        {saveError && (
+          <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 p-3 text-xs font-bold text-red-800 dark:text-red-300 animate-in fade-in">
+            {saveError}
           </div>
         )}
       </div>

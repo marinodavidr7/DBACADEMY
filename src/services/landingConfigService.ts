@@ -1,3 +1,5 @@
+import { getAuth } from 'firebase/auth';
+
 export interface LandingStat {
   value: string;
   label: string;
@@ -403,17 +405,25 @@ export async function loadLandingConfig(): Promise<LandingConfig> {
 /** Guarda en Supabase (sólo admin en el servidor) y actualiza la caché local. */
 export async function saveLandingConfig(config: LandingConfig): Promise<void> {
   publishLocal(config);
-  try {
-    const response = await fetch(API_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    });
-    if (!response.ok) {
-      console.warn('No se pudo sincronizar la configuración del landing:', response.status);
-    }
-  } catch (err) {
-    console.warn('No se pudo sincronizar la configuración del landing:', err);
+  const currentUser = getAuth().currentUser;
+  if (!currentUser) {
+    throw new Error('Debes iniciar sesión como administrador para guardar la configuración del landing.');
+  }
+  const idToken = await currentUser.getIdToken();
+  const response = await fetch(API_URL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify(config),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message =
+      (payload && typeof payload.error === 'string' && payload.error) ||
+      `No se pudo sincronizar la configuración del landing (${response.status})`;
+    throw new Error(message);
   }
 }
 
