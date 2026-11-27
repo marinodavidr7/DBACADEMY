@@ -719,16 +719,17 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [language]
   );
 
-  // Sync theme to <html> class
+  // Sync theme to <html> class (landing siempre en light)
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
+    const effectiveDark = theme === 'dark' && activeView !== 'landing';
+    if (effectiveDark) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
     localStorage.setItem('catedra_theme', theme);
-  }, [theme]);
+  }, [theme, activeView]);
 
   // Initialize E2EE Vault key fingerprint
   useEffect(() => {
