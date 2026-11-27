@@ -267,7 +267,7 @@ export function exportEventsToIcs(events: CalendarEvent[]) {
       const end = formatIcsDate(new Date(new Date(ev.dueAtIso).getTime() + 60 * 60 * 1000).toISOString());
       return [
         'BEGIN:VEVENT',
-        `UID:${ev.id}@catedra.campus`,
+        `UID:${ev.id}@dbacademy.campus`,
         `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
         `DTSTART:${start}`,
         `DTEND:${end}`,

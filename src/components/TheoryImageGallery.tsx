@@ -28,7 +28,7 @@ import {
 } from '../services/storageService';
 import { esGoogleDriveUrl, normalizarUrlImagen } from '../utils/imageUtils';
 
-export interface CatedraImagePreset {
+export interface DbaImagePreset {
   label: string;
   title: string;
   description: string;
@@ -36,7 +36,7 @@ export interface CatedraImagePreset {
   sizeByte: number;
 }
 
-export const CATEDRA_GALLERY_PRESETS: CatedraImagePreset[] = [
+export const DBA_GALLERY_PRESETS: DbaImagePreset[] = [
   {
     label: 'Hoja de Excel (Partes)',
     title: 'Partes principales de una hoja de cálculo de Excel',
@@ -522,7 +522,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
     setShowComposer(false);
   };
 
-  const handleAddPreset = async (preset: CatedraImagePreset) => {
+  const handleAddPreset = async (preset: DbaImagePreset) => {
     setLocalError(null);
     const alreadyExists = images.some((m) => m.url === preset.url);
     if (alreadyExists) {
@@ -838,7 +838,7 @@ export const TheoryImageGallery: React.FC<TheoryImageGalleryProps> = ({
                 <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">
                   Diagramas Cátedra listos:
                 </span>
-                {CATEDRA_GALLERY_PRESETS.map((preset) => (
+                {DBA_GALLERY_PRESETS.map((preset) => (
                   <button
                     key={preset.url}
                     type="button"

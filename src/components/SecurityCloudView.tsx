@@ -72,7 +72,7 @@ export const SecurityCloudView: React.FC = () => {
   const [importKeyText, setImportKeyText] = useState('');
 
   const [provider, setProvider] = useState<CloudProvider>(privateInfo?.cloudProvider || 'google_drive');
-  const [folder, setFolder] = useState(privateInfo?.cloudFolder || '/Catedra-Backups');
+  const [folder, setFolder] = useState(privateInfo?.cloudFolder || '/DBAcademy-Backups');
   const [autoBackup, setAutoBackup] = useState(privateInfo?.cloudAutoBackup ?? true);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ checksumSha256: string; syncedAt: string; bytes: number } | null>(null);

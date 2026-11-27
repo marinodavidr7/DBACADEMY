@@ -1,4 +1,4 @@
-const STORAGE_JWK_KEY = 'catedra_e2ee_master_jwk_v1';
+const STORAGE_JWK_KEY = 'dba_e2ee_master_jwk_v1';
 
 function toBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -43,7 +43,7 @@ export async function getOrCreateVaultKey(): Promise<{ key: CryptoKey; fingerpri
     localStorage.setItem(STORAGE_JWK_KEY, JSON.stringify(exported));
   }
   const jwk = await crypto.subtle.exportKey('jwk', key);
-  const hash = await sha256Hex(String(jwk.k || 'catedra'));
+  const hash = await sha256Hex(String(jwk.k || 'dba'));
   const fingerprint = hash.slice(0, 16).toUpperCase();
   return { key, fingerprint };
 }
@@ -53,7 +53,7 @@ export async function rotateVaultKeyFromPassphrase(passphrase: string): Promise<
   const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, [
     'deriveKey',
   ]);
-  const salt = enc.encode('catedra-e2ee-salt-2026');
+  const salt = enc.encode('dba-e2ee-salt-2026');
   const derived = await crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
     baseKey,
@@ -72,7 +72,7 @@ export async function exportVaultKeyJson(): Promise<string> {
   if (!saved) {
     await getOrCreateVaultKey();
   }
-  return localStorage.getItem(STORAGE_JWK_KEY) || '{}';
+  return localStorage.getItem(STORAGE_JWK_KEY) ?? '{}';
 }
 
 export async function importVaultKeyJson(jwkString: string): Promise<string> {
@@ -83,7 +83,7 @@ export async function importVaultKeyJson(jwkString: string): Promise<string> {
   ]);
   const exported = await crypto.subtle.exportKey('jwk', key);
   localStorage.setItem(STORAGE_JWK_KEY, JSON.stringify(exported));
-  const hash = await sha256Hex(String(exported.k || 'catedra'));
+  const hash = await sha256Hex(String(exported.k || 'dba'));
   return hash.slice(0, 16).toUpperCase();
 }
 

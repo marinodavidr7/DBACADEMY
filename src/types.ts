@@ -17,6 +17,7 @@ export type AppView =
   | 'calendar'
   | 'security'
   | 'integrations'
+  | 'gift-store'
   | 'account'
   | 'legal'
   | 'themes';

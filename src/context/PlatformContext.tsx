@@ -292,10 +292,10 @@ function formatGoogleAuthError(err: unknown): string {
 }
 
 function getDeviceId(): string {
-  const existing = sessionStorage.getItem('catedra_device_id');
+  const existing = sessionStorage.getItem('dba_device_id');
   if (existing) return existing;
   const id = `dev_${Math.random().toString(36).slice(2, 10)}`;
-  sessionStorage.setItem('catedra_device_id', id);
+  sessionStorage.setItem('dba_device_id', id);
   return id;
 }
 
@@ -533,13 +533,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [privateInfo, setPrivateInfo] = useState<UserPrivateInfo | null>(null);
 
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('catedra_theme');
+    const saved = localStorage.getItem('dba_theme');
     if (saved === 'dark' || saved === 'light') return saved;
     return 'light';
   });
 
   const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem('catedra_lang');
+    const saved = localStorage.getItem('dba_lang');
     if (saved === 'es' || saved === 'en' || saved === 'fr' || saved === 'pt') return saved;
     return 'es';
   });
@@ -728,7 +728,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('catedra_theme', theme);
+    localStorage.setItem('dba_theme', theme);
   }, [theme, activeView]);
 
   // Initialize E2EE Vault key fingerprint
@@ -920,7 +920,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                   quietHoursStart: '22:00',
                   quietHoursEnd: '07:00',
                   cloudProvider: 'none',
-                  cloudFolder: '/Catedra-Backups',
+                  cloudFolder: '/DBAcademy-Backups',
                   cloudAutoBackup: false,
                   cloudLastSyncedAt: '',
                   updatedAt: serverTimestamp(),
@@ -1163,7 +1163,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               data.language === 'pt'
             ) {
               setLanguageState(data.language);
-              localStorage.setItem('catedra_lang', data.language);
+              localStorage.setItem('dba_lang', data.language);
             }
           } else if (data.type === 'INSTRUCTOR_SALE' && data.courseTitle) {
             triggerPushAlert(
@@ -1288,7 +1288,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               p.preferredLanguage === 'pt'
             ) {
               setLanguageState(p.preferredLanguage);
-              localStorage.setItem('catedra_lang', p.preferredLanguage);
+              localStorage.setItem('dba_lang', p.preferredLanguage);
             }
           }
         },
@@ -1752,7 +1752,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setLanguage = useCallback(
     async (lang: Language) => {
       setLanguageState(lang);
-      localStorage.setItem('catedra_lang', lang);
+      localStorage.setItem('dba_lang', lang);
       sendWs({ type: 'SYNC_PREFS', language: lang });
       if (user) {
         try {
@@ -1863,7 +1863,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       if (targetLanguage !== language) {
         setLanguageState(targetLanguage);
-        localStorage.setItem('catedra_lang', targetLanguage);
+        localStorage.setItem('dba_lang', targetLanguage);
       }
 
       sendWs({
@@ -2214,6 +2214,47 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [user]
   );
 
+  const notifyStudentPaymentReceipt = useCallback(
+    async (payload: {
+      courseTitle: string;
+      studentName: string;
+      amountCents: number;
+      currency: string;
+      gateway: string;
+      transactionRef?: string;
+    }) => {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        await fetch('/api/notifications/payment-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // Non-blocking
+      }
+    },
+    [user]
+  );
+
+  const notifyStudentCourseCompleted = useCallback(
+    async (payload: { courseId: string; courseTitle: string; studentName: string; verificationCode?: string }) => {
+      if (!user) return;
+      try {
+        const idToken = await user.getIdToken();
+        await fetch('/api/notifications/course-completed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // Non-blocking
+      }
+    },
+    [user]
+  );
+
   const enrollWithPayment = useCallback(
     async (
       course: Course,
@@ -2457,6 +2498,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           currency: authoritativeCurrency,
           ...(appliedCouponCode ? { couponCode: appliedCouponCode } : {}),
         });
+        if (finalAmount > 0) {
+          void notifyStudentPaymentReceipt({
+            courseTitle: course.title.slice(0, 140),
+            studentName: (displayName || enrollmentEmail || 'Estudiante').slice(0, 100),
+            amountCents: finalAmount,
+            currency: authoritativeCurrency,
+            gateway: resolvedGateway,
+            transactionRef,
+          });
+        }
       }
 
       triggerPushAlert(
@@ -2468,7 +2519,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
       return paymentPayload;
     },
-    [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, notifyAdminNewEnrollment, t]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, notifyAdminNewEnrollment, notifyStudentPaymentReceipt, t]
   );
 
   const completeLesson = useCallback(
@@ -2561,9 +2612,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         );
       }
 
+      if (isCompleted) {
+        void notifyStudentCourseCompleted({
+          courseId: course.id,
+          courseTitle: course.title.slice(0, 140),
+          studentName: (displayName || authenticatedEmail || 'Estudiante').slice(0, 100),
+          ...(issuedCert?.verificationCode ? { verificationCode: issuedCert.verificationCode } : {}),
+        });
+      }
+
       return { progressPercent, certificateIssued: issuedCert };
     },
-    [user, enrollments, certificates, sendWs, triggerPushAlert]
+    [user, enrollments, certificates, sendWs, triggerPushAlert, notifyStudentCourseCompleted, displayName, authenticatedEmail]
   );
 
   const verifyCoursePersisted = useCallback(
@@ -3973,6 +4033,16 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         currency: authoritativeCurrency,
         couponCode: code,
       });
+      if (txResult.payment.amountCents > 0) {
+        void notifyStudentPaymentReceipt({
+          courseTitle: course.title.slice(0, 140),
+          studentName: txResult.redemption.studentName || 'Estudiante',
+          amountCents: txResult.payment.amountCents,
+          currency: authoritativeCurrency,
+          gateway: txResult.payment.gateway,
+          transactionRef: txResult.payment.transactionRef || txResult.payment.id,
+        });
+      }
 
       triggerPushAlert(
         'payment',
@@ -3982,7 +4052,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return txResult;
     },
-    [user, isAdmin, enrollments, certificates, courses, privateInfo, sendWs, triggerPushAlert, notifyAdminNewEnrollment]
+    [user, isAdmin, enrollments, certificates, courses, privateInfo, sendWs, triggerPushAlert, notifyAdminNewEnrollment, notifyStudentPaymentReceipt]
   );
 
   const redeemGiftCardCode = useCallback(

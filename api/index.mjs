@@ -550,8 +550,8 @@ async function dispatchWebhooks(ownerId, event, data) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Catedra-Event": event,
-            "X-Catedra-Signature": `sha256=${signature}`
+            "X-DBA-Event": event,
+            "X-DBA-Signature": `sha256=${signature}`
           },
           body,
           signal: controller.signal
@@ -688,7 +688,7 @@ function createApp() {
   app2.get("/api/v1/health", (_req, res) => {
     res.json({
       status: "ok",
-      service: "catedra-lms-api",
+      service: "dbacademy-lms-api",
       version: "1.0.0",
       connectedSockets: clients.size,
       // Booleano: permite a QA verificar la inyección de ENV sin exponer secretos.
@@ -1603,6 +1603,71 @@ function createApp() {
       res.status(400).json({ error: message });
     }
   });
+  const generateGiftCardCodeServer = () => {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let p1 = "", p2 = "";
+    for (let i = 0; i < 4; i++) {
+      p1 += alphabet[Math.floor(Math.random() * alphabet.length)];
+      p2 += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return `DBA-${p1}-${p2}`;
+  };
+  app2.post("/api/v1/gift-cards/purchase", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { orderId, amountCents, currency } = req.body ?? {};
+    const amount = Math.round(Number(amountCents));
+    const allowedCurrencies = ["DOP", "USD", "EUR", "MXN"];
+    const cur = String(currency || "DOP").toUpperCase();
+    if (!orderId || !Number.isFinite(amount) || amount < 100 || amount > 5e5) {
+      res.status(400).json({ error: "Datos de compra inv\xE1lidos." });
+      return;
+    }
+    if (!allowedCurrencies.includes(cur)) {
+      res.status(400).json({ error: "Moneda no soportada." });
+      return;
+    }
+    try {
+      const verified = await verifyPayPalOrder({
+        orderId: String(orderId),
+        expectedAmountCents: amount,
+        expectedCurrency: cur
+      });
+      const db = serverDb;
+      let code = generateGiftCardCodeServer();
+      for (let i = 0; i < 8; i++) {
+        const exists = await db.collection("giftCards").doc(code).get();
+        if (!exists.exists) break;
+        code = generateGiftCardCodeServer();
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const card = {
+        id: code,
+        code,
+        initialAmountCents: amount,
+        remainingAmountCents: amount,
+        currency: cur,
+        singleUse: false,
+        status: "active",
+        active: true,
+        redemptionCount: 0,
+        note: `Comprada en tienda por ${auth.email || auth.uid}`,
+        createdBy: auth.uid,
+        purchasedBy: auth.uid,
+        purchasedByEmail: auth.email || "",
+        purchaseOrderId: String(verified.orderId),
+        purchaseCaptureId: String(verified.captureId),
+        createdAt: now,
+        updatedAt: now
+      };
+      await db.collection("giftCards").doc(code).set(card);
+      res.json({ ok: true, card });
+    } catch (err) {
+      console.error("Gift card purchase error:", err);
+      const message = err instanceof Error ? err.message : "Error procesando la compra de la Gift Card.";
+      res.status(400).json({ error: message });
+    }
+  });
   app2.post("/api/v1/payments/checkout", async (req, res) => {
     const auth = await requireAuth(req, res);
     if (!auth) return;
@@ -1940,11 +2005,10 @@ function createApp() {
     "users_private"
   ]);
   const isAdminProxyTable = (table) => ADMIN_PROXY_TABLES.has(table);
-  app2.get("/api/admin/:table", async (req, res) => {
+  app2.get("/api/admin/:table", async (req, res, next) => {
     const table = req.params.table;
     if (!isAdminProxyTable(table)) {
-      res.status(404).json({ error: "Tabla no disponible" });
-      return;
+      return next();
     }
     const selfService = table === "payments" || table === "enrollments" || table === "users_private";
     const ownerField = table === "users_private" ? "uid" : "studentId";
@@ -1971,11 +2035,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al listar" });
     }
   });
-  app2.get("/api/admin/:table/:id", async (req, res) => {
+  app2.get("/api/admin/:table/:id", async (req, res, next) => {
     const table = req.params.table;
     if (!isAdminProxyTable(table)) {
-      res.status(404).json({ error: "Tabla no disponible" });
-      return;
+      return next();
     }
     const selfService = table === "payments" || table === "enrollments" || table === "users_private";
     const ownerField = table === "users_private" ? "uid" : "studentId";
@@ -2007,11 +2070,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al leer" });
     }
   });
-  app2.put("/api/admin/:table/:id", async (req, res) => {
+  app2.put("/api/admin/:table/:id", async (req, res, next) => {
     const table = req.params.table;
     if (!isAdminProxyTable(table)) {
-      res.status(404).json({ error: "Tabla no disponible" });
-      return;
+      return next();
     }
     const selfService = table === "payments" || table === "enrollments" || table === "users_private";
     const ownerField = table === "users_private" ? "uid" : "studentId";
@@ -2053,11 +2115,10 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al guardar" });
     }
   });
-  app2.post("/api/admin/:table", async (req, res) => {
+  app2.post("/api/admin/:table", async (req, res, next) => {
     const table = req.params.table;
     if (!isAdminProxyTable(table)) {
-      res.status(404).json({ error: "Tabla no disponible" });
-      return;
+      return next();
     }
     const selfService = table === "payments" || table === "enrollments" || table === "users_private";
     const ownerField = table === "users_private" ? "uid" : "studentId";
@@ -2094,10 +2155,9 @@ function createApp() {
       res.status(500).json({ error: err instanceof Error ? err.message : "Error al crear" });
     }
   });
-  app2.delete("/api/admin/:table/:id", async (req, res) => {
+  app2.delete("/api/admin/:table/:id", async (req, res, next) => {
     if (!isAdminProxyTable(req.params.table)) {
-      res.status(404).json({ error: "Tabla no disponible" });
-      return;
+      return next();
     }
     if (!await requireAdmin(req, res)) return;
     try {
@@ -2533,7 +2593,7 @@ function createApp() {
         certificateIssued: true
       }
     };
-    const hmacSecret = crypto.createHash("sha256").update(String(ownerId || "catedra")).digest("hex");
+    const hmacSecret = crypto.createHash("sha256").update(String(ownerId || "dbacademy")).digest("hex");
     const signature = crypto.createHmac("sha256", hmacSecret).update(JSON.stringify(payload)).digest("hex");
     let deliveryStatus = 200;
     let deliveryNote = "Verified local HMAC-SHA256 payload signed";
@@ -2549,8 +2609,8 @@ function createApp() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Catedra-Event": eventName,
-            "X-Catedra-Signature": `sha256=${signature}`
+            "X-DBA-Event": eventName,
+            "X-DBA-Signature": `sha256=${signature}`
           },
           body: JSON.stringify(payload),
           signal: controller.signal
@@ -2595,7 +2655,7 @@ function createApp() {
     const record = {
       ownerId: String(ownerId),
       provider: String(provider),
-      folder: String(folder || "/Catedra-Backups"),
+      folder: String(folder || "/DBAcademy-Backups"),
       checksumSha256,
       bytes: Buffer.byteLength(serialized, "utf8"),
       syncedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -2721,7 +2781,7 @@ function createApp() {
     }
     if (status.provider === "resend") {
       const apiKey = process.env.RESEND_API_KEY.trim();
-      const from = process.env.RESEND_FROM_EMAIL?.trim() || "C\xE1tedra DB Academy <onboarding@resend.dev>";
+      const from = process.env.RESEND_FROM_EMAIL?.trim() || "DB Academy <onboarding@resend.dev>";
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -2746,7 +2806,7 @@ function createApp() {
     const smtpPass = process.env.SMTP_PASS.trim();
     const smtpHost = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
     const smtpPort = Number(process.env.SMTP_PORT || 465);
-    const smtpFrom = process.env.SMTP_FROM?.trim() || `C\xE1tedra DB Academy <${smtpUser}>`;
+    const smtpFrom = process.env.SMTP_FROM?.trim() || `DB Academy <${smtpUser}>`;
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
@@ -2776,55 +2836,87 @@ function createApp() {
       dateStyle: "medium",
       timeStyle: "short"
     });
+    const appBaseUrl = process.env.APP_URL && !process.env.APP_URL.includes("MY_APP_URL") ? process.env.APP_URL.replace(/\/+$/, "") : "";
+    const logoUrl = appBaseUrl ? `${appBaseUrl}/assets/aistudio/logo-db-academy-mark-dark.png` : "https://dbacademy.vercel.app/assets/aistudio/logo-db-academy-mark-dark.png";
     const subjectPrefix = params.isTest ? "[PRUEBA] " : "";
     const subject = `${subjectPrefix}Nueva inscripci\xF3n en ${params.courseTitle.slice(0, 80)}: ${params.studentName.slice(0, 50)}`;
+    const adminUrl = appBaseUrl ? `${appBaseUrl}/admin` : "https://dbacademy.vercel.app/admin";
+    const safeEmailHref = encodeURIComponent(params.studentEmail || "");
+    const isFree = params.amountCents <= 0;
     const html = `
 <!DOCTYPE html>
 <html lang="es">
-<body style="margin:0;padding:24px;background-color:#f8fafc;font-family:Inter,Segoe UI,Arial,sans-serif;color:#0f172a;">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
-    <div style="background:#0f172a;padding:20px 24px;color:#ffffff;">
-      <p style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#38bdf8;font-weight:700;">
-        C\xE1tedra DB Academy \xB7 Alerta de Matr\xEDcula
-      </p>
-      <h1 style="margin:6px 0 0;font-size:20px;line-height:1.3;">
-        ${params.isTest ? "Prueba de notificaci\xF3n de inscripci\xF3n" : "\xA1Se inscribi\xF3 un alumno nuevo!"}
-      </h1>
+  <body style="margin:0; padding:40px 20px; background-color:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#334155;">
+    <div style="max-width:600px; margin:0 auto; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.1);">
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding:32px 40px; color:#ffffff; border-bottom: 4px solid #38bdf8;">
+        <img src="${escapeEmailHtml(logoUrl)}" alt="DB-ACADEMY Logo" width="130" style="display:block; max-width:130px; height:auto; margin:0 0 20px; border:0;" />
+        <span style="display:inline-block; background-color:#38bdf8; color:#0f172a; font-size:11px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; padding:4px 10px; border-radius:20px; margin-bottom:12px;">
+          ${params.isTest ? "Prueba de Matr\xEDcula" : "Nueva Matr\xEDcula"}
+        </span>
+        <h1 style="margin:0; font-size:24px; line-height:1.2; font-weight:700;">
+          ${params.isTest ? "Prueba de Notificaci\xF3n" : "Notificaci\xF3n de Inscripci\xF3n"}
+        </h1>
+      </div>
+
+      <div style="padding:40px;">
+        <p style="margin:0 0 24px; font-size:16px; line-height:1.6; color:#475569;">
+          Hola equipo de <strong>DB-ACADEMY</strong>,<br>
+          Se ha registrado ${params.isTest ? "una matr\xEDcula de prueba" : "un nuevo alumno"} en la plataforma. Aqu\xED tienes los detalles de la transacci\xF3n:
+        </p>
+
+        <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:8px 24px; margin-bottom:32px;">
+          <table role="presentation" style="width:100%; border-collapse:collapse; font-size:14px;">
+            <tr>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#64748b; width:160px;">\u{1F464} Alumno</td>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; font-weight:600; color:#0f172a;">${safeName}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#64748b;">\u2709\uFE0F Correo</td>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#1d4ed8;">
+                <a href="mailto:${safeEmailHref}" style="color:#1d4ed8; text-decoration:none;">${safeEmail}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#64748b;">\u{1F4DA} Curso</td>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; font-weight:600; color:#0f172a;">${safeCourse}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#64748b;">\u{1F4B3} Pasarela</td>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#0f172a;">
+                <span style="background-color:#e2e8f0; padding:4px 8px; border-radius:6px; font-size:12px; font-weight:600;">${safeGateway}${safeCoupon ? ` \xB7 Cup\xF3n ${safeCoupon}` : ""}</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; color:#64748b;">\u{1F4B0} Importe</td>
+              <td style="padding:16px 0; border-bottom:1px dashed #cbd5e1; font-weight:700; color:${isFree ? "#16a34a" : "#0f172a"}; font-size:16px;">${amountLabel}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px 0; color:#64748b;">\u{1F4C5} Fecha</td>
+              <td style="padding:16px 0; color:#0f172a;">${escapeEmailHtml(timestamp)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="text-align:center; margin-bottom:20px;">
+          <a href="${escapeEmailHtml(adminUrl)}" style="display:inline-block; background-color:#0f172a; color:#ffffff; font-size:14px; font-weight:600; text-decoration:none; padding:12px 24px; border-radius:8px;">
+            Ver en el Panel de Administraci\xF3n
+          </a>
+        </div>
+      </div>
+
+      <div style="background-color:#f8fafc; padding:24px 40px; text-align:center; border-top:1px solid #e2e8f0;">
+        <p style="margin:0 0 8px; font-size:12px; color:#64748b;">
+          Este es un correo autom\xE1tico generado por el sistema de <strong>DB-ACADEMY</strong>.
+        </p>
+        <p style="margin:0; font-size:12px; color:#94a3b8;">
+          \xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} DB-ACADEMY. Todos los derechos reservados.
+        </p>
+      </div>
     </div>
-    <div style="padding:24px;font-size:14px;line-height:1.6;">
-      <p style="margin:0 0 16px;">Se ha registrado una nueva matr\xEDcula en la plataforma con los siguientes detalles:</p>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;width:140px;">Alumno</td>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;">${safeName}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Correo</td>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeEmail}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Curso</td>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:600;color:#1d4ed8;">${safeCourse}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">M\xE9todo / Pasarela</td>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;">${safeGateway}${safeCoupon ? ` (Cup\xF3n: ${safeCoupon})` : ""}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;">Importe</td>
-          <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:700;">${amountLabel}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;color:#64748b;">Fecha</td>
-          <td style="padding:8px 0;">${escapeEmailHtml(timestamp)}</td>
-        </tr>
-      </table>
-    </div>
-  </div>
-</body>
+  </body>
 </html>`.trim();
     const text = [
-      params.isTest ? "[PRUEBA] Nueva inscripci\xF3n en C\xE1tedra DB Academy" : "\xA1Se inscribi\xF3 un alumno nuevo en C\xE1tedra DB Academy!",
+      params.isTest ? "[PRUEBA] Nueva inscripci\xF3n en DB-ACADEMY" : "\xA1Se inscribi\xF3 un alumno nuevo en DB-ACADEMY!",
       `Alumno: ${params.studentName}`,
       `Correo: ${params.studentEmail}`,
       `Curso: ${params.courseTitle}`,
@@ -2834,6 +2926,143 @@ function createApp() {
     ].join("\n");
     return { subject, html, text };
   }
+  function buildPaymentReceiptEmailContent(params) {
+    const safeName = escapeEmailHtml(params.studentName || "Estudiante");
+    const safeCourse = escapeEmailHtml(params.courseTitle || "Curso");
+    const safeGateway = escapeEmailHtml((params.gateway || "pago").toUpperCase());
+    const safeRef = escapeEmailHtml(params.transactionRef || "N/A");
+    const amountLabel = params.amountCents <= 0 ? "Gratuito" : `${escapeEmailHtml(params.currency)} ${(params.amountCents / 100).toFixed(2)}`;
+    const timestamp = (/* @__PURE__ */ new Date()).toLocaleString("es-DO", { dateStyle: "medium", timeStyle: "short" });
+    const appBaseUrl = process.env.APP_URL && !process.env.APP_URL.includes("MY_APP_URL") ? process.env.APP_URL.replace(/\/+$/, "") : "";
+    const logoUrl = appBaseUrl ? `${appBaseUrl}/assets/aistudio/logo-db-academy-mark-dark.png` : "https://dbacademy.vercel.app/assets/aistudio/logo-db-academy-mark-dark.png";
+    const subject = `Confirmaci\xF3n de pago: ${params.courseTitle.slice(0, 80)}`;
+    const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:40px 20px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#334155;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(15,23,42,.1);">
+<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px;color:#fff;border-bottom:4px solid #38bdf8;">
+<img src="${escapeEmailHtml(logoUrl)}" alt="DB-ACADEMY" width="130" style="display:block;max-width:130px;height:auto;margin:0 0 20px;border:0;" />
+<span style="display:inline-block;background:#38bdf8;color:#0f172a;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-bottom:12px;">Pago Confirmado</span>
+<h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">Recibimos tu pago</h1>
+</div>
+<div style="padding:40px;">
+<p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#475569;">Hola <strong>${safeName}</strong>,<br>Tu pago fue procesado correctamente. Aqu\xED tienes el resumen:</p>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:8px 24px;margin-bottom:32px;">
+<table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px;">
+<tr><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#64748b;width:160px;">\u{1F4DA} Curso</td><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;font-weight:600;color:#0f172a;">${safeCourse}</td></tr>
+<tr><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#64748b;">\u{1F4B3} M\xE9todo</td><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#0f172a;"><span style="background:#e2e8f0;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;">${safeGateway}</span></td></tr>
+<tr><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#64748b;">\u{1F4B0} Importe</td><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;font-weight:700;color:#16a34a;font-size:16px;">${amountLabel}</td></tr>
+<tr><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#64748b;">\u{1F9FE} Referencia</td><td style="padding:16px 0;border-bottom:1px dashed #cbd5e1;color:#0f172a;">${safeRef}</td></tr>
+<tr><td style="padding:16px 0;color:#64748b;">\u{1F4C5} Fecha</td><td style="padding:16px 0;color:#0f172a;">${escapeEmailHtml(timestamp)}</td></tr>
+</table></div></div>
+<div style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="margin:0 0 8px;font-size:12px;color:#64748b;">Este es un correo autom\xE1tico de <strong>DB-ACADEMY</strong>.</p>
+<p style="margin:0;font-size:12px;color:#94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} DB-ACADEMY. Todos los derechos reservados.</p>
+</div></div></body></html>`;
+    const text = `Confirmaci\xF3n de pago - DB-ACADEMY
+Hola ${params.studentName}
+Curso: ${params.courseTitle}
+M\xE9todo: ${params.gateway}
+Importe: ${amountLabel}
+Referencia: ${params.transactionRef || "N/A"}
+Fecha: ${timestamp}`;
+    return { subject, html, text };
+  }
+  function buildCourseCompletedEmailContent(params) {
+    const safeName = escapeEmailHtml(params.studentName || "Estudiante");
+    const safeCourse = escapeEmailHtml(params.courseTitle || "Curso");
+    const safeCode = escapeEmailHtml(params.verificationCode || "");
+    const appBaseUrl = process.env.APP_URL && !process.env.APP_URL.includes("MY_APP_URL") ? process.env.APP_URL.replace(/\/+$/, "") : "";
+    const logoUrl = appBaseUrl ? `${appBaseUrl}/assets/aistudio/logo-db-academy-mark-dark.png` : "https://dbacademy.vercel.app/assets/aistudio/logo-db-academy-mark-dark.png";
+    const certUrl = appBaseUrl ? `${appBaseUrl}/certificates` : "https://dbacademy.vercel.app/certificates";
+    const subject = `\xA1Felicidades! Completaste ${params.courseTitle.slice(0, 80)}`;
+    const html = `<!DOCTYPE html><html lang="es"><body style="margin:0;padding:40px 20px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#334155;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(15,23,42,.1);">
+<div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:32px 40px;color:#fff;border-bottom:4px solid #38bdf8;">
+<img src="${escapeEmailHtml(logoUrl)}" alt="DB-ACADEMY" width="130" style="display:block;max-width:130px;height:auto;margin:0 0 20px;border:0;" />
+<span style="display:inline-block;background:#22c55e;color:#052e16;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-bottom:12px;">Curso Completado</span>
+<h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;">\xA1Felicidades, ${safeName}!</h1>
+</div>
+<div style="padding:40px;">
+<p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#475569;">Has completado exitosamente el curso <strong>${safeCourse}</strong>. Tu esfuerzo y dedicaci\xF3n dieron resultado.</p>
+${safeCode ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin-bottom:24px;"><p style="margin:0;font-size:13px;color:#166534;">C\xF3digo de verificaci\xF3n del certificado:</p><p style="margin:6px 0 0;font-size:18px;font-weight:700;color:#166534;letter-spacing:.04em;">${safeCode}</p></div>` : ""}
+<div style="text-align:center;margin-bottom:20px;">
+<a href="${escapeEmailHtml(certUrl)}" style="display:inline-block;background-color:#0f172a;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;">Ver mis certificados</a>
+</div></div>
+<div style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="margin:0 0 8px;font-size:12px;color:#64748b;">Este es un correo autom\xE1tico de <strong>DB-ACADEMY</strong>.</p>
+<p style="margin:0;font-size:12px;color:#94a3b8;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} DB-ACADEMY. Todos los derechos reservados.</p>
+</div></div></body></html>`;
+    const text = `\xA1Felicidades ${params.studentName}! Completaste el curso "${params.courseTitle}" en DB-ACADEMY.${params.verificationCode ? `
+C\xF3digo de verificaci\xF3n: ${params.verificationCode}` : ""}`;
+    return { subject, html, text };
+  }
+  app2.post("/api/notifications/payment-receipt", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    if (!checkRateLimit(`payment_receipt:${auth.uid}`, 20, 60 * 60 * 1e3)) {
+      res.status(429).json({ error: "L\xEDmite de notificaciones alcanzado." });
+      return;
+    }
+    const body = req.body ?? {};
+    const to = (auth.email || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.json({ ok: true, emailed: false, reason: "Sin email v\xE1lido del usuario" });
+      return;
+    }
+    const courseTitle = String(body.courseTitle || "Curso").trim().slice(0, 140);
+    const amountCents = Math.max(0, Math.round(Number(body.amountCents || 0)));
+    const currency = String(body.currency || "DOP").trim().slice(0, 8).toUpperCase();
+    const gateway = String(body.gateway || "pago").trim().slice(0, 32);
+    const transactionRef = String(body.transactionRef || "").trim().slice(0, 120);
+    const dedupeKey = `pay:${auth.uid}:${transactionRef || courseTitle}:${amountCents}`;
+    if (sentEnrollmentEmailIds.has(dedupeKey)) {
+      res.json({ ok: true, emailed: false, deduplicated: true });
+      return;
+    }
+    try {
+      const content = buildPaymentReceiptEmailContent({ studentName: String(body.studentName || auth.email || "Estudiante").slice(0, 100), studentEmail: to, courseTitle, amountCents, currency, gateway, transactionRef });
+      const result = await sendTransactionalEmail({ to, ...content });
+      if (result.sent) {
+        sentEnrollmentEmailIds.add(dedupeKey);
+        if (sentEnrollmentEmailIds.size > 5e3) sentEnrollmentEmailIds.clear();
+      }
+      res.json({ ok: true, emailed: result.sent, provider: result.provider, ...result.reason ? { reason: result.reason } : {} });
+    } catch (err) {
+      res.json({ ok: true, emailed: false, reason: err instanceof Error ? err.message : "Error enviando correo" });
+    }
+  });
+  app2.post("/api/notifications/course-completed", async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    if (!checkRateLimit(`course_completed:${auth.uid}`, 20, 60 * 60 * 1e3)) {
+      res.status(429).json({ error: "L\xEDmite de notificaciones alcanzado." });
+      return;
+    }
+    const body = req.body ?? {};
+    const to = (auth.email || "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      res.json({ ok: true, emailed: false, reason: "Sin email v\xE1lido del usuario" });
+      return;
+    }
+    const courseId = String(body.courseId || "").trim().slice(0, 128);
+    const courseTitle = String(body.courseTitle || "Curso").trim().slice(0, 140);
+    const verificationCode = String(body.verificationCode || "").trim().slice(0, 64);
+    const dedupeKey = `done:${auth.uid}:${courseId}`;
+    if (sentEnrollmentEmailIds.has(dedupeKey)) {
+      res.json({ ok: true, emailed: false, deduplicated: true });
+      return;
+    }
+    try {
+      const content = buildCourseCompletedEmailContent({ studentName: String(body.studentName || auth.email || "Estudiante").slice(0, 100), courseTitle, verificationCode });
+      const result = await sendTransactionalEmail({ to, ...content });
+      if (result.sent) {
+        sentEnrollmentEmailIds.add(dedupeKey);
+        if (sentEnrollmentEmailIds.size > 5e3) sentEnrollmentEmailIds.clear();
+      }
+      res.json({ ok: true, emailed: result.sent, provider: result.provider, ...result.reason ? { reason: result.reason } : {} });
+    } catch (err) {
+      res.json({ ok: true, emailed: false, reason: err instanceof Error ? err.message : "Error enviando correo" });
+    }
+  });
   app2.post("/api/notifications/enrollment", async (req, res) => {
     const auth = await requireAuth(req, res);
     if (!auth) return;
@@ -2936,7 +3165,7 @@ function createApp() {
     try {
       const content = buildEnrollmentEmailContent({
         studentName: "Alumno de Prueba",
-        studentEmail: "prueba@catedradbacademy.com",
+        studentEmail: "prueba@dbacademy.com",
         studentId: "test-student",
         courseTitle: "Excel Intermedio: Funciones Avanzadas",
         courseId: "excel-intermedio-01",
@@ -3062,7 +3291,7 @@ async function startServer() {
     });
   });
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`C\xE1tedra LMS server listening on http://0.0.0.0:${PORT}`);
+    console.log(`DB Academy LMS server listening on http://0.0.0.0:${PORT}`);
   });
 }
 if (!process.env.VERCEL) {

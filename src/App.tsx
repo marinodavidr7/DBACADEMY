@@ -89,6 +89,9 @@ const LegalCenterView = lazyWithRetry(() =>
 const LandingEditorPanel = lazyWithRetry(() =>
   import('./components/LandingEditorPanel').then((m) => ({ default: m.LandingEditorPanel }))
 );
+const GiftCardStoreView = lazyWithRetry(() =>
+  import('./components/GiftCardStoreView').then((m) => ({ default: m.GiftCardStoreView }))
+);
 
 const ViewSkeleton: React.FC = () => (
   <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Cargando sección">
@@ -179,7 +182,7 @@ const AppShell: React.FC = () => {
   const [redeemOpen, setRedeemOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('catedra_sidebar_collapsed') === 'true';
+      return localStorage.getItem('dba_sidebar_collapsed') === 'true';
     } catch {
       return false;
     }
@@ -189,7 +192,7 @@ const AppShell: React.FC = () => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem('catedra_sidebar_collapsed', String(next));
+        localStorage.setItem('dba_sidebar_collapsed', String(next));
       } catch {
         // Ignore storage errors
       }
@@ -213,6 +216,7 @@ const AppShell: React.FC = () => {
     { id: 'calendar', label: t('navCalendar'), icon: Calendar },
     { id: 'security', label: t('navSecurity'), icon: Shield },
     { id: 'integrations', label: t('navIntegrations'), icon: Code2 },
+    { id: 'gift-store', label: 'Tienda', icon: Gift },
     { id: 'legal', label: 'Legal', icon: Scale },
   ];
 
@@ -719,6 +723,7 @@ const AppShell: React.FC = () => {
                   {activeView === 'calendar' && <CalendarTasksView />}
                   {activeView === 'security' && <SecurityCloudView />}
                   {activeView === 'integrations' && <ApiIntegrationsView />}
+                  {activeView === 'gift-store' && <GiftCardStoreView />}
                   {activeView === 'account' && <UserAccountView />}
                   {activeView === 'legal' && <LegalCenterView />}
                   {activeView === 'themes' && <AdminThemePanel />}

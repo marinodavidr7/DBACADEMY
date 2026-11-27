@@ -46,10 +46,10 @@ export function isPlaceholderCampusEmail(email?: string | null): boolean {
   const normalized = email.trim().toLowerCase();
   return (
     !normalized ||
-    normalized === 'user@catedra.campus' ||
+    normalized === 'user@dbacademy.campus' ||
     normalized === 'estudiante@dbacademy.app' ||
     normalized === 'user@dbacademy.app' ||
-    normalized.endsWith('@catedra.campus')
+    normalized.endsWith('@dbacademy.campus')
   );
 }
 

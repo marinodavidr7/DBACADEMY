@@ -175,7 +175,7 @@ function verifyImageLoads(url: string, timeoutMs = 8000): Promise<boolean> {
 
 export type MarkdownTab = 'edit' | 'preview';
 
-const CATEDRA_DIAGRAM_PRESETS = [
+const DBA_DIAGRAM_PRESETS = [
   { label: 'Hoja de Excel (Partes)', alt: 'Infografía: Partes principales de una hoja de cálculo de Excel', url: '/assets/aistudio/Infograf_a__Partes_principales_de_la_hoja_de_Excel_8da439cd.webp' },
   { label: 'Concepto: Columnas', alt: 'Esquema técnico: Columnas en Excel (Eje Vertical A–XFD)', url: '/assets/images/excel_concepto_columnas_1795446880239.jpg' },
   { label: 'Concepto: Filas', alt: 'Esquema técnico: Filas en Excel (Eje Horizontal 1–1.048.576)', url: '/assets/images/excel_concepto_filas_1795446901853.jpg' },
@@ -613,7 +613,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = memo(({
             </div>
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Biblioteca rápida:</span>
-              {CATEDRA_DIAGRAM_PRESETS.map((preset) => (
+              {DBA_DIAGRAM_PRESETS.map((preset) => (
                 <button key={preset.url} type="button" onClick={() => insertImage(preset.url, preset.alt)} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 dark:hover:text-cyan-300 transition-colors">
                   + {preset.label}
                 </button>
