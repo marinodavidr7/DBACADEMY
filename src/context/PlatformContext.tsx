@@ -1592,38 +1592,38 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const studentEmailsMap = useMemo(() => {
     const merged: Record<string, string> = {};
-    // Prioridad 1: users/{uid}/private/info (resuelto por admin vía getDoc)
+    const claimedByEmail = new Map<string, string>(); // email(lower) -> uid
+
+    const claim = (uid: string, rawEmail?: string | null) => {
+      if (!uid || !rawEmail || isPlaceholderCampusEmail(rawEmail)) return;
+      const email = rawEmail.trim();
+      const key = email.toLowerCase();
+      const owner = claimedByEmail.get(key);
+      if (owner && owner !== uid) return; // evita contaminar otro estudiante con email ajeno
+      if (!merged[uid]) merged[uid] = email;
+      claimedByEmail.set(key, uid);
+    };
+
+    // Prioridad 1: users/{uid}/private/info (fuente confiable por uid)
     for (const [uid, email] of Object.entries(privateEmailsByUid)) {
-      if (!isPlaceholderCampusEmail(email)) {
-        merged[uid] = email.trim();
-      }
+      claim(uid, email);
     }
     // Prioridad 2: giftCardRedemptions.studentEmail
     for (const red of giftCardRedemptions) {
-      if (red.studentId && !isPlaceholderCampusEmail(red.studentEmail) && !merged[red.studentId]) {
-        merged[red.studentId] = red.studentEmail!.trim();
-      }
+      claim(red.studentId, red.studentEmail);
     }
     // Prioridad 3: assignmentSubmissions.studentEmail
     for (const sub of assignmentSubmissions) {
-      if (sub.studentId && !isPlaceholderCampusEmail(sub.studentEmail) && !merged[sub.studentId]) {
-        merged[sub.studentId] = sub.studentEmail.trim();
-      }
+      claim(sub.studentId, sub.studentEmail);
     }
-    // Fallback: enrollment.studentEmail / profile displayName email-like
+    // Fallback: enrollment.studentEmail
     for (const enr of instructorEnrollments) {
-      if (enr.studentId && !isPlaceholderCampusEmail(enr.studentEmail) && !merged[enr.studentId]) {
-        merged[enr.studentId] = enr.studentEmail!.trim();
-      }
+      claim(enr.studentId, enr.studentEmail);
     }
+    // Último fallback: displayName con forma de email
     for (const [uid, prof] of Object.entries(studentProfilesMap)) {
-      if (
-        !merged[uid] &&
-        prof?.displayName &&
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prof.displayName.trim()) &&
-        !isPlaceholderCampusEmail(prof.displayName)
-      ) {
-        merged[uid] = prof.displayName.trim();
+      if (!merged[uid] && prof?.displayName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prof.displayName.trim())) {
+        claim(uid, prof.displayName);
       }
     }
     return merged;
