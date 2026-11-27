@@ -11,7 +11,7 @@
  * (construcción lazy: el error sucede en la primera operación).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { cleanWrite, rowToSnapshot, toSnake, type DocRef, type DocSnapshot, type Snapshot } from './utils.ts';
+import { cleanWrite, pkFor, rowToSnapshot, toSnake, type DocRef, type DocSnapshot, type Snapshot } from './utils.ts';
 
 let client: SupabaseClient | null = null;
 
@@ -73,32 +73,39 @@ function queryRows(
 }
 
 function serverDocGet(table: string, id: string): Promise<DocSnapshot> {
-  return queryRows(table, { where: [['id', '==', id]], limitN: 1 }).then((rows) => rowToSnapshot(rows[0] ?? null, table));
+  const pk = pkFor(table);
+  return queryRows(table, { where: [[pk, '==', id]], limitN: 1 }).then((rows) => rowToSnapshot(rows[0] ?? null, table));
 }
 
 async function serverDocSet(table: string, id: string, data: any): Promise<void> {
-  // UPSERT idempotente: el id del documento siempre debe viajar en el payload.
+  // UPSERT idempotente: la PK del documento siempre debe viajar en el payload.
   // `.eq()` después de `upsert()` no es válido en PostgREST y puede reportar
   // errores engañosos; la columna de conflicto ya garantiza la identidad.
+  const pk = pkFor(table);
   const payload = cleanWrite(data);
-  payload.id = id;
+  payload[pk] = id;
+  if (pk !== 'id') delete payload.id;
   const { error } = await getSupabaseServiceClient()
     .from(table)
-    .upsert(payload, { onConflict: 'id' });
+    .upsert(payload, { onConflict: pk });
   if (error) throw new Error(`Supabase server ${table}.set(${id}): ${error.message}`);
 }
 
 async function serverDocUpdate(table: string, id: string, data: any): Promise<void> {
+  const pk = pkFor(table);
+  const payload = cleanWrite(data);
+  if (pk !== 'id') delete payload.id;
   const { error } = await getSupabaseServiceClient()
     .from(table)
-    .update(cleanWrite(data))
-    .eq('id', id)
-    .select('id');
+    .update(payload)
+    .eq(pk, id)
+    .select(pk);
   if (error) throw new Error(`Supabase server ${table}.update(${id}): ${error.message}`);
 }
 
 async function serverDocDelete(table: string, id: string): Promise<void> {
-  const { error } = await getSupabaseServiceClient().from(table).delete().eq('id', id);
+  const pk = pkFor(table);
+  const { error } = await getSupabaseServiceClient().from(table).delete().eq(pk, id);
   if (error) throw new Error(`Supabase server ${table}.delete(${id}): ${error.message}`);
 }
 

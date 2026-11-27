@@ -127,6 +127,9 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
   const [sdkReady, setSdkReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [retryNonce, setRetryNonce] = useState(0);
+  const closeButtonsRef = useRef<() => void>(() => {});
 
   acceptedTermsRef.current = acceptedTerms;
   onTermsRequiredRef.current = onTermsRequired;
@@ -186,14 +189,21 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
 
     let cancelled = false;
     const container = containerRef.current;
+    for (const btn of buttonsRef.current) {
+      if (btn?.close) void btn.close().catch(() => undefined);
+    }
+    buttonsRef.current = [];
     container.innerHTML = '';
+    setPaymentError('');
 
     const closeButtons = () => {
       for (const btn of buttonsRef.current) {
         if (btn?.close) void btn.close().catch(() => undefined);
       }
       buttonsRef.current = [];
+      if (container) container.innerHTML = '';
     };
+    closeButtonsRef.current = closeButtons;
 
     const baseOptions = {
       onClick: (_data: unknown, actions: { reject: () => unknown; resolve: () => unknown }) => {
@@ -219,28 +229,62 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
             },
           ],
         }),
-      onApprove: async (data: { orderID: string }, actions: { order: { capture: () => Promise<unknown> } }) => {
+      onApprove: async (
+        data: { orderID: string },
+        actions: {
+          order: { capture: () => Promise<unknown> };
+          restart?: () => Promise<void>;
+        }
+      ) => {
         try {
           const details = (await actions.order.capture()) as {
             purchase_units?: Array<{
               payments?: {
-                captures?: Array<{ id?: string }>;
+                captures?: Array<{ id?: string; status?: string }>;
               };
             }>;
           };
           const captureId =
             details?.purchase_units?.[0]?.payments?.captures?.[0]?.id || data.orderID;
           await onApprovedRef.current({ orderId: data.orderID, captureId });
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : 'No se pudo confirmar el pago con PayPal.';
+        } catch (err: unknown) {
+          if (cancelled) return;
+          const paypalErr = err as {
+            name?: string;
+            status?: number;
+            message?: string;
+            details?: Array<{ issue?: string; description?: string }>;
+            links?: Array<{ href?: string; rel?: string; method?: string }>;
+          };
+          const issues = Array.isArray(paypalErr?.details) ? paypalErr.details : [];
+          const isInstrumentDeclined =
+            paypalErr?.name === 'INSTRUMENT_DECLINED' ||
+            paypalErr?.status === 422 ||
+            issues.some((d) => d?.issue === 'INSTRUMENT_DECLINED');
+
+          const message = isInstrumentDeclined
+            ? 'Tarjeta rechazada por el banco o fondos insuficientes. Por favor, intenta con otra tarjeta.'
+            : paypalErr?.details?.[0]?.description ||
+              (err instanceof Error ? err.message : 'No se pudo confirmar el pago con PayPal.');
+
+          setPaymentError(message);
           onErrorRef.current(message);
+          // No llamar actions.restart(): PayPal muestra un mensaje genérico dentro de su overlay.
+          // Mostramos nuestro mensaje claro y dejamos que el usuario reintente con "Intentar de nuevo".
+          return;
         }
+      },
+      onCancel: () => {
+        if (cancelled) return;
+        setPaymentError('Pago cancelado. Puedes intentarlo de nuevo cuando quieras.');
+        onErrorRef.current('Pago cancelado. Puedes intentarlo de nuevo cuando quieras.');
       },
       onError: (err: unknown) => {
         if (cancelled) return;
         const message =
           err instanceof Error ? err.message : 'Ocurrió un error con PayPal. Intenta de nuevo.';
+        // No cerrar/desmontar botones aquí: postrobot necesita que el DOM siga vivo.
+        setPaymentError(message);
         onErrorRef.current(message);
       },
     };
@@ -299,12 +343,12 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
       container.innerHTML = '';
       closeButtons();
     };
-  }, [sdkReady, currency, value, course.id, course.title]);
+  }, [sdkReady, currency, value, course.id, course.title, retryNonce]);
 
   return (
     <div className="space-y-3">
       <div className="relative rounded-[12px] bg-white dark:bg-zinc-950 p-1 min-h-[58px]">
-        <div ref={containerRef} className={`space-y-2 ${disabled ? 'opacity-50 pointer-events-none' : ''}`} />
+        <div ref={containerRef} className={`space-y-2 ${disabled || paymentError ? 'opacity-30 pointer-events-none' : ''}`} />
 
         {loading && !loadError && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-stone-500 dark:text-zinc-400">
@@ -312,7 +356,7 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
           </div>
         )}
 
-        {!loading && sdkReady && !acceptedTerms && !loadError && (
+        {!loading && sdkReady && !acceptedTerms && !loadError && !paymentError && (
           <button
             type="button"
             aria-label="Aceptar términos para continuar con el pago"
@@ -322,7 +366,7 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
         )}
       </div>
 
-      {showUsdEquivalent && !loadError && (
+      {showUsdEquivalent && !loadError && !paymentError && (
         <p className="text-xs text-stone-500 dark:text-zinc-400 text-center">
           Total en PayPal: ${value} USD (tasa ref. 1 USD = RD${rate})
         </p>
@@ -330,6 +374,23 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
 
       {loadError && (
         <p className="text-sm text-red-600 dark:text-red-400 text-center">{loadError}</p>
+      )}
+
+      {paymentError && (
+        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-3 text-center space-y-2">
+          <p className="text-sm text-red-700 dark:text-red-300">{paymentError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setPaymentError('');
+              setLoadError('');
+              setRetryNonce((n) => n + 1);
+            }}
+            className="min-h-[44px] px-4 py-2 rounded-lg border border-red-300 dark:border-red-800 text-sm font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900/40"
+          >
+            Intentar de nuevo
+          </button>
+        </div>
       )}
     </div>
   );

@@ -125,20 +125,27 @@ function queryRows(table, opts = {}) {
   });
 }
 function serverDocGet(table, id) {
-  return queryRows(table, { where: [["id", "==", id]], limitN: 1 }).then((rows) => rowToSnapshot(rows[0] ?? null, table));
+  const pk = pkFor(table);
+  return queryRows(table, { where: [[pk, "==", id]], limitN: 1 }).then((rows) => rowToSnapshot(rows[0] ?? null, table));
 }
 async function serverDocSet(table, id, data) {
+  const pk = pkFor(table);
   const payload = cleanWrite(data);
-  payload.id = id;
-  const { error } = await getSupabaseServiceClient().from(table).upsert(payload, { onConflict: "id" });
+  payload[pk] = id;
+  if (pk !== "id") delete payload.id;
+  const { error } = await getSupabaseServiceClient().from(table).upsert(payload, { onConflict: pk });
   if (error) throw new Error(`Supabase server ${table}.set(${id}): ${error.message}`);
 }
 async function serverDocUpdate(table, id, data) {
-  const { error } = await getSupabaseServiceClient().from(table).update(cleanWrite(data)).eq("id", id).select("id");
+  const pk = pkFor(table);
+  const payload = cleanWrite(data);
+  if (pk !== "id") delete payload.id;
+  const { error } = await getSupabaseServiceClient().from(table).update(payload).eq(pk, id).select(pk);
   if (error) throw new Error(`Supabase server ${table}.update(${id}): ${error.message}`);
 }
 async function serverDocDelete(table, id) {
-  const { error } = await getSupabaseServiceClient().from(table).delete().eq("id", id);
+  const pk = pkFor(table);
+  const { error } = await getSupabaseServiceClient().from(table).delete().eq(pk, id);
   if (error) throw new Error(`Supabase server ${table}.delete(${id}): ${error.message}`);
 }
 function makeCollection(table, opts = {}) {
