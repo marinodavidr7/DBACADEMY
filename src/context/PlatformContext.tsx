@@ -535,7 +535,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('catedra_theme');
     if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
   });
 
   const [language, setLanguageState] = useState<Language>(() => {
