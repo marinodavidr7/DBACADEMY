@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -53,6 +53,56 @@ export const CourseDetailView: React.FC = () => {
   const [checkoutGiftCardCode, setCheckoutGiftCardCode] = useState('');
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const paypalHostedRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const isExcel = course?.id === 'excel-basico-05';
+    const container = paypalHostedRef.current;
+    if (!isExcel || !container) return;
+
+    container.innerHTML = '';
+    const scriptId = 'paypal-hosted-buttons-excel-live-test';
+    const src = 'https://www.paypal.com/sdk/js?client-id=BAAL2q7MP3jMCLTm3mNKjJ1WeaEoQl2ZAjckQKqY8nxTRSqHyb4OQAi5m0qRbZIw2G_6llhS2MtWwd3M6Q&components=hosted-buttons&disable-funding=venmo&currency=USD';
+
+    const renderButton = () => {
+      const paypalAny = (window as unknown as { paypal?: { HostedButtons?: (opts: { hostedButtonId: string }) => { render: (sel: string) => Promise<void> } } }).paypal;
+      if (!paypalAny?.HostedButtons) {
+        container.innerHTML = '<p style="font-size:12px;color:#b91c1c">PayPal SDK cargado, pero HostedButtons no está disponible. Recarga la página.</p>';
+        return;
+      }
+      void paypalAny.HostedButtons({ hostedButtonId: 'JCXBM2F5NMQB8' })
+        .render('#paypal-container-JCXBM2F5NMQB8')
+        .catch(() => {
+          container.innerHTML = '<p style="font-size:12px;color:#b91c1c">No se pudo renderizar el botón de PayPal. Revisa consola/red.</p>';
+        });
+    };
+
+    const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+    const paypalAny = (window as unknown as { paypal?: { HostedButtons?: unknown } }).paypal;
+    if (paypalAny?.HostedButtons) {
+      renderButton();
+      return;
+    }
+
+    // If another PayPal SDK is loaded without HostedButtons, replace it for this test.
+    if (existing) existing.remove();
+    if ((window as unknown as { paypal?: unknown }).paypal && !(window as unknown as { paypal?: { HostedButtons?: unknown } }).paypal?.HostedButtons) {
+      delete (window as unknown as { paypal?: unknown }).paypal;
+      const other = document.getElementById('dba-paypal-js-sdk');
+      if (other) other.remove();
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = src;
+    script.crossOrigin = 'anonymous';
+    script.async = true;
+    script.onload = renderButton;
+    script.onerror = () => {
+      container.innerHTML = '<p style="font-size:12px;color:#b91c1c">No se pudo cargar el SDK de PayPal.</p>';
+    };
+    document.body.appendChild(script);
+  }, [course?.id]);
 
   if (!course) {
     return (
@@ -408,6 +458,13 @@ export const CourseDetailView: React.FC = () => {
                 <Gift className="w-4 h-4 text-[var(--dba-accent-ink)]" />
                 <span>¿Tienes una Gift Card? Canjear código</span>
               </button>
+            )}
+
+            {course.id === 'excel-basico-05' && (
+              <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20 p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Prueba de pago PayPal (Live)</p>
+                <div id="paypal-container-JCXBM2F5NMQB8" ref={paypalHostedRef} />
+              </div>
             )}
 
             {isAdmin && (

@@ -220,24 +220,54 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     captureId: string;
   }) => {
     setError('');
-    let recordedPayment: PaymentRecord;
-    if (appliedGiftCard?.valid && appliedGiftCard.card) {
-      const res = await redeemGiftCardForCourse(appliedGiftCard.card.code, course, 'paypal', {
-        externalPaymentId: 'pp_' + orderId,
-        externalTransactionRef: captureId || orderId,
-      });
-      recordedPayment = res.payment;
-    } else {
-      recordedPayment = await enrollWithPayment(course, 'paypal', {
-        couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
-        testMode: isAdmin ? testMode : false,
-        externalPaymentId: 'pp_' + orderId,
-        externalTransactionRef: captureId || orderId,
-      });
+    try {
+      if (!user) throw new Error('Debes iniciar sesión para completar el pago.');
+
+      let verifiedCaptureId = captureId;
+      const finalAmountCents = Math.max(0, finalPrice);
+      if (finalAmountCents > 0) {
+        const idToken = await user.getIdToken();
+        const verifyResp = await fetch('/api/v1/payments/paypal/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            orderId,
+            courseId: course.id,
+            couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
+            referralWelcome: Boolean((user as unknown as { referredBy?: string }).referredBy),
+          }),
+        });
+        const verifyJson = await verifyResp.json().catch(() => ({}));
+        if (!verifyResp.ok || !verifyJson?.verified) {
+          throw new Error(verifyJson?.error || 'No se pudo verificar el pago con PayPal.');
+        }
+        if (verifyJson.captureId) verifiedCaptureId = String(verifyJson.captureId);
+      }
+
+      let recordedPayment: PaymentRecord;
+      if (appliedGiftCard?.valid && appliedGiftCard.card) {
+        const res = await redeemGiftCardForCourse(appliedGiftCard.card.code, course, 'paypal', {
+          externalPaymentId: 'pp_' + orderId,
+          externalTransactionRef: verifiedCaptureId || orderId,
+        });
+        recordedPayment = res.payment;
+      } else {
+        recordedPayment = await enrollWithPayment(course, 'paypal', {
+          couponCode: appliedCoupon?.valid ? appliedCoupon.coupon?.code : undefined,
+          testMode: isAdmin ? testMode : false,
+          externalPaymentId: 'pp_' + orderId,
+          externalTransactionRef: verifiedCaptureId || orderId,
+        });
+      }
+      recordCheckoutConsent();
+      setReceipt(recordedPayment);
+      setTimeout(() => onSuccess(course.id), 700);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error verificando el pago con PayPal.');
     }
-    recordCheckoutConsent();
-    setReceipt(recordedPayment);
-    setTimeout(() => onSuccess(course.id), 700);
   };
 
   const onSubmit = async (e: React.FormEvent) => {

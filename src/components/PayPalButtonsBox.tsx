@@ -205,6 +205,9 @@ export const PayPalButtonsBox: React.FC<PayPalButtonsBoxProps> = ({
       },
       createOrder: (_data: unknown, actions: { order: { create: (payload: unknown) => Promise<string> } }) =>
         actions.order.create({
+          application_context: {
+            shipping_preference: 'NO_SHIPPING',
+          },
           purchase_units: [
             {
               description: courseRef.current.title.slice(0, 127),

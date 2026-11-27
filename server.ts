@@ -1574,6 +1574,169 @@ export function createApp(): express.Express {
     res.json({ received: true, eventType: event.type });
   });
 
+  // -------------------------------------------------------------------------
+  // PayPal server-side verification
+  // -------------------------------------------------------------------------
+  const getPayPalConfig = () => {
+    const clientId = String(process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '').trim();
+    const clientSecret = String(process.env.PAYPAL_CLIENT_SECRET || '').trim();
+    const env = String(process.env.PAYPAL_ENV || 'live').trim().toLowerCase();
+    const baseUrl = env === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
+    return { clientId, clientSecret, env, baseUrl, configured: Boolean(clientId && clientSecret) };
+  };
+
+  const getPayPalAccessToken = async (): Promise<string> => {
+    const cfg = getPayPalConfig();
+    if (!cfg.configured) throw new Error('PayPal no está configurado en el servidor.');
+    const auth = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64');
+    const resp = await fetch(`${cfg.baseUrl}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json?.access_token) {
+      throw new Error('No se pudo autenticar con PayPal.');
+    }
+    return String(json.access_token);
+  };
+
+  const getExpectedPayPalAmount = (amountCents: number, currency: string): { value: string; currency: string } => {
+    if (currency === 'DOP') {
+      const rate = Number(process.env.DOP_TO_USD_RATE || process.env.VITE_DOP_TO_USD_RATE || 60);
+      const usd = amountCents / 100 / (rate > 0 ? rate : 60);
+      return { value: usd.toFixed(2), currency: 'USD' };
+    }
+    return { value: (amountCents / 100).toFixed(2), currency };
+  };
+
+  const verifyPayPalOrder = async (params: {
+    orderId: string;
+    expectedAmountCents: number;
+    expectedCurrency: string;
+  }): Promise<{ verified: true; orderId: string; captureId: string; status: string }> => {
+    const { orderId, expectedAmountCents, expectedCurrency } = params;
+    const cfg = getPayPalConfig();
+    if (!cfg.configured) throw new Error('PayPal no está configurado en el servidor.');
+    const accessToken = await getPayPalAccessToken();
+    const resp = await fetch(`${cfg.baseUrl}/v2/checkout/orders/${encodeURIComponent(orderId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+    const order = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(order?.message || 'No se pudo verificar la orden de PayPal.');
+    }
+
+    const status = String(order?.status || '');
+    if (status !== 'COMPLETED') {
+      throw new Error(`La orden de PayPal no está completada (estado: ${status || 'desconocido'}).`);
+    }
+
+    const purchaseUnit = Array.isArray(order?.purchase_units) ? order.purchase_units[0] : null;
+    const capture = Array.isArray(purchaseUnit?.payments?.captures) ? purchaseUnit.payments.captures[0] : null;
+    const captureStatus = String(capture?.status || '');
+    if (captureStatus !== 'COMPLETED') {
+      throw new Error(`La captura de PayPal no está completada (estado: ${captureStatus || 'desconocido'}).`);
+    }
+
+    const amount = capture?.amount || purchaseUnit?.amount || {};
+    const paidValue = String(amount?.value || '');
+    const paidCurrency = String(amount?.currency_code || '').toUpperCase();
+    const expected = getExpectedPayPalAmount(expectedAmountCents, expectedCurrency);
+    const paidNumber = Number(paidValue);
+    const expectedNumber = Number(expected.value);
+    if (!Number.isFinite(paidNumber) || Math.abs(paidNumber - expectedNumber) > 0.01) {
+      throw new Error(`El monto pagado en PayPal no coincide con el esperado (${expected.currency} ${expected.value}).`);
+    }
+    if (paidCurrency !== expected.currency.toUpperCase()) {
+      throw new Error(`La moneda pagada en PayPal no coincide (${paidCurrency || 'desconocida'}).`);
+    }
+
+    return {
+      verified: true,
+      orderId: String(order?.id || orderId),
+      captureId: String(capture?.id || ''),
+      status,
+    };
+  };
+
+  app.post('/api/v1/payments/paypal/verify', async (req, res) => {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { orderId, courseId, couponCode, referralWelcome } = req.body ?? {};
+    if (!orderId || !courseId) {
+      res.status(400).json({ error: 'Missing orderId or courseId' });
+      return;
+    }
+    try {
+      const db = serverDb;
+      const courseSnap = await db.collection('courses').doc(String(courseId)).get();
+      if (!courseSnap.exists()) {
+        res.status(404).json({ error: 'Curso no encontrado' });
+        return;
+      }
+      const course = courseSnap.data() as { priceCents?: number; currency?: string };
+      const originalAmountCents = Math.max(0, Math.round(Number(course.priceCents ?? 0)));
+      const currency = (course.currency === 'EUR' || course.currency === 'MXN' || course.currency === 'USD' ? course.currency : 'DOP') as 'DOP' | 'USD' | 'EUR' | 'MXN';
+
+      // Recompute discount server-side (same rules as checkout)
+      let discountCents = 0;
+      let discountSource: 'none' | 'coupon' | 'referral_welcome' = 'none';
+      let appliedCouponCode: string | undefined;
+      let welcomeDiscountCents = 0;
+      if (referralWelcome === true && originalAmountCents > 0) {
+        const settingsSnap = await db.collection('settings').doc('referrals').get();
+        const settings = settingsSnap.exists() ? (settingsSnap.data() as ReferralSettings) : null;
+        if (settings?.active) {
+          const userSnap = await db.collection('users').doc(auth.uid).get();
+          const userData = userSnap.exists() ? (userSnap.data() as { referredBy?: string }) : {};
+          if (userData.referredBy && userData.referredBy !== auth.uid) {
+            const prevPayments = await db.collection('payments').where('studentId', '==', auth.uid).where('status', '==', 'succeeded').limit(1).get();
+            if (prevPayments.empty) {
+              const pct = Math.min(100, Math.max(0, Number(settings.welcomeDiscountPercent ?? 10)));
+              welcomeDiscountCents = Math.min(originalAmountCents, Math.round((originalAmountCents * pct) / 100));
+            }
+          }
+        }
+      }
+      let couponDiscountCents = 0;
+      const normalizedCoupon = typeof couponCode === 'string' && couponCode.trim() ? normalizeCode(couponCode) : '';
+      if (normalizedCoupon && originalAmountCents > 0) {
+        const couponSnap = await db.collection('coupons').doc(normalizedCoupon).get();
+        if (couponSnap.exists()) {
+          const couponToApply = couponSnap.data() as Coupon;
+          if (isCouponActive(couponToApply) && (couponToApply.appliesTo !== 'courses' || couponToApply.courseIds?.includes(String(courseId)))) {
+            couponDiscountCents = calculateDiscount(couponToApply, originalAmountCents).discountCents;
+          }
+        }
+      }
+      if (couponDiscountCents >= welcomeDiscountCents && couponDiscountCents > 0) {
+        discountCents = couponDiscountCents; discountSource = 'coupon'; appliedCouponCode = normalizedCoupon;
+      } else if (welcomeDiscountCents > 0) {
+        discountCents = welcomeDiscountCents; discountSource = 'referral_welcome';
+      }
+      const finalAmountCents = Math.max(0, originalAmountCents - discountCents);
+      if (finalAmountCents <= 0) {
+        res.json({ verified: true, free: true, orderId: String(orderId), captureId: '' });
+        return;
+      }
+
+      const verified = await verifyPayPalOrder({
+        orderId: String(orderId),
+        expectedAmountCents: finalAmountCents,
+        expectedCurrency: currency,
+      });
+      res.json({ ...verified, finalAmountCents, currency, discountCents, discountSource, couponCode: appliedCouponCode });
+    } catch (err) {
+      console.error('PayPal verify error:', err);
+      const message = err instanceof Error ? err.message : 'Error verificando el pago con PayPal.';
+      res.status(400).json({ error: message });
+    }
+  });
+
   app.post('/api/v1/payments/checkout', async (req, res) => {
     const auth = await requireAuth(req, res);
     if (!auth) return;
@@ -1975,35 +2138,80 @@ export function createApp(): express.Express {
   const isAdminProxyTable = (table: string): boolean => ADMIN_PROXY_TABLES.has(table);
 
   app.get('/api/admin/:table', async (req, res) => {
-    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
-    if (!await requireAdmin(req, res)) return;
+    const table = req.params.table;
+    if (!isAdminProxyTable(table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    const selfService = table === 'payments' || table === 'enrollments' || table === 'users_private';
+    const ownerField = table === 'users_private' ? 'uid' : 'studentId';
+    let authUser: { uid: string; email: string | null; emailVerified: boolean } | null = null;
+    if (selfService) {
+      try { authUser = await verifyFirebaseTokenAny(req.headers.authorization); } catch { res.status(401).json({ error: 'Invalid token' }); return; }
+    } else {
+      if (!await requireAdmin(req, res)) return;
+    }
+    const isAdmin = authUser?.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
     try {
-      const snap = await serverDb.collection(req.params.table).get();
-      res.json(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const snap = await serverDb.collection(table).get();
+      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Array<Record<string, unknown>>;
+      if (selfService && !isAdmin && authUser) {
+        rows = rows.filter((r) => String(r[ownerField] ?? r.student_id ?? r.uid ?? '') === authUser!.uid);
+      }
+      res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al listar' });
     }
   });
 
   app.get('/api/admin/:table/:id', async (req, res) => {
-    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
-    if (!await requireAdmin(req, res)) return;
+    const table = req.params.table;
+    if (!isAdminProxyTable(table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    const selfService = table === 'payments' || table === 'enrollments' || table === 'users_private';
+    const ownerField = table === 'users_private' ? 'uid' : 'studentId';
+    let authUser: { uid: string; email: string | null; emailVerified: boolean } | null = null;
+    if (selfService) {
+      try { authUser = await verifyFirebaseTokenAny(req.headers.authorization); } catch { res.status(401).json({ error: 'Invalid token' }); return; }
+    } else {
+      if (!await requireAdmin(req, res)) return;
+    }
+    const isAdmin = authUser?.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
     try {
-      const snap = await serverDb.collection(req.params.table).doc(req.params.id).get();
+      const snap = await serverDb.collection(table).doc(req.params.id).get();
       if (!snap.exists()) { res.status(404).json({ error: 'No encontrado' }); return; }
-      res.json({ id: snap.id, ...snap.data() });
+      const row = { id: snap.id, ...snap.data() } as Record<string, unknown>;
+      if (selfService && !isAdmin && authUser && String(row[ownerField] ?? row.student_id ?? row.uid ?? '') !== authUser.uid) {
+        res.status(403).json({ error: 'No autorizado' }); return;
+      }
+      res.json(row);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al leer' });
     }
   });
 
   app.put('/api/admin/:table/:id', async (req, res) => {
-    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
-    if (!await requireAdmin(req, res)) return;
+    const table = req.params.table;
+    if (!isAdminProxyTable(table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    const selfService = table === 'payments' || table === 'enrollments' || table === 'users_private';
+    const ownerField = table === 'users_private' ? 'uid' : 'studentId';
+    let authUser: { uid: string; email: string | null; emailVerified: boolean } | null = null;
+    if (selfService) {
+      try { authUser = await verifyFirebaseTokenAny(req.headers.authorization); } catch (e) { res.status(401).json({ error: 'Invalid token' }); return; }
+    } else {
+      if (!await requireAdmin(req, res)) return;
+    }
+    const isAdmin = authUser?.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
     try {
-      const docRef = serverDb.collection(req.params.table).doc(req.params.id);
+      const docRef = serverDb.collection(table).doc(req.params.id);
       const existing = await docRef.get();
       const merged = { ...(existing.exists() ? (existing.data() as Record<string, unknown>) : {}), ...(req.body as Record<string, unknown>), id: req.params.id };
+      if (selfService && !isAdmin) {
+        const owner = String((merged[ownerField] ?? merged.student_id ?? merged.uid ?? '') as string);
+        const idOwner = table === 'users_private' ? req.params.id : owner;
+        if (!authUser || (owner && owner !== authUser.uid) || (table === 'users_private' && idOwner !== authUser.uid)) { res.status(403).json({ error: 'No autorizado' }); return; }
+        if (existing.exists()) {
+          const ex = existing.data() as Record<string, unknown>;
+          const exOwner = String((ex[ownerField] ?? ex.student_id ?? ex.uid ?? '') as string);
+          if (exOwner && exOwner !== authUser.uid) { res.status(403).json({ error: 'No autorizado' }); return; }
+        }
+      }
       await docRef.set(merged);
       res.json({ ok: true, id: req.params.id });
     } catch (err) {
@@ -2012,12 +2220,27 @@ export function createApp(): express.Express {
   });
 
   app.post('/api/admin/:table', async (req, res) => {
-    if (!isAdminProxyTable(req.params.table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
-    if (!await requireAdmin(req, res)) return;
-    const id = String((req.body as { id?: unknown })?.id || '').trim();
+    const table = req.params.table;
+    if (!isAdminProxyTable(table)) { res.status(404).json({ error: 'Tabla no disponible' }); return; }
+    const selfService = table === 'payments' || table === 'enrollments' || table === 'users_private';
+    const ownerField = table === 'users_private' ? 'uid' : 'studentId';
+    let authUser: { uid: string; email: string | null; emailVerified: boolean } | null = null;
+    if (selfService) {
+      try { authUser = await verifyFirebaseTokenAny(req.headers.authorization); } catch (e) { res.status(401).json({ error: 'Invalid token' }); return; }
+    } else {
+      if (!await requireAdmin(req, res)) return;
+    }
+    const isAdmin = authUser?.email?.toLowerCase() === AUTHORIZED_ADMIN_EMAIL.toLowerCase();
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const id = String(body.id || '').trim();
     if (!id) { res.status(400).json({ error: 'Se requiere el campo "id".' }); return; }
+    if (selfService && !isAdmin) {
+      const owner = String((body[ownerField] ?? body.student_id ?? body.uid ?? '') as string);
+      const idOwner = table === 'users_private' ? id : owner;
+      if (!authUser || (owner && owner !== authUser.uid) || (table === 'users_private' && idOwner !== authUser.uid)) { res.status(403).json({ error: 'No autorizado' }); return; }
+    }
     try {
-      await serverDb.collection(req.params.table).doc(id).set(req.body);
+      await serverDb.collection(table).doc(id).set(req.body);
       res.status(201).json({ ok: true, id });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error al crear' });

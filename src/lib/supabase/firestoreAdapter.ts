@@ -98,7 +98,7 @@ function wrapFsDocSnap(
 
 async function singleRow(table: string, id: string): Promise<Row | null> {
   if (SERVER_TABLES.has(table)) {
-    if (isAdminUser()) {
+    if (isAdminUser() || table === 'payments' || table === 'enrollments' || table === 'users_private') {
       const res = await adminFetch('GET', `/api/admin/${table}/${encodeURIComponent(id)}`);
       if (res.status === 404) return null;
       if (!res.ok) throw new Error(`Admin ${table}.get failed: ${await adminError(res)}`);
@@ -208,8 +208,8 @@ export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
     const docs = snap.docs.map((d) => wrapFsDocSnap(d, q.table, [...q.path, d.id]));
     return { docs, empty: docs.length === 0 };
   }
-  if (SERVER_TABLES.has(q.table) && isAdminUser()) {
-    // Listados del panel de administración: se sirven con service_role.
+  if (SERVER_TABLES.has(q.table) && (isAdminUser() || q.table === 'payments' || q.table === 'enrollments' || q.table === 'users_private')) {
+    // Tablas protegidas por RLS: se sirven vía server (service_role). payments/enrollments/users_private permiten self-service.
     const res = await adminFetch('GET', `/api/admin/${q.table}`);
     if (!res.ok) throw new Error(`Admin ${q.table}.list failed: ${await adminError(res)}`);
     const rows = (await res.json()) as Row[];
@@ -239,7 +239,8 @@ export async function getDocs(q: CollectionQuery): Promise<Snapshot> {
 
 /* --------------------------------- refs --------------------------------- */
 
-const ADMIN_WRITE_TABLES = new Set(['courses', 'gift_cards', 'gift_card_redemptions']);
+// Writes routed through server API (service_role). Payments/enrollments/users_private allow self-service on server.
+const ADMIN_WRITE_TABLES = new Set(['courses', 'gift_cards', 'gift_card_redemptions', 'payments', 'enrollments', 'users_private']);
 
 const SERVER_TABLES = new Set([
   'gift_cards', 'gift_card_redemptions', 'enrollments', 'payments', 'certificates', 'users_private',
