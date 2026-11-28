@@ -133,9 +133,9 @@ export function getTopicSimulatorMeta(lessonId?: string | null): TopicSimulatorM
     case 'les-excel-1-3':
       return {
         kind: 'grid-basics',
-        shortBadge: 'Rangos & Hojas',
-        topicLabel: 'Simulador: Navegación, Rangos y Pestañas',
-        subtitle: 'Practica seleccionar rangos como A1:D4, renombrar pestañas a «Práctica» y moverte por la hoja.',
+        shortBadge: 'Rangos & Navegación',
+        topicLabel: 'Simulador: Navegación y Selección de Rangos',
+        subtitle: 'Practica moverte con teclado/mouse, seleccionar celdas, filas, columnas y rangos como A1:D4.',
       };
     case 'les-excel-0-1':
       return {
@@ -282,13 +282,18 @@ export function getTopicSimulatorMeta(lessonId?: string | null): TopicSimulatorM
         subtitle: 'Pulsa Recalcular (F9) para generar decimales [0, 1) y enteros entre inferior y superior.',
       };
     case 'les-excel-4-12':
+      return {
+        kind: 'if-logic',
+        shortBadge: '=SI()',
+        topicLabel: 'Simulador: Función =SI()',
+        subtitle: 'Evalúa una condición lógica y observa cómo cambia el resultado entre VERDADERO y FALSO.',
+      };
     case 'les-excel-4-13':
-    case 'les-excel-1-13':
       return {
         kind: 'if-logic',
         shortBadge: '=SI() 3D',
-        topicLabel: 'Simulador 3D: =SI(), Anidado, Y() y O()',
-        subtitle: 'Evalúa condiciones lógicas en vivo y explora las compuertas de decisión en 3D.',
+        topicLabel: 'Simulador 3D: SI anidado, Y() y O()',
+        subtitle: 'Explora decisiones multinivel y condiciones compuestas con Y() y O().',
       };
     default:
       return {
@@ -819,10 +824,28 @@ const OperatorsHierarchySim: React.FC = () => {
 /* ------------------------------------------------------------------ */
 const WIZARD_FNS = [
   { name: 'PROMEDIO', args: 'número1; [número2]', desc: 'Calcula la media aritmética de los argumentos.', sample: '=PROMEDIO(B2:B5)', preview: 82.5 },
+  { name: 'PROMEDIO.SI', args: 'rango; criterio; [rango_promedio]', desc: 'Promedia solo las celdas que cumplen un criterio.', sample: '=PROMEDIO.SI(A2:A5;">80")', preview: 90 },
   { name: 'SUMA', args: 'número1; [número2]', desc: 'Suma todos los números de un rango de celdas.', sample: '=SUMA(B2:B5)', preview: 330 },
+  { name: 'SUMAR.SI', args: 'rango; criterio; [rango_suma]', desc: 'Suma celdas que cumplen un criterio.', sample: '=SUMAR.SI(A2:A5;"Norte";B2:B5)', preview: 300 },
+  { name: 'SI', args: 'prueba_lógica; valor_si_verdadero; [valor_si_falso]', desc: 'Devuelve un valor según si la condición es verdadera o falsa.', sample: '=SI(A1>=70;"Aprobado";"Reprobado")', preview: 'Aprobado' },
   { name: 'MAX', args: 'número1; [número2]', desc: 'Devuelve el valor mayor de un conjunto.', sample: '=MAX(B2:B5)', preview: 95 },
+  { name: 'MIN', args: 'número1; [número2]', desc: 'Devuelve el valor menor de un conjunto.', sample: '=MIN(B2:B5)', preview: 70 },
+  { name: 'CONTAR', args: 'valor1; [valor2]', desc: 'Cuenta celdas que contienen números.', sample: '=CONTAR(B2:B5)', preview: 4 },
+  { name: 'CONTARA', args: 'valor1; [valor2]', desc: 'Cuenta celdas no vacías.', sample: '=CONTARA(A2:A5)', preview: 4 },
   { name: 'CONTAR.SI', args: 'rango; criterio', desc: 'Cuenta las celdas que cumplen una condición.', sample: '=CONTAR.SI(B2:B5;">80")', preview: 2 },
+  { name: 'CONTAR.BLANCO', args: 'rango', desc: 'Cuenta celdas vacías en un rango.', sample: '=CONTAR.BLANCO(A2:A10)', preview: 3 },
+  { name: 'MEDIANA', args: 'número1; [número2]', desc: 'Devuelve el valor central de un conjunto.', sample: '=MEDIANA(B2:B6)', preview: 85 },
+  { name: 'MODA.UNO', args: 'número1; [número2]', desc: 'Devuelve el valor que más se repite.', sample: '=MODA.UNO(B2:B6)', preview: 80 },
   { name: 'REDONDEAR', args: 'número; núm_decimales', desc: 'Redondea un número al número de decimales especificado.', sample: '=REDONDEAR(82.567;1)', preview: 82.6 },
+  { name: 'REDONDEAR.MAS', args: 'número; núm_decimales', desc: 'Redondea alejándose de cero.', sample: '=REDONDEAR.MAS(10.1;0)', preview: 11 },
+  { name: 'REDONDEAR.MENOS', args: 'número; núm_decimales', desc: 'Redondea acercándose a cero.', sample: '=REDONDEAR.MENOS(10.9;0)', preview: 10 },
+  { name: 'PRODUCTO', args: 'número1; [número2]', desc: 'Multiplica todos los números dados.', sample: '=PRODUCTO(B2:B4)', preview: 100 },
+  { name: 'POTENCIA', args: 'número; potencia', desc: 'Eleva un número a una potencia.', sample: '=POTENCIA(5;2)', preview: 25 },
+  { name: 'RAIZ', args: 'número', desc: 'Devuelve la raíz cuadrada positiva.', sample: '=RAIZ(25)', preview: 5 },
+  { name: 'ABS', args: 'número', desc: 'Devuelve el valor absoluto de un número.', sample: '=ABS(-45)', preview: 45 },
+  { name: 'ENTERO', args: 'número', desc: 'Redondea hacia abajo al entero inferior.', sample: '=ENTERO(2.7)', preview: 2 },
+  { name: 'TRUNCAR', args: 'número; [núm_decimales]', desc: 'Corta decimales sin redondear.', sample: '=TRUNCAR(15.678;1)', preview: 15.6 },
+  { name: 'CONCAT', args: 'texto1; [texto2]', desc: 'Une varios textos en uno solo.', sample: '=CONCAT(A2;" ";B2)', preview: 'Ana López' },
 ];
 
 const FunctionWizardSim: React.FC = () => {
@@ -843,11 +866,59 @@ const FunctionWizardSim: React.FC = () => {
 
   const liveFxResult = useMemo(() => {
     if (parsedNums.length === 0) return '—';
-    if (selectedFn.name === 'PROMEDIO') return (parsedNums.reduce((a, b) => a + b, 0) / parsedNums.length).toFixed(2);
-    if (selectedFn.name === 'SUMA') return parsedNums.reduce((a, b) => a + b, 0);
-    if (selectedFn.name === 'MAX') return Math.max(...parsedNums);
-    if (selectedFn.name === 'CONTAR.SI') return parsedNums.filter((n) => n > 80).length;
-    return Number(parsedNums[0].toFixed(1));
+    const n = parsedNums;
+    switch (selectedFn.name) {
+      case 'PROMEDIO':
+      case 'PROMEDIO.SI':
+        return (n.reduce((a, b) => a + b, 0) / n.length).toFixed(2);
+      case 'SUMA':
+      case 'SUMAR.SI':
+        return n.reduce((a, b) => a + b, 0);
+      case 'MAX':
+        return Math.max(...n);
+      case 'MIN':
+        return Math.min(...n);
+      case 'CONTAR':
+      case 'CONTARA':
+        return n.length;
+      case 'CONTAR.SI':
+        return n.filter((x) => x > 80).length;
+      case 'CONTAR.BLANCO':
+        return 0;
+      case 'MEDIANA': {
+        const s = [...n].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : ((s[m - 1] + s[m]) / 2).toFixed(2);
+      }
+      case 'MODA.UNO': {
+        const sorted = [...n].sort((a, b) => n.filter((v) => v === b).length - n.filter((v) => v === a).length);
+        return sorted[0];
+      }
+      case 'PRODUCTO':
+        return n.reduce((a, b) => a * b, 1);
+      case 'POTENCIA':
+        return Math.pow(n[0] ?? 0, n[1] ?? 1);
+      case 'RAIZ':
+        return Math.sqrt(n[0] ?? 0).toFixed(2);
+      case 'ABS':
+        return Math.abs(n[0] ?? 0);
+      case 'ENTERO':
+        return Math.floor(n[0] ?? 0);
+      case 'TRUNCAR':
+        return Math.trunc(n[0] ?? 0);
+      case 'REDONDEAR':
+        return Number((n[0] ?? 0).toFixed(n[1] ?? 0));
+      case 'REDONDEAR.MAS':
+        return Math.ceil(n[0] ?? 0);
+      case 'REDONDEAR.MENOS':
+        return Math.floor(n[0] ?? 0);
+      case 'SI':
+        return (n[0] ?? 0) >= 70 ? 'Aprobado' : 'Reprobado';
+      case 'CONCAT':
+        return n.join(' ');
+      default:
+        return Number((n[0] ?? 0).toFixed(2));
+    }
   }, [parsedNums, selectedFn.name]);
 
   return (
@@ -878,7 +949,7 @@ const FunctionWizardSim: React.FC = () => {
             </button>
           </div>
 
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-800 overflow-hidden">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-800 max-h-64 overflow-y-auto">
             {matches.map((fn) => (
               <button
                 key={fn.name}
@@ -974,6 +1045,9 @@ const ErrorDiagnosticsSim: React.FC = () => {
   const [repaired, setRepaired] = useState(false);
   const [colWidth, setColWidth] = useState(65);
   const active = ERROR_CASES[idx];
+  const showFormula = repaired ? active.fixFormula : active.formula;
+  const showResult = repaired ? active.fixedOutput : active.code;
+  const resultIsError = !repaired;
 
   return (
     <div className="space-y-4">
@@ -997,11 +1071,11 @@ const ErrorDiagnosticsSim: React.FC = () => {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-950 p-4 space-y-3 text-slate-100">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
           <div className="flex items-center gap-2 text-xs font-mono">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="font-bold text-rose-400">{repaired ? active.fixedOutput : active.code}</span>
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="font-semibold text-slate-700 dark:text-slate-200">Hoja: Diagnóstico</span>
           </div>
           <button
             type="button"
@@ -1013,46 +1087,80 @@ const ErrorDiagnosticsSim: React.FC = () => {
           </button>
         </div>
 
-        <div className="font-mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 whitespace-pre-wrap break-words">
-          <span className="text-slate-400 block mb-1">Fórmula en celda:</span>
-          <span className={repaired ? 'text-emerald-400 font-bold' : 'text-rose-300'}>
-            {repaired ? active.fixFormula : active.formula}
-          </span>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-xs font-mono">
+            <thead>
+              <tr className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <th className="w-12 border border-slate-200 dark:border-slate-700 px-2 py-2 text-center font-bold">#</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">A (Dato / Celda)</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">B (Valor / Fórmula)</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">C (Resultado / Estado)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold">1</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-200">Datos de entrada</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">{active.brokenData}</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-500 dark:text-slate-400">—</td>
+              </tr>
+              <tr>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold">2</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-200">Fórmula en celda B4</td>
+                <td className={`border border-slate-200 dark:border-slate-700 px-3 py-2 whitespace-pre-wrap break-words font-semibold ${repaired ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/20' : 'text-rose-700 dark:text-rose-300 bg-rose-50/60 dark:bg-rose-950/20'}`}>{showFormula}</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-500 dark:text-slate-400">{repaired ? 'Corregida' : 'Con error'}</td>
+              </tr>
+              <tr>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold">3</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-200">Resultado visible</td>
+                <td className={`border border-slate-200 dark:border-slate-700 px-3 py-2 font-bold ${resultIsError ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{showResult}</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2">
+                  <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${resultIsError ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'}`}>
+                    {resultIsError ? 'ERROR' : 'OK'}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold">4</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-200">Causa</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words" colSpan={2}>{active.cause}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-
-        <p className="text-xs text-slate-300 leading-relaxed">
-          <strong className="text-white">Datos:</strong> {active.brokenData} · <strong className="text-white">Causa:</strong> {active.cause}
-        </p>
       </div>
 
-      {/* ##### Desbordamiento por ancho de columna */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="font-bold text-slate-800 dark:text-slate-100">
-            Prueba extra: Error visual <span className="font-mono text-amber-600 dark:text-amber-300">#####</span> (columna angosta)
-          </span>
-          <span className="font-mono text-slate-500 dark:text-slate-400">Ancho: {colWidth}px</span>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs font-bold text-slate-800 dark:text-slate-100">
+          Prueba extra: Error visual <span className="font-mono text-amber-600 dark:text-amber-300">#####</span> (columna angosta)
         </div>
-        <input
-          type="range"
-          min={50}
-          max={150}
-          value={colWidth}
-          onChange={(e) => setColWidth(Number(e.target.value))}
-          className="w-full accent-[#107C41]"
-        />
-        <div className="flex items-center gap-3">
-          <div
-            style={{ width: `${colWidth}px` }}
-            className="border-2 border-[#107C41] bg-emerald-50/40 dark:bg-emerald-950/30 px-2 py-2 font-mono text-xs font-bold text-right overflow-hidden whitespace-nowrap"
-          >
-            {colWidth < 92 ? '#####' : '$1,250.00'}
+        <div className="p-3 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-slate-600 dark:text-slate-300">Ajusta el ancho de columna B</span>
+            <span className="font-mono text-slate-500 dark:text-slate-400">Ancho: {colWidth}px</span>
           </div>
-          <span className="text-xs text-slate-600 dark:text-slate-300">
-            {colWidth < 92
-              ? 'No es un error de fórmula: solo ensancha la columna (doble clic entre letras).'
-              : '¡Columna ajustada! Ahora el número completo es visible.'}
-          </span>
+          <input type="range" min={50} max={150} value={colWidth} onChange={(e) => setColWidth(Number(e.target.value))} className="w-full accent-[#107C41]" />
+          <div className="overflow-x-auto">
+            <table className="border-collapse text-xs font-mono">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  <th className="w-10 border border-slate-200 dark:border-slate-700 px-2 py-1.5">#</th>
+                  <th className="border border-slate-200 dark:border-slate-700 px-2 py-1.5" style={{ width: `${colWidth}px` }}>B</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold">1</td>
+                  <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-right font-bold text-slate-800 dark:text-slate-100 overflow-hidden whitespace-nowrap" style={{ width: `${colWidth}px` }}>
+                    {colWidth < 92 ? '#####' : '$1,250.00'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            {colWidth < 92 ? 'No es un error de fórmula: solo ensancha la columna (doble clic entre letras).' : '¡Columna ajustada! Ahora el número completo es visible.'}
+          </p>
         </div>
       </div>
     </div>
@@ -1073,83 +1181,111 @@ const NestedFunctionsSim: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-950 p-4 space-y-3 text-slate-100">
-        <div className="text-xs font-semibold text-slate-400">
-          Paréntesis emparejados por color (siempre se resuelve primero el más interno):
-        </div>
-        <div className="font-mono text-sm sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-          <span className="text-slate-400">=</span>
-          <span className="text-emerald-400 font-bold">REDONDEAR</span>
-          <span className="text-emerald-300 font-bold">(</span>
-          <span className="text-cyan-300 font-bold">PROMEDIO</span>
-          <span className="text-amber-300 font-bold">(</span>
-          <span className="text-white">B2:B5</span>
-          <span className="text-amber-300 font-bold">)</span>
-          <span className="text-slate-400">; </span>
-          <span className="text-emerald-200">{decimals}</span>
-          <span className="text-emerald-300 font-bold">)</span>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-bold text-slate-800 dark:text-slate-100">Hoja: Funciones anidadas</div>
+          <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400">Resuelve de adentro hacia afuera</div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setStep('inner')}
-            className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border ${
-              step === 'inner'
-                ? 'bg-cyan-600 border-cyan-500 text-white'
-                : 'bg-slate-900 border-slate-700 text-slate-300'
-            }`}
-          >
-            Paso 1: Función interna PROMEDIO(B2:B5)
-          </button>
-          <button
-            type="button"
-            onClick={() => setStep('outer')}
-            className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border ${
-              step === 'outer'
-                ? 'bg-[#107C41] border-emerald-500 text-white'
-                : 'bg-slate-900 border-slate-700 text-slate-300'
-            }`}
-          >
-            Paso 2: Función externa REDONDEAR(...; {decimals})
-          </button>
-        </div>
-
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-3 font-mono text-xs">
-          {step === 'inner' ? (
-            <span className="text-cyan-300">
-              PROMEDIO({scores.join('; ')}) = <strong>{avg}</strong> → Este valor pasa directo como argumento 1 de REDONDEAR.
-            </span>
-          ) : (
-            <span className="text-emerald-400">
-              REDONDEAR(<strong>{avg}</strong>; {decimals}) = <strong className="text-lg">{rounded}</strong>
-            </span>
-          )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-xs font-mono">
+            <thead>
+              <tr className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <th className="w-12 border border-slate-200 dark:border-slate-700 px-2 py-2 text-center font-bold">#</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">A</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">B (Nota)</th>
+                <th className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-left font-bold">C (Detalle)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-slate-50/60 dark:bg-slate-800/30">
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center text-slate-500 font-bold">1</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">Estudiante</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">Nota</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">Entrada</td>
+              </tr>
+              {scores.map((val, i) => (
+                <tr key={i}>
+                  <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center text-slate-500 font-bold">{i + 2}</td>
+                  <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-700 dark:text-slate-300">Estudiante {i + 1}</td>
+                  <td className="border border-slate-200 dark:border-slate-700 px-1.5 py-1.5">
+                    <input
+                      type="number"
+                      value={val}
+                      onChange={(e) => {
+                        const next = [...scores];
+                        next[i] = Number(e.target.value) || 0;
+                        setScores(next);
+                      }}
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#107C41]"
+                    />
+                  </td>
+                  <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-500 dark:text-slate-400">B{i + 2}</td>
+                </tr>
+              ))}
+              <tr className={step === 'inner' ? 'bg-cyan-50/60 dark:bg-cyan-950/20' : ''}>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center text-slate-500 font-bold">6</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">Función interna</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-cyan-700 dark:text-cyan-300 whitespace-pre-wrap break-words">=PROMEDIO(B2:B5)</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-bold text-cyan-700 dark:text-cyan-300">{avg}</td>
+              </tr>
+              <tr className={step === 'outer' ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : ''}>
+                <td className="border border-slate-200 dark:border-slate-700 px-2 py-2 text-center text-slate-500 font-bold">7</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">Función externa</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 text-emerald-700 dark:text-emerald-300 whitespace-pre-wrap break-words">=REDONDEAR(PROMEDIO(B2:B5);{decimals})</td>
+                <td className="border border-slate-200 dark:border-slate-700 px-3 py-2 font-bold text-emerald-700 dark:text-emerald-300">{rounded}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        {scores.map((val, i) => (
-          <label key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs">
-            <span className="font-mono font-bold text-slate-500 block">B{i + 2}</span>
-            <input
-              type="number"
-              value={val}
-              onChange={(e) => {
-                const next = [...scores];
-                next[i] = Number(e.target.value) || 0;
-                setScores(next);
-              }}
-              className="mt-1 w-full bg-transparent font-mono font-bold text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none"
-            />
-          </label>
-        ))}
-        <label className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs">
-          <span className="font-mono font-bold text-slate-500 block">Decimales</span>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-950 p-4 space-y-3 text-slate-100">
+          <div className="text-xs font-semibold text-slate-400">Paréntesis emparejados por color:</div>
+          <div className="font-mono text-sm sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+            <span className="text-slate-400">=</span>
+            <span className="text-emerald-400 font-bold">REDONDEAR</span>
+            <span className="text-emerald-300 font-bold">(</span>
+            <span className="text-cyan-300 font-bold">PROMEDIO</span>
+            <span className="text-amber-300 font-bold">(</span>
+            <span className="text-white">B2:B5</span>
+            <span className="text-amber-300 font-bold">)</span>
+            <span className="text-slate-400">; </span>
+            <span className="text-emerald-200">{decimals}</span>
+            <span className="text-emerald-300 font-bold">)</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setStep('inner')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border ${step === 'inner' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+            >
+              Paso 1: PROMEDIO(B2:B5)
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('outer')}
+              className={`min-h-[44px] px-3 py-2 rounded-lg text-xs font-semibold border ${step === 'outer' ? 'bg-[#107C41] border-emerald-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'}`}
+            >
+              Paso 2: REDONDEAR(...; {decimals})
+            </button>
+          </div>
+          <div className="rounded-lg bg-slate-900 border border-slate-800 p-3 font-mono text-xs">
+            {step === 'inner' ? (
+              <span className="text-cyan-300">PROMEDIO({scores.join('; ')}) = <strong>{avg}</strong> → pasa como argumento 1 de REDONDEAR.</span>
+            ) : (
+              <span className="text-emerald-400">REDONDEAR(<strong>{avg}</strong>; {decimals}) = <strong className="text-lg">{rounded}</strong></span>
+            )}
+          </div>
+        </div>
+
+        <label className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-xs min-w-[140px]">
+          <span className="font-mono font-bold text-slate-500 block">Decimales (arg. 2)</span>
           <select
             value={decimals}
             onChange={(e) => setDecimals(Number(e.target.value))}
-            className="mt-1 w-full bg-transparent font-mono font-bold text-base sm:text-xs text-slate-900 dark:text-white focus:outline-none"
+            className="mt-2 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-2 font-mono font-bold text-sm text-slate-900 dark:text-white focus:outline-none"
           >
             <option value={0}>0</option>
             <option value={1}>1</option>

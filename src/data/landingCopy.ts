@@ -23,7 +23,7 @@ export const LANDING_COPY = {
     mockProgress: 'Progreso del curso',
   },
   stats: [
-    { value: '3', label: 'pasarelas de pago' },
+    { value: 'PayPal', label: 'pagos integrados' },
     { value: '4', label: 'idiomas disponibles' },
     { value: 'AES-256', label: 'cifrado de extremo a extremo' },
     { value: 'Tiempo real', label: 'sincronización entre dispositivos' },
@@ -52,7 +52,7 @@ export const LANDING_COPY = {
     items: [
       {
         title: 'Pagos sin salir del curso',
-        body: 'Inscripción con Stripe, MercadoPago o PayPal y acceso desbloqueado al confirmar la autorización.',
+        body: 'Inscripción con PayPal y acceso desbloqueado al confirmar el pago.',
       },
       {
         title: 'Progreso en vivo',
@@ -134,7 +134,7 @@ export const LANDING_COPY = {
       },
       {
         q: '¿Qué métodos de pago hay?',
-        a: 'La inscripción puede autorizarse con Stripe, MercadoPago o PayPal. El curso se desbloquea al confirmarse el pago.',
+        a: 'La inscripción se realiza con PayPal. El curso se desbloquea al confirmarse el pago.',
       },
       {
         q: '¿Puedo estudiar desde varios dispositivos?',

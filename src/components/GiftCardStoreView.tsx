@@ -3,50 +3,13 @@ import { Check, Copy, Gift, Loader2, ShoppingBag } from 'lucide-react';
 import { usePlatform } from '../context/PlatformContext';
 import { formatCurrency } from '../utils/currency';
 import type { CurrencyCode } from '../types';
-
-type PayPalButtonsInstance = {
-  render: (container: HTMLElement | string) => Promise<void>;
-  close?: () => Promise<void>;
-  isEligible?: () => boolean;
-};
-type PayPalNs = { Buttons: (options: Record<string, unknown>) => PayPalButtonsInstance };
+import { getPayPal, getPayPalCurrency, getPayPalValue, loadPayPalSdk, type PayPalButtonsInstance } from '../utils/paypalSdk';
 
 const PRESETS: Record<CurrencyCode, number[]> = {
   DOP: [500, 1000, 2000, 5000],
   USD: [10, 25, 50, 100],
   EUR: [10, 25, 50, 100],
   MXN: [200, 500, 1000, 2000],
-};
-
-const getPayPalCurrency = (currency: CurrencyCode): string => (currency === 'DOP' ? 'USD' : currency);
-const getPayPalValue = (amountCents: number, currency: CurrencyCode): string => {
-  const rate = Number(import.meta.env.VITE_DOP_TO_USD_RATE) || 60;
-  const amount = currency === 'DOP' ? amountCents / 100 / rate : amountCents / 100;
-  return amount.toFixed(2);
-};
-
-const getPayPal = (): PayPalNs | undefined => (window as unknown as { paypal?: PayPalNs }).paypal;
-
-const loadPayPalSdk = (clientId: string, currency: string): Promise<void> => {
-  if (typeof window === 'undefined') return Promise.reject(new Error('window unavailable'));
-  const id = 'dba-paypal-store-sdk';
-  const src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&components=buttons`;
-  const existing = document.getElementById(id) as HTMLScriptElement | null;
-  if (existing && existing.dataset.loaded === 'true' && existing.dataset.currency === currency && getPayPal()?.Buttons) {
-    return Promise.resolve();
-  }
-  if (existing) existing.remove();
-  if (getPayPal() && !getPayPal()?.Buttons) delete (window as unknown as { paypal?: unknown }).paypal;
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.id = id;
-    s.src = src;
-    s.async = true;
-    s.dataset.currency = currency;
-    s.onload = () => { s.dataset.loaded = 'true'; resolve(); };
-    s.onerror = () => reject(new Error('No se pudo cargar PayPal.'));
-    document.body.appendChild(s);
-  });
 };
 
 export const GiftCardStoreView: React.FC = () => {
@@ -85,7 +48,7 @@ export const GiftCardStoreView: React.FC = () => {
         const clientId = (import.meta.env.VITE_PAYPAL_CLIENT_ID as string | undefined)?.trim() || '';
         if (!clientId) throw new Error('PayPal no está configurado.');
         const ppCurrency = getPayPalCurrency(currency);
-        await loadPayPalSdk(clientId, ppCurrency);
+        await loadPayPalSdk(clientId, ppCurrency, 'dba-paypal-store-sdk');
         if (cancelled || !containerRef.current || !getPayPal()?.Buttons) return;
 
         buttonInstance = getPayPal()!.Buttons({

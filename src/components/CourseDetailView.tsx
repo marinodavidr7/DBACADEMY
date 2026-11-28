@@ -75,7 +75,7 @@ export const CourseDetailView: React.FC = () => {
   const enrollment = enrollments.find((e) => e.courseId === course.id);
   const isEnrolled = Boolean(enrollment);
   const hasInstructorAccess = isAdmin;
-  const isExcelCourse = course.id === 'excel-basico-05' || /excel/i.test(course.title);
+  const isExcelCourse = course.id === 'excel-basico-05';
 
   const prereqCourses = useMemo(() => {
     if (!course?.prerequisites || course.prerequisites.length === 0) return [];

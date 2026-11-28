@@ -342,7 +342,7 @@ export const CalendarTasksView: React.FC = () => {
               [
                 { key: 'notifyDeadlines', label: 'Fechas límite del calendario' },
                 { key: 'notifyForumReplies', label: 'Respuestas en foros de discusión' },
-                { key: 'notifyPayments', label: 'Confirmaciones de pasarelas de pago' },
+                { key: 'notifyPayments', label: 'Confirmaciones de pagos' },
                 { key: 'notifyCertificates', label: 'Emisión automática de certificados' },
               ] as const
             ).map((item) => {

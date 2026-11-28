@@ -232,7 +232,7 @@ export const GiftCardsAdminPanel: React.FC = () => {
         return false;
       }
       if (q) {
-        const hay = `${card.code} ${card.courseTitle || ''} ${card.note || ''}`.toUpperCase();
+        const hay = `${card.code} ${card.courseTitle || ''} ${card.note || ''} ${card.purchasedByEmail || ''} ${card.purchasedByName || ''}`.toUpperCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -588,6 +588,11 @@ export const GiftCardsAdminPanel: React.FC = () => {
                         {card.note && (
                           <p className="text-[11px] text-[var(--dba-text-secondary)] mt-0.5 truncate max-w-[200px]">
                             {card.note}
+                          </p>
+                        )}
+                        {card.purchasedByEmail && (
+                          <p className="text-[11px] text-[var(--dba-text-secondary)] mt-0.5 truncate max-w-[220px]">
+                            Comprada por: {card.purchasedByName ? `${card.purchasedByName} · ` : ''}{card.purchasedByEmail}
                           </p>
                         )}
                       </td>

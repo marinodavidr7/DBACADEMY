@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Home,
   Globe,
+  Building2,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -92,6 +93,9 @@ const LandingEditorPanel = lazyWithRetry(() =>
 const GiftCardStoreView = lazyWithRetry(() =>
   import('./components/GiftCardStoreView').then((m) => ({ default: m.GiftCardStoreView }))
 );
+const PartnersView = lazyWithRetry(() =>
+  import('./components/PartnersView').then((m) => ({ default: m.PartnersView }))
+);
 
 const ViewSkeleton: React.FC = () => (
   <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Cargando sección">
@@ -138,18 +142,24 @@ const AppShell: React.FC = () => {
   const [verifyCode, setVerifyCode] = useState<string | null>(() =>
     getCertificateVerifyCodeFromLocation()
   );
+  const [showPartners, setShowPartners] = useState(() => window.location.pathname === '/para-instructores');
   useEffect(() => {
     const syncLegalDocument = () => setLegalDocSlug(getLegalDocSlugFromLocation());
     const syncVerifyCode = () => setVerifyCode(getCertificateVerifyCodeFromLocation());
+    const syncPartners = () => setShowPartners(window.location.pathname === '/para-instructores');
     window.addEventListener('popstate', syncLegalDocument);
     window.addEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
     window.addEventListener('popstate', syncVerifyCode);
     window.addEventListener('dbacademy:verify-route', syncVerifyCode);
+    window.addEventListener('popstate', syncPartners);
+    window.addEventListener('dbacademy:partners-route', syncPartners);
     return () => {
       window.removeEventListener('popstate', syncLegalDocument);
       window.removeEventListener(LEGAL_DOCUMENT_EVENT, syncLegalDocument);
       window.removeEventListener('popstate', syncVerifyCode);
       window.removeEventListener('dbacademy:verify-route', syncVerifyCode);
+      window.removeEventListener('popstate', syncPartners);
+      window.removeEventListener('dbacademy:partners-route', syncPartners);
     };
   }, []);
 
@@ -217,6 +227,7 @@ const AppShell: React.FC = () => {
     { id: 'security', label: t('navSecurity'), icon: Shield },
     { id: 'integrations', label: t('navIntegrations'), icon: Code2 },
     { id: 'gift-store', label: 'Tienda', icon: Gift },
+    { id: 'partners', label: 'Para instructores', icon: Building2 },
     { id: 'legal', label: 'Legal', icon: Scale },
   ];
 
@@ -237,6 +248,29 @@ const AppShell: React.FC = () => {
       apply();
     }
   };
+
+  if (showPartners) {
+    return (
+      <div className="min-h-[100dvh] bg-slate-100 dark:bg-[#070E1D] text-slate-900 dark:text-slate-100">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <a href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
+              <BrandLogo size="sm" showWordmark />
+            </a>
+            <a
+              href="/"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px] inline-flex items-center"
+            >
+              Volver al inicio
+            </a>
+          </div>
+          <Suspense fallback={<ViewSkeleton />}>
+            <PartnersView />
+          </Suspense>
+        </div>
+      </div>
+    );
+  }
 
   if (verifyCode) {
     return (
@@ -724,6 +758,7 @@ const AppShell: React.FC = () => {
                   {activeView === 'security' && <SecurityCloudView />}
                   {activeView === 'integrations' && <ApiIntegrationsView />}
                   {activeView === 'gift-store' && <GiftCardStoreView />}
+                  {activeView === 'partners' && <PartnersView />}
                   {activeView === 'account' && <UserAccountView />}
                   {activeView === 'legal' && <LegalCenterView />}
                   {activeView === 'themes' && <AdminThemePanel />}

@@ -21,6 +21,7 @@ import type {
   PaymentRecord,
 } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { trackEvent } from '../utils/analytics';
 import { legalConsentService } from '../services/legalConsentService';
 import { legalDocumentPath } from '../services/legalDocuments';
 import { PayPalButtonsBox } from './PayPalButtonsBox';
@@ -222,6 +223,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     try {
       if (!user) throw new Error('Debes iniciar sesión para completar el pago.');
 
+      trackEvent('begin_checkout', {
+        course_id: course.id,
+        currency: course.currency,
+        value: Math.max(0, finalPrice) / 100,
+        gateway: 'paypal',
+      });
+
       let verifiedCaptureId = captureId;
       const finalAmountCents = Math.max(0, finalPrice);
       if (finalAmountCents > 0) {
@@ -244,6 +252,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           throw new Error(verifyJson?.error || 'No se pudo verificar el pago con PayPal.');
         }
         if (verifyJson.captureId) verifiedCaptureId = String(verifyJson.captureId);
+        trackEvent('payment_verified', {
+          course_id: course.id,
+          order_id: orderId,
+          capture_id: verifiedCaptureId,
+          currency: course.currency,
+          value: finalAmountCents / 100,
+        });
       }
 
       let recordedPayment: PaymentRecord;
@@ -293,6 +308,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     setSubmitting(true);
     setError('');
+    trackEvent('begin_checkout', {
+      course_id: course.id,
+      currency: course.currency,
+      value: Math.max(0, finalPrice) / 100,
+      gateway,
+    });
     try {
       let payment: PaymentRecord;
       if (appliedGiftCard?.valid && appliedGiftCard.card) {

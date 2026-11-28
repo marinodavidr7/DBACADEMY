@@ -449,6 +449,12 @@ export const CatalogView: React.FC = () => {
                       </div>
                     )}
 
+                    {!course.published && (
+                      <span className="absolute top-3 left-3 z-10 inline-flex items-center rounded-lg bg-amber-500/90 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
+                        Borrador
+                      </span>
+                    )}
+
                     {/* Botón flotante de Administrador para editar curso sin saturar la botonera del estudiante */}
                     {isAdmin && (
                       <button
@@ -483,7 +489,7 @@ export const CatalogView: React.FC = () => {
                       <span className="tabular-nums">
                         {course.totalLessons} {t('lessonsLabel')}
                       </span>
-                      {(course.id === 'excel-basico-05' || /excel/i.test(course.title)) && (
+                      {course.id === 'excel-basico-05' && (
                         <>
                           <span aria-hidden="true">·</span>
                           <span className="font-semibold text-emerald-700 dark:text-emerald-400">

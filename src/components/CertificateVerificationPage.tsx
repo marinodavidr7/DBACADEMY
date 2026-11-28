@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Linkedin, Loader2, Share2, ShieldCheck, XCircle } from 'lucide-react';
 import { collection, doc, getDoc, getDocs, query, where } from '../lib/supabase/firestoreAdapter';
 import { db } from '../lib/supabase/firestoreAdapter';
 import type { Certificate } from '../types';
 import { formatCertificateDate } from '../utils/export';
-import { isSampleCertificateId } from '../utils/qr';
+import { getCertificateVerificationUrl, isSampleCertificateId } from '../utils/qr';
+import { trackEvent } from '../utils/analytics';
 import { CertificateDocumentCard } from './CertificatePreviewModal';
 
 interface CertificateVerificationPageProps {
@@ -16,6 +17,7 @@ export const CertificateVerificationPage: React.FC<CertificateVerificationPagePr
   const [loading, setLoading] = useState(true);
   const [cert, setCert] = useState<Certificate | null>(null);
   const [status, setStatus] = useState<'loading' | 'found' | 'sample' | 'not_found'>('loading');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,63 @@ export const CertificateVerificationPage: React.FC<CertificateVerificationPagePr
     return () => { cancelled = true; };
   }, [code]);
 
+  useEffect(() => {
+    if (status === 'found' && cert) {
+      document.title = `Certificado verificado · ${cert.courseTitle} — DB Academy`;
+      trackEvent('certificate_verified_view', {
+        verification_code: cert.verificationCode,
+        course_id: cert.courseId,
+      });
+    } else if (status === 'not_found') {
+      document.title = 'Certificado no encontrado — DB Academy';
+    }
+  }, [status, cert]);
+
+  const verifyUrl = cert ? getCertificateVerificationUrl(cert) : '';
+  const shareText = cert
+    ? `Verifica el certificado de ${cert.studentName} en ${cert.courseTitle} — DB Academy`
+    : 'Verificación de certificado — DB Academy';
+
+  const copyLink = async () => {
+    if (!verifyUrl) return;
+    try {
+      await navigator.clipboard.writeText(verifyUrl);
+      setCopied(true);
+      trackEvent('certificate_share', { method: 'copy_link', verification_code: cert?.verificationCode });
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const shareNative = async () => {
+    if (!verifyUrl) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Certificado verificado — DB Academy', text: shareText, url: verifyUrl });
+        trackEvent('certificate_share', { method: 'native', verification_code: cert?.verificationCode });
+        return;
+      } catch {
+        // user cancelled or unsupported
+      }
+    }
+    await copyLink();
+  };
+
+  const shareTo = (target: 'linkedin' | 'x' | 'whatsapp') => {
+    if (!verifyUrl) return;
+    const encodedUrl = encodeURIComponent(verifyUrl);
+    const encodedText = encodeURIComponent(shareText);
+    const url =
+      target === 'linkedin'
+        ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`
+        : target === 'x'
+          ? `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`
+          : `https://wa.me/?text=${encodedText}%20${encodedUrl}`;
+    trackEvent('certificate_share', { method: target, verification_code: cert?.verificationCode });
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="min-h-[100dvh] bg-slate-100 dark:bg-[#070E1D] text-slate-900 dark:text-slate-100 px-4 py-8 sm:py-12">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -81,20 +140,51 @@ export const CertificateVerificationPage: React.FC<CertificateVerificationPagePr
 
         {!loading && status === 'found' && cert && (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-950/25 p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-emerald-600 text-white shrink-0">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
-                    <ShieldCheck className="w-3.5 h-3.5" /> Certificado válido
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-950/25 p-5 sm:p-6 flex flex-col gap-5">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-5">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-emerald-600 text-white shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
                   </div>
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">{cert.courseTitle}</h2>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">Otorgado a: <strong>{cert.studentName}</strong></p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">Instructor: <strong>{cert.instructorName}</strong></p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">Fecha de emisión: <strong>{formatCertificateDate(cert.issuedAt)}</strong></p>
-                  <p className="text-[11px] font-mono text-slate-500 pt-1 break-all">Código: {cert.verificationCode} · SHA-256: {cert.hashSignature}</p>
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Certificado válido
+                    </div>
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">{cert.courseTitle}</h2>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">Otorgado a: <strong>{cert.studentName}</strong></p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">Instructor: <strong>{cert.instructorName}</strong></p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">Fecha de emisión: <strong>{formatCertificateDate(cert.issuedAt)}</strong></p>
+                    <p className="text-[11px] font-mono text-slate-500 pt-1 break-all">Código: {cert.verificationCode} · SHA-256: {cert.hashSignature}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-emerald-500/20 pt-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Compartir verificación</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void copyLink()} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-white/70 dark:bg-slate-900/40 px-3 py-2 text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 min-h-[40px]">
+                    <Copy className="w-3.5 h-3.5" /> {copied ? 'Enlace copiado' : 'Copiar enlace'}
+                  </button>
+                  <button type="button" onClick={() => void shareNative()} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-white/70 dark:bg-slate-900/40 px-3 py-2 text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 min-h-[40px]">
+                    <Share2 className="w-3.5 h-3.5" /> Compartir
+                  </button>
+                  <button type="button" onClick={() => shareTo('linkedin')} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-white/70 dark:bg-slate-900/40 px-3 py-2 text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 min-h-[40px]">
+                    <Linkedin className="w-3.5 h-3.5" /> LinkedIn
+                  </button>
+                  <button type="button" onClick={() => shareTo('x')} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-white/70 dark:bg-slate-900/40 px-3 py-2 text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 min-h-[40px]">
+                    <ExternalLink className="w-3.5 h-3.5" /> X
+                  </button>
+                  <button type="button" onClick={() => shareTo('whatsapp')} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-white/70 dark:bg-slate-900/40 px-3 py-2 text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 min-h-[40px]">
+                    <Share2 className="w-3.5 h-3.5" /> WhatsApp
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <a href="/" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 min-h-[40px]">
+                    Explorar cursos en DB Academy
+                  </a>
+                  <a href={verifyUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 min-h-[40px]">
+                    Abrir enlace público
+                  </a>
                 </div>
               </div>
             </div>
@@ -113,10 +203,11 @@ export const CertificateVerificationPage: React.FC<CertificateVerificationPagePr
         )}
 
         {!loading && status === 'not_found' && (
-          <div className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50/60 dark:bg-red-950/20 p-8 text-center space-y-2">
+          <div className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50/60 dark:bg-red-950/20 p-8 text-center space-y-3">
             <XCircle className="w-10 h-10 text-red-500 mx-auto" />
             <p className="font-bold text-red-700 dark:text-red-300">Certificado no válido</p>
             <p className="text-xs text-red-600 dark:text-red-400">No se encontró ninguna credencial oficial registrada en DB Academy con el código proporcionado.</p>
+            <a href="/" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 min-h-[40px]">Ir a DB Academy</a>
           </div>
         )}
       </div>

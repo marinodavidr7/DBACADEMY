@@ -161,7 +161,7 @@ export const DEFAULT_LANDING_CONFIG: LandingConfig = {
 
   // Banner Superior
   bannerActive: true,
-  bannerText: '¡Inscripciones abiertas para la nueva cohorte de formación técnica y analítica!',
+  bannerText: '¡Inscripciones abiertas para el nuevo grupo de formación técnica y analítica!',
   bannerLinkText: 'Ver detalles',
   bannerLinkUrl: '#rutas',
 

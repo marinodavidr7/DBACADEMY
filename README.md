@@ -1,43 +1,100 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# DB Academy
 
-# Run and deploy your AI Studio app
+Plataforma web de formación técnica/profesional (LMS) con catálogo de cursos, aprendizaje en tiempo real, pagos por PayPal, gift cards, certificados verificables y notas cifradas E2E.
 
-This contains everything you need to run your app locally.
+## Stack
 
-View your app in AI Studio: https://ai.studio/apps/a72dae13-bd70-4e6d-ac84-49c7c4803e6b
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS 4, Motion
+- **Backend:** Node/Express (`server.ts`) + API Vercel (`api/index.mjs` generado en build)
+- **Auth/Datos:** Firebase Auth + capa Firestore adaptada a Supabase (`src/lib/supabase/firestoreAdapter.ts`)
+- **Base de datos/servicios:** Supabase (Postgres/Storage), Firebase Admin en servidor
+- **Pagos:** PayPal (checkout y verificación server-side), gift cards
+- **Certificados:** QR/verificación pública `/verificar/{codigo}`, PDF, hash SHA-256
 
-## Run Locally
+## Requisitos
 
-**Prerequisites:**  Node.js
+- Node.js 22+ recomendado
+- npm
+- Proyecto Firebase configurado
+- Proyecto Supabase configurado
+- Credenciales PayPal (sandbox/live según entorno)
 
+## Desarrollo local
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. Instalar dependencias:
+   ```bash
+   npm install
+   ```
+2. Crear `.env.local` (no se commitea; está ignorado por `.gitignore`).
+3. Iniciar app en desarrollo:
+   ```bash
+   npm run dev
+   ```
 
-## Server environment (admin writes)
+## Scripts
 
-El backend (`server.ts`) necesita `SUPABASE_URL` y una clave de servicio:
-`SUPABASE_SECRET_KEY` (formato nuevo `sb_secret_...`) o `SUPABASE_SERVICE_KEY`
-(legacy `service_role`). Se usan para escrituras de administrador (guardar cursos,
-cupones, etc.). En local se leen desde `.env.local` (o `.env`); en producción deben
-inyectarse como secretos del hosting y reiniciar el servicio. **Nunca** usar el
-prefijo `VITE_` ni exponer la clave de servicio al frontend.
+| Comando | Descripción |
+|---|---|
+| `npm run dev` | Inicia servidor de desarrollo (`tsx server.ts`) |
+| `npm run build` | Build frontend + bundle API Vercel (`api/index.mjs`) |
+| `npm run preview` | Preview de build Vite |
+| `npm run lint` | Typecheck (`tsc --noEmit`) |
+| `npm run test` | Vitest en modo watch |
+| `npm run test:run` | Vitest una sola ejecución |
+| `npm run clean` | Limpia artefactos de build |
 
-El navegador usa `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` (nuevo) o
-`VITE_SUPABASE_ANON_KEY` (legacy). `SUPABASE_JWKS_URL` no es necesaria: la
-autenticación de la app verifica tokens de Firebase con los certificados de Google.
+## Variables de entorno
 
-Para comprobar la configuración sin revelar secretos:
+### Frontend (Vite, exponer solo `VITE_*` seguras)
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY` (nuevo) o `VITE_SUPABASE_ANON_KEY` (legacy)
+- `VITE_PAYPAL_CLIENT_ID`
+- `VITE_DOP_TO_USD_RATE` (opcional, conversión DOP→USD para PayPal)
+- `VITE_*` adicionales según integraciones habilitadas
+
+### Backend (server/Vercel, **nunca** `VITE_`)
+
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY` (`sb_secret_...`) o `SUPABASE_SERVICE_KEY` (legacy service role)
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_ENV` (`sandbox` | `live`)
+- `DOP_TO_USD_RATE` (opcional)
+- Variables Firebase Admin / email / otros servicios según configuración de despliegue
+
+> No exponer claves de servicio al frontend. `.env.local` debe permanecer fuera de git.
+
+## Verificación de salud
 
 ```bash
 curl http://localhost:3000/api/v1/health
-# "supabaseAdminConfigured": true
+# esperar: "supabaseAdminConfigured": true
 ```
 
-Las variables del navegador (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) son
-independientes y no habilitan escrituras admin por RLS.
+## Rutas públicas relevantes
+
+- `/` — landing/catálogo
+- `/para-instructores` — página para instructores/academias
+- `/verificar/{codigo}` — verificación pública de certificados
+- `/legal/*` — documentos legales
+
+## Arquitectura (resumen)
+
+- `src/App.tsx`: shell de app, rutas públicas/vistas.
+- `src/context/PlatformContext.tsx`: estado global, auth, cursos, pagos, inscripciones, certificados.
+- `server.ts`: API Express, verificación PayPal, gift cards, webhooks/admin.
+- `src/lib/supabase/firestoreAdapter.ts`: adaptador Firestore→Supabase.
+- `src/components/`: vistas y UI por dominio.
+
+## Riesgos técnicos conocidos
+
+- `PlatformContext.tsx` y `server.ts` son monolitos; modularizar por dominio incrementalmente.
+- Cobertura de tests limitada; priorizar flujos críticos: pagos verificados, gift cards, certificados, rutas públicas.
+- Hay dependencias pesadas; auditar uso real antes de remover.
+- Existen dos superficies de gift cards: `GiftCardStoreView` (app autenticada) y `GiftCardStoreSection` (landing pública). Mantener coherencia funcional/comercial.
+
+## Despliegue
+
+- Build: `npm run build`
+- Vercel usa `vercel.json` (rewrites SPA/API, headers). Configurar env vars en Vercel y redeploy tras cambios.

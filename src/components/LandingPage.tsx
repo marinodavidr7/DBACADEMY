@@ -13,6 +13,7 @@ import {
   MapPin,
   Menu,
   Phone,
+  ShoppingBag,
   Sparkles,
   UserCheck,
   Users,
@@ -30,7 +31,7 @@ import { BrandLogo } from './ui/BrandLogo';
 import { Container } from './ui/Container';
 import { PWAInstallButton } from './PWAInstallButton';
 import { SnowEffect } from './ui/SnowEffect';
-import { GiftCardLandingModal } from './GiftCardLandingModal';
+import { GiftCardStoreSection, type CartItem } from './GiftCardStoreSection';
 import {
   getLandingConfig,
   subscribeLandingConfig,
@@ -79,7 +80,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     city: 'Santo Domingo',
   });
   const [regSuccess, setRegSuccess] = useState(false);
-  const [showGiftCardStore, setShowGiftCardStore] = useState(false);
+  const [giftStoreOpen, setGiftStoreOpen] = useState(false);
+  const [giftCart, setGiftCart] = useState<CartItem[]>([]);
+  const [giftCartOpen, setGiftCartOpen] = useState(false);
+  const giftCartCount = giftCart.reduce((sum, item) => sum + item.qty, 0);
+  const openGiftStore = () => setGiftStoreOpen(true);
+  const closeGiftStore = () => setGiftStoreOpen(false);
+
+  useEffect(() => {
+    if (!giftStoreOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setGiftStoreOpen(false);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [giftStoreOpen]);
 
   useEffect(() => {
     const unsub = subscribeLandingConfig((updated) => {
@@ -132,7 +152,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {isChristmas && config.showSnow && <SnowEffect />}
 
       {/* Banner Superior */}
-      {config.showSectionBanner && config.bannerActive ? (
+      {config.showSectionBanner && config.bannerActive && !giftStoreOpen ? (
         <div className="bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)] text-xs font-semibold py-2 px-4 shadow-sm border-b border-[var(--dba-accent-hover)] relative z-30">
           <Container>
             <div className="flex items-center justify-between gap-4 text-center sm:text-left">
@@ -150,24 +170,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </Container>
         </div>
       ) : null}
-
-      {/* Cinta estacional: nieve en diciembre y fechas patrias dominicanas */}
-      {seasonalTheme.id !== 'default' && (
-        <div
-          className="relative z-30 border-b border-[var(--dba-border)] bg-[var(--dba-bg-elevated)] px-4 py-1.5 text-center text-[11px] font-medium text-[var(--dba-text-secondary)] sm:text-xs"
-          role="note"
-          aria-label={seasonalTheme.label}
-        >
-          {seasonalTheme.isPreview && (
-            <span className="mr-2 rounded bg-[var(--dba-accent)] px-1.5 py-0.5 font-bold uppercase tracking-wide text-[var(--dba-accent-foreground)]">
-              Vista previa admin
-            </span>
-          )}
-          <span className="font-semibold text-[var(--dba-accent-ink)]">{seasonalTheme.label}</span>
-          <span className="mx-2 opacity-50">·</span>
-          {seasonalTheme.isChristmas ? config.christmasGreeting : seasonalTheme.greeting}
-        </div>
-      )}
 
       {/* Header / Navbar */}
       <header className="sticky top-0 z-40 border-b border-zinc-800/90 bg-[var(--dba-bg-hero)]/95 backdrop-blur text-zinc-100 safe-pt transition-colors">
@@ -205,10 +207,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 onClick={user ? onOpenLearning : onExplore}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2 text-xs font-semibold text-[var(--dba-accent-foreground)] transition-all shadow-sm whitespace-nowrap shrink-0 min-h-[40px] active:scale-95"
+                className="hidden md:inline-flex items-center gap-2 rounded-lg border border-zinc-600 hover:border-amber-400/70 px-4 py-2 text-xs font-semibold text-zinc-100 hover:text-amber-300 transition-all whitespace-nowrap shrink-0 min-h-[40px]"
               >
                 <span>{user ? config.navCtaLearningText : config.navCtaExploreText}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (giftStoreOpen) setGiftCartOpen(true);
+                  else openGiftStore();
+                }}
+                aria-label={giftStoreOpen ? 'Abrir carrito' : 'Abrir tienda'}
+                className={`relative inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap shrink-0 min-h-[40px] active:scale-95 ${
+                  giftStoreOpen
+                    ? 'bg-transparent border border-amber-400/70 text-amber-300 hover:bg-amber-400/10'
+                    : 'bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] shadow-sm'
+                }`}
+              >
+                {giftStoreOpen ? <ShoppingBag className="w-3.5 h-3.5" /> : <Gift className="w-3.5 h-3.5" />}
+                <span>{giftStoreOpen ? 'Carrito' : 'Tienda'}</span>
+                {giftStoreOpen && giftCartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-[var(--dba-accent)] text-[var(--dba-accent-foreground)] text-[11px] font-bold grid place-items-center">{giftCartCount}</span>
+                )}
               </button>
 
               <button
@@ -240,10 +262,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 type="button"
                 onClick={() => {
                   setMobileNavOpen(false);
+                  if (giftStoreOpen) setGiftCartOpen(true);
+                  else openGiftStore();
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2.5 text-sm font-semibold text-[var(--dba-accent-foreground)] min-h-[44px]"
+              >
+                {giftStoreOpen ? <ShoppingBag className="w-4 h-4" /> : <Gift className="w-4 h-4" />}
+                <span>{giftStoreOpen ? `Carrito${giftCartCount > 0 ? ` (${giftCartCount})` : ''}` : 'Tienda'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
                   if (user) onOpenLearning();
                   else onExplore();
                 }}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] px-4 py-2.5 text-sm font-semibold text-[var(--dba-accent-foreground)] min-h-[44px]"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 px-4 py-2.5 text-sm font-semibold text-zinc-100 min-h-[44px]"
               >
                 <span>{user ? config.navCtaLearningText : config.navCtaExploreText}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -1092,7 +1126,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <li>
                   <button
                     type="button"
-                    onClick={() => setShowGiftCardStore(true)}
+                    onClick={openGiftStore}
                     className="hover:text-white transition-colors text-left inline-flex items-center gap-1.5"
                   >
                     <Gift className="w-3.5 h-3.5 text-amber-400" />
@@ -1185,22 +1219,48 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </Container>
       </footer>
 
+      {giftStoreOpen && (
+        <div
+          id="gift-store-module"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tienda de Gift Cards"
+          className="fixed inset-0 z-[35] bg-[var(--dba-bg-canvas)]"
+        >
+          <div className="absolute inset-0 overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))]">
+            <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-5 lg:px-8 2xl:px-10 pt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={closeGiftStore}
+                className="inline-flex items-center gap-2 min-h-[40px] px-3 py-2 rounded-lg text-sm font-medium text-[var(--dba-text-secondary)] hover:text-[var(--dba-text-primary)] hover:bg-[var(--dba-bg-surface)] transition-colors"
+                aria-label="Cerrar tienda"
+              >
+                <X className="w-4 h-4" />
+                <span>Cerrar tienda</span>
+              </button>
+            </div>
+            <div className="pb-10">
+              <GiftCardStoreSection
+                courses={publishedCourses}
+                cart={giftCart}
+                onCartChange={setGiftCart}
+                cartOpen={giftCartOpen}
+                onCartOpenChange={setGiftCartOpen}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
-        onClick={() => setShowGiftCardStore(true)}
-        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex items-center gap-2 rounded-full bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] px-4 py-3 text-sm font-bold shadow-lg transition-colors min-h-[48px]"
+        onClick={openGiftStore}
+        className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 inline-flex items-center gap-2 rounded-full bg-[var(--dba-accent)] hover:bg-[var(--dba-accent-hover)] text-[var(--dba-accent-foreground)] px-4 py-3 text-sm font-bold shadow-lg transition-colors min-h-[48px]"
         aria-label="Comprar Gift Card"
       >
         <Gift className="w-4 h-4 shrink-0" />
         <span className="hidden sm:inline">Comprar Gift Card</span>
       </button>
-
-      {showGiftCardStore && (
-        <GiftCardLandingModal
-          courses={publishedCourses}
-          onClose={() => setShowGiftCardStore(false)}
-        />
-      )}
     </div>
   );
 };

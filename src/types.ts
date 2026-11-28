@@ -18,6 +18,7 @@ export type AppView =
   | 'security'
   | 'integrations'
   | 'gift-store'
+  | 'partners'
   | 'account'
   | 'legal'
   | 'themes';
@@ -414,6 +415,10 @@ export interface GiftCard {
   note?: string;
   redeemedBy?: string;
   redeemedAt?: unknown;
+  purchasedByEmail?: string;
+  purchasedByName?: string;
+  purchaseOrderId?: string;
+  purchaseCaptureId?: string;
   createdBy: string;
   createdAt?: unknown;
   updatedAt?: unknown;

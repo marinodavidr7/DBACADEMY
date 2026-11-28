@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  getAdditionalUserInfo,
   getRedirectResult,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -44,6 +45,7 @@ import {
 } from '../firebase';
 import { normalizarUrlImagen } from '../utils/imageUtils';
 import { sortCoursesByLevel } from '../utils/courseOrder';
+import { trackEvent } from '../utils/analytics';
 import { translations, type TranslationKeys } from '../i18n/translations';
 import type {
   ApiIntegrationKey,
@@ -1077,12 +1079,18 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     window.addEventListener('online', handleOnline);
 
-    void getRedirectResult(auth).catch((err: unknown) => {
-      const code = (err as { code?: string })?.code;
-      if (code && code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        setAuthError(formatGoogleAuthError(err));
-      }
-    });
+    void getRedirectResult(auth)
+      .then((cred) => {
+        if (!cred) return;
+        const isNew = getAdditionalUserInfo(cred)?.isNewUser === true;
+        trackEvent(isNew ? 'sign_up' : 'login', { method: 'google_redirect' });
+      })
+      .catch((err: unknown) => {
+        const code = (err as { code?: string })?.code;
+        if (code && code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+          setAuthError(formatGoogleAuthError(err));
+        }
+      });
 
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -1666,7 +1674,9 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const signInWithGoogle = useCallback(async () => {
     setAuthError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const cred = await signInWithPopup(auth, googleProvider);
+      const isNew = getAdditionalUserInfo(cred)?.isNewUser === true;
+      trackEvent(isNew ? 'sign_up' : 'login', { method: 'google' });
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
@@ -1685,6 +1695,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
       try {
         await signInWithEmailAndPassword(auth, email.trim(), password);
+        trackEvent('login', { method: 'email' });
         return { success: true };
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
@@ -1719,6 +1730,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     googleProvider.setCustomParameters({ prompt: 'select_account', login_hint: AUTHORIZED_ADMIN_EMAIL });
     try {
       await signInWithPopup(auth, googleProvider);
+      trackEvent('login', { method: 'google_admin' });
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
@@ -2522,6 +2534,13 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ? `${course.title} (${appliedCouponCode ? `Cupón ${appliedCouponCode}` : 'Inscripción gratuita'})`
           : `${course.title} (${resolvedGateway.toUpperCase()} · ${transactionRef})`
       );
+      trackEvent('enrollment_completed', {
+        course_id: course.id,
+        currency: authoritativeCurrency,
+        value: finalAmount / 100,
+        gateway: resolvedGateway,
+        coupon: appliedCouponCode || undefined,
+      });
       return paymentPayload;
     },
     [user, isAdmin, enrollments, certificates, courses, privateInfo, validateCoupon, triggerPushAlert, notifyAdminNewEnrollment, notifyStudentPaymentReceipt, t]
@@ -2615,6 +2634,10 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           `${course.title} · ${issuedCert.verificationCode}`,
           true
         );
+        trackEvent('certificate_issued', {
+          course_id: course.id,
+          verification_code: issuedCert.verificationCode,
+        });
       }
 
       if (isCompleted) {

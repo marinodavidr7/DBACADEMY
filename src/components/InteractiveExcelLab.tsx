@@ -208,7 +208,9 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   const [downloadedNotice, setDownloadedNotice] = useState<string | null>(null);
   const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(false);
+  const [solutionUses, setSolutionUses] = useState(0);
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const MAX_SOLUTION_USES = 2;
 
   const safeIdx = Math.min(exerciseIdx, Math.max(0, allExercises.length - 1));
   const activeExercise: LabExercise = allExercises[safeIdx] ?? allExercises[0];
@@ -282,6 +284,7 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
     setDownloadedNotice(null);
     setLoadedExampleId(requestedExampleId ?? null);
     setShowHint(false);
+    setSolutionUses(0);
   }, [lessonId, requestedExampleId]);
 
   // Sync spreadsheet whenever active exercise or loaded example changes
@@ -806,6 +809,14 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
   };
 
   const handleApplySolution = () => {
+    if (solutionUses >= MAX_SOLUTION_USES) {
+      setCheckResult({
+        ok: false,
+        feedback: `Has alcanzado el límite de ${MAX_SOLUTION_USES} usos de "Ver solución" en esta lección. Intenta resolver el ejercicio con la pista o la teoría.`,
+      });
+      return;
+    }
+    setSolutionUses((prev) => prev + 1);
     if (activeExample) {
       setLoadedExampleId(null);
     }
@@ -1350,10 +1361,12 @@ export const InteractiveExcelLab: React.FC<InteractiveExcelLabProps> = ({
                   <button
                     type="button"
                     onClick={handleApplySolution}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 min-h-[44px]"
+                    disabled={solutionUses >= MAX_SOLUTION_USES}
+                    title={solutionUses >= MAX_SOLUTION_USES ? 'Límite de usos de solución alcanzado' : `Usos restantes: ${MAX_SOLUTION_USES - solutionUses}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 min-h-[44px] disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900"
                   >
                     <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Ver solución</span>
+                    <span>Ver solución ({Math.max(0, MAX_SOLUTION_USES - solutionUses)} uso(s) restante(s))</span>
                   </button>
                   <button
                     type="button"

@@ -553,9 +553,7 @@ export const CoursePlayerView: React.FC = () => {
       ? null
       : allLessons[moduleProgression.firstIncompleteLessonIndex] ?? null;
 
-  const isExcelCourse = Boolean(
-    activeCourse && (activeCourse.id === 'excel-basico-05' || /excel/i.test(activeCourse.title))
-  );
+  const isExcelCourse = activeCourse?.id === 'excel-basico-05';
 
   const prereqCourses = useMemo(() => {
     if (!activeCourse?.prerequisites || activeCourse.prerequisites.length === 0) return [];
@@ -2338,22 +2336,55 @@ export const CoursePlayerView: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Module Checkpoint Quiz (10 Mixed Questions) */}
-          <ModuleQuizPanel
-            module={currentLesson.module}
-            courseId={activeCourse.id}
-            userId={user?.uid}
-            sectionTitle={t('moduleQuiz')}
-            onPassed={() => {
-              if (!isLessonDone) {
-                void markSubModuleComplete(
-                  currentLesson.id,
-                  currentLesson.title,
-                  currentLesson.durationMinutes
-                );
-              }
-            }}
-          />
+          {/* Module checkpoint quiz - only available after completing all module lessons */}
+          {(() => {
+            const moduleLessons = currentLesson.module.lessons ?? [];
+            const isCurrentModuleCompleted =
+              moduleLessons.length > 0 && moduleLessons.every((l) => completedLessonSet.has(l.id));
+            const canShowModuleQuiz = (isAdmin && !viewAsStudent) || isCurrentModuleCompleted;
+            const quizEnabled = currentLesson.module.quizEnabled !== false;
+            const hasQuizQuestions =
+              (currentLesson.module.questions ?? []).length > 0 ||
+              Boolean((currentLesson.module as any).quizQuestion?.trim?.());
+
+            if (!quizEnabled || !hasQuizQuestions) return null;
+
+            if (!canShowModuleQuiz) {
+              const remaining = moduleLessons.filter((l) => !completedLessonSet.has(l.id)).length;
+              return (
+                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/20 p-4 sm:p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 rounded-lg bg-amber-100 dark:bg-amber-900/40 p-2 text-amber-700 dark:text-amber-300 shrink-0">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        Evaluación del módulo bloqueada
+                      </p>
+                      <p className="text-sm text-amber-800 dark:text-amber-200/90">
+                        La evaluación de <span className="font-medium">{currentLesson.module.title}</span> estará disponible cuando completes todas las lecciones del módulo.
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Lecciones pendientes en este módulo: {remaining}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <ModuleQuizPanel
+                module={currentLesson.module}
+                courseId={activeCourse.id}
+                userId={user?.uid}
+                sectionTitle={t('moduleQuiz')}
+                onPassed={() => {
+                  /* Quiz approval is tracked by ModuleQuizPanel; do not auto-complete lessons. */
+                }}
+              />
+            );
+          })()}
         </div>
 
         {/* Right Syllabus Tree (Module Explorer) */}
@@ -2501,7 +2532,7 @@ export const CoursePlayerView: React.FC = () => {
                             <span className="truncate">{lesson.title}</span>
                           </span>
                           <span className="flex items-center gap-1.5 shrink-0">
-                            {(lesson.id === 'les-excel-4-13' || lesson.id === 'les-excel-1-13') && (
+                            {isExcelCourse && (lesson.id === 'les-excel-4-13' || lesson.id === 'les-excel-1-13') && (
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                   lessonLocked
