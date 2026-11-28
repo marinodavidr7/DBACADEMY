@@ -2723,6 +2723,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             if (
               perLessons[l]?.id !== expLessons[l]?.id ||
               (perLessons[l]?.title ?? '') !== (expLessons[l]?.title ?? '') ||
+              (perLessons[l]?.status ?? 'draft') !== (expLessons[l]?.status ?? 'draft') ||
               (perLessons[l]?.content?.length ?? 0) !== (expLessons[l]?.content?.length ?? 0) ||
               (perLessons[l]?.materials?.length ?? 0) !== (expLessons[l]?.materials?.length ?? 0)
             ) {

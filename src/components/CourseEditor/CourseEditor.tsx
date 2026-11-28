@@ -1365,8 +1365,17 @@ export const CourseEditor: React.FC<CourseEditorProps> = ({
       setPublishIssues(true);
       return;
     }
-    updateInput((prev) => ({ ...prev, published: !prev.published }));
-  }, [updateInput]);
+    const nextInput: CourseInput = { ...current, published: !current.published };
+    latestInputRef.current = nextInput;
+    updateInput(() => nextInput);
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (canEdit && nextInput.title.trim().length >= 3) {
+      void save('manual');
+    }
+  }, [updateInput, canEdit, save]);
 
   const handleCoverFileUpload = useCallback(
     async (file: File) => {

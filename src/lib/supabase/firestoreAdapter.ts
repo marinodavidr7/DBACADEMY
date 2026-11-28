@@ -252,12 +252,20 @@ async function adminFetch(
   path: string,
   body?: Row,
 ): Promise<Response> {
-  const token: string | null = auth.currentUser
-    ? await auth.currentUser.getIdToken().catch(() => null)
-    : null;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return fetch(path, { method, headers, body: body != null ? JSON.stringify(body) : undefined });
+  const send = async (forceRefresh: boolean): Promise<Response> => {
+    const token: string | null = auth.currentUser
+      ? await auth.currentUser.getIdToken(forceRefresh).catch(() => null)
+      : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(path, { method, headers, body: body != null ? JSON.stringify(body) : undefined });
+  };
+
+  const res = await send(false);
+  if (res.status === 401 && auth.currentUser) {
+    return send(true);
+  }
+  return res;
 }
 
 async function adminError(res: Response): Promise<string> {
