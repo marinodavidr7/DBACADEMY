@@ -435,19 +435,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <section className="border-b border-[var(--dba-border)] bg-[var(--dba-bg-surface)] py-8 sm:py-10">
             <Container>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-                {config.stats.map((stat, idx) => (
+                {config.stats.map((stat, idx) => {
+                  const isLearningPaths = /rutas?\s+de\s+aprendizaje/i.test(stat.label);
+                  const displayValue = isLearningPaths ? String(publishedCourses.length) : stat.value;
+                  return (
                   <div
                     key={idx}
                     className="rounded-xl border border-[var(--dba-border)] bg-[var(--dba-bg-canvas)] p-5 text-center flex flex-col justify-center shadow-xs hover:border-[var(--dba-accent-ink)] transition-colors"
                   >
                     <p className="font-display text-3xl sm:text-4xl lg:text-5xl font-black font-mono tabular-nums text-[var(--dba-accent-ink)]">
-                      {stat.value}
+                      {displayValue}
                     </p>
                     <p className="mt-2 text-xs sm:text-sm font-semibold text-[var(--dba-text-primary)] leading-snug">
                       {stat.label}
                     </p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Container>
           </section>

@@ -987,8 +987,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const existingExcelData = existingExcelSnap ? (existingExcelSnap.data() as Course) : null;
           const needsExcelReset = Boolean(
             existingExcelData &&
-            (!existingExcelData.published ||
-              (existingExcelData.title && existingExcelData.title.includes('eliminado')) ||
+            ((existingExcelData.title && existingExcelData.title.includes('eliminado')) ||
               !existingExcelData.modulesCount)
           );
           const needsExcelPriceMigration = Boolean(
@@ -2775,6 +2774,7 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           published: createdCourse.published,
           modules: createdCourse.modules,
         });
+        setCourses((prev) => (prev.some((c) => c.id === id) ? prev : [...prev, createdCourse]));
         const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
         const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
         commitCourseSync((prev) => ({
@@ -2897,6 +2897,24 @@ export const PlatformProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           published: typeof allowedPatch.published === 'boolean' ? allowedPatch.published : undefined,
           modules: expectedModules,
         });
+
+        setCourses((prev) =>
+          prev.map((c) =>
+            c.id === courseId
+              ? {
+                  ...c,
+                  ...allowedPatch,
+                  ...(Array.isArray(expectedModules)
+                    ? {
+                        modules: expectedModules,
+                        modulesCount: expectedModules.length,
+                        totalLessons: expectedModules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0),
+                      }
+                    : {}),
+                } as Course
+              : c
+          )
+        );
 
         const nextSavedRevision = Math.max(courseSyncRef.current.savedRevision, targetRevision);
         const allSaved = courseSyncRef.current.dirtyRevision <= nextSavedRevision;
